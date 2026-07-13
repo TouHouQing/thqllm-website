@@ -6,10 +6,11 @@ import styles from './ProjectStageGrid.module.css';
 
 interface ProjectStageGridProps {
   projects: readonly ProjectDefinition[];
+  featuredOnly?: boolean;
 }
 
-export function ProjectStageGrid({ projects }: ProjectStageGridProps) {
-  const featuredProjects = getFeaturedProjects(projects);
+export function ProjectStageGrid({ projects, featuredOnly = true }: ProjectStageGridProps) {
+  const visibleProjects = featuredOnly ? getFeaturedProjects(projects) : projects;
 
   return (
     <section id="projects" className={styles.section} aria-labelledby="projects-title">
@@ -18,11 +19,11 @@ export function ProjectStageGrid({ projects }: ProjectStageGridProps) {
           <p>STAGE SELECT / PROJECT NETWORK</p>
           <h2 id="projects-title">项目选择</h2>
         </div>
-        <span>{String(featuredProjects.length).padStart(2, '0')} PROJECTS AVAILABLE</span>
+        <span>{String(visibleProjects.length).padStart(2, '0')} PROJECTS AVAILABLE</span>
       </header>
 
       <div className={styles.grid}>
-        {featuredProjects.map((project) => (
+        {visibleProjects.map((project) => (
           <article
             key={project.id}
             className={styles.card}

@@ -76,4 +76,27 @@ describe('ProjectStageGrid', () => {
     expect(view.queryByText('Hidden Project')).not.toBeInTheDocument();
     expect(view.getByText('01 PROJECTS AVAILABLE')).toBeInTheDocument();
   });
+
+  it('renders every supplied project when featured-only filtering is disabled', () => {
+    const fixture = [
+      projects[0],
+      {
+        ...projects[1],
+        id: 'non-featured-project',
+        name: 'Non-featured Project',
+        featured: false,
+      },
+    ];
+    const { container } = render(
+      <MemoryRouter>
+        <ProjectStageGrid projects={fixture} featuredOnly={false} />
+      </MemoryRouter>,
+    );
+    const view = within(container);
+
+    expect(view.getAllByRole('article')).toHaveLength(2);
+    expect(view.getByText('FluctGraph')).toBeInTheDocument();
+    expect(view.getByText('Non-featured Project')).toBeInTheDocument();
+    expect(view.getByText('02 PROJECTS AVAILABLE')).toBeInTheDocument();
+  });
 });
