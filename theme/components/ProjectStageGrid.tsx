@@ -10,7 +10,9 @@ interface ProjectStageGridProps {
 }
 
 export function ProjectStageGrid({ projects, featuredOnly = true }: ProjectStageGridProps) {
-  const visibleProjects = featuredOnly ? getFeaturedProjects(projects) : projects;
+  const visibleProjects = featuredOnly
+    ? getFeaturedProjects(projects)
+    : projects.toSorted((a, b) => a.order - b.order);
 
   return (
     <section id="projects" className={styles.section} aria-labelledby="projects-title">

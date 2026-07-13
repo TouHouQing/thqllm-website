@@ -99,4 +99,26 @@ describe('ProjectStageGrid', () => {
     expect(view.getByText('Non-featured Project')).toBeInTheDocument();
     expect(view.getByText('02 PROJECTS AVAILABLE')).toBeInTheDocument();
   });
+
+  it('sorts all projects by order without mutating the supplied fixture', () => {
+    const fixture = [
+      {
+        ...projects[1],
+        featured: false,
+      },
+      projects[0],
+    ];
+    const inputOrder = fixture.map((project) => project.id);
+    const { container } = render(
+      <MemoryRouter>
+        <ProjectStageGrid projects={fixture} featuredOnly={false} />
+      </MemoryRouter>,
+    );
+    const view = within(container);
+
+    expect(
+      view.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent),
+    ).toEqual(['FluctGraph', 'THQ API']);
+    expect(fixture.map((project) => project.id)).toEqual(inputOrder);
+  });
 });
