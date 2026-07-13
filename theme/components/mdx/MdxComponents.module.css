@@ -1,0 +1,139 @@
+.projectLink {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 38px;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border: 1px solid var(--thq-ink);
+  border-radius: 4px;
+  color: var(--thq-paper);
+  background: var(--thq-ink);
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.3;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.projectLink:visited {
+  color: var(--thq-paper);
+}
+
+.projectLink:hover {
+  border-color: var(--thq-vermilion);
+  color: var(--thq-paper);
+  background: var(--thq-vermilion);
+}
+
+.projectLink:focus-visible {
+  outline-color: var(--thq-vermilion);
+  outline-offset: 2px;
+}
+
+.projectLink svg {
+  flex: 0 0 auto;
+}
+
+.endpoint {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--thq-border);
+  border-radius: 4px;
+  background: #faf5e8;
+}
+
+.endpoint strong {
+  flex: 0 0 auto;
+  color: var(--thq-vermilion);
+  font-family: var(--thq-mono-font);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.endpoint code {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: var(--thq-ink);
+  background: transparent;
+  font-family: var(--thq-mono-font);
+  font-size: 0.84rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.tableScroll {
+  width: 100%;
+  max-width: 100%;
+  margin: 18px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.tableScroll > .parameterTable {
+  width: 100%;
+  min-width: 600px;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  border-collapse: collapse;
+  color: var(--thq-text);
+  font-size: 0.88rem;
+  line-height: 1.55;
+  overflow: visible;
+}
+
+.parameterTable th,
+.parameterTable td {
+  padding: 10px;
+  border: 1px solid var(--thq-border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.parameterTable thead {
+  color: var(--thq-ink-deep);
+  background: var(--thq-paper-muted);
+}
+
+.parameterTable thead th {
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.parameterTable tbody th {
+  color: var(--thq-ink);
+  background: #fbf8ef;
+  font-weight: 700;
+}
+
+.parameterTable code {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  background: transparent;
+  font-family: var(--thq-mono-font);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .endpoint {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+}
