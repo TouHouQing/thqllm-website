@@ -1,0 +1,6 @@
+.superpowers/
+node_modules/
+doc_build/
+.rspress/
+.DS_Store
+
