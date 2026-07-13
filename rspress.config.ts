@@ -2,6 +2,8 @@ import * as path from 'node:path';
 import { defineConfig } from '@rspress/core';
 import { pluginLlms } from '@rspress/plugin-llms';
 import { pluginSitemap } from '@rspress/plugin-sitemap';
+import { projects } from './src/data/projects';
+import { createSidebarConfig } from './src/lib/projects';
 
 export default defineConfig({
   root: path.join(__dirname, 'site'),
@@ -24,7 +26,7 @@ export default defineConfig({
   ],
   markdown: {
     link: {
-      checkDeadLinks: false,
+      checkDeadLinks: true,
     },
   },
   plugins: [
@@ -52,6 +54,7 @@ export default defineConfig({
     enableContentAnimation: false,
     enableAppearanceAnimation: false,
     lastUpdated: true,
+    sidebar: createSidebarConfig(projects),
     nav: [
       { text: '项目', link: '/projects/', activeMatch: '/projects/' },
       { text: '文档', link: '/docs/fluctgraph/', activeMatch: '/docs/' },
