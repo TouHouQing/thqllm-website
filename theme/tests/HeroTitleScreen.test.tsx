@@ -21,7 +21,9 @@ describe('HeroTitleScreen', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('heading', { level: 1, name: 'THQLLM' })).toBeInTheDocument();
+    const levelOneHeadings = screen.getAllByRole('heading', { level: 1 });
+    expect(levelOneHeadings).toHaveLength(1);
+    expect(levelOneHeadings[0]).toHaveAccessibleName('THQLLM');
     const menu = screen.getByRole('navigation', { name: '首页主菜单' });
     expect(within(menu).getByRole('link', { name: /项目选择/ })).toHaveAttribute(
       'href',
