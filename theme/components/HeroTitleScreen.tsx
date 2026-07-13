@@ -1,5 +1,6 @@
 import { Link } from '@rspress/core/theme-original';
 import { ChevronDown } from 'lucide-react';
+import { DanmakuCanvas } from './DanmakuCanvas';
 import styles from './HeroTitleScreen.module.css';
 
 interface HeroTitleScreenProps {
@@ -27,6 +28,10 @@ export function HeroTitleScreen({ projectCount }: HeroTitleScreenProps) {
       </picture>
 
       <div className={styles.scrim} aria-hidden="true" />
+
+      <div className={styles.danmaku}>
+        <DanmakuCanvas />
+      </div>
 
       <div className={styles.content}>
         <div className={styles.lockup}>
