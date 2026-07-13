@@ -1,0 +1,27 @@
+:root {
+  --thq-ink: #263e3a;
+  --thq-ink-deep: #172824;
+  --thq-vermilion: #a92935;
+  --thq-paper: #fffdf7;
+  --thq-paper-muted: #f2ecda;
+  --thq-sakura: #f28aa0;
+  --thq-cyan: #70d8c7;
+  --thq-gold: #f4cf71;
+  --thq-sky: #72aebc;
+  --thq-text: #2d292a;
+  --thq-text-muted: #6c6564;
+  --thq-border: #d8d1bc;
+  --thq-nav-height: 64px;
+  --thq-radius: 6px;
+  --thq-display-font: "Cormorant Garamond", Georgia, serif;
+  --thq-serif-font: "Songti SC", STSong, "Noto Serif CJK SC", serif;
+  --thq-sans-font: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --thq-mono-font: "JetBrains Mono", ui-monospace, monospace;
+
+  --rp-c-brand: var(--thq-vermilion);
+  --rp-c-brand-dark: #92232e;
+  --rp-c-brand-darker: #7f1e28;
+  --rp-c-brand-light: #bd3c47;
+  --rp-c-brand-lighter: #d25661;
+  --rp-c-brand-tint: rgb(169 41 53 / 8%);
+}

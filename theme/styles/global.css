@@ -1,0 +1,81 @@
+html {
+  color-scheme: light;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  color: var(--thq-text);
+  background: var(--thq-paper);
+  font-family: var(--thq-sans-font);
+  letter-spacing: 0;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  letter-spacing: 0;
+}
+
+*:focus-visible {
+  outline: 3px solid var(--thq-gold);
+  outline-offset: 3px;
+}
+
+.rp-nav {
+  min-height: var(--thq-nav-height);
+  border-bottom: 1px solid rgb(255 253 247 / 15%);
+  color: var(--thq-paper);
+  background: var(--thq-ink);
+}
+
+.rp-nav__title {
+  font-family: var(--thq-display-font);
+  font-size: 1.45rem;
+  letter-spacing: 0;
+}
+
+.rp-doc-layout__container,
+.rp-doc-layout__doc {
+  background: var(--thq-paper);
+}
+
+.rp-doc-layout__sidebar {
+  border-right: 1px solid var(--thq-border);
+  background: var(--thq-paper-muted);
+}
+
+.rp-doc-layout__outline {
+  border-left: 1px solid var(--thq-border);
+  background: #fbf8ef;
+}
+
+.rspress-doc h1,
+.rspress-doc h2,
+.rspress-doc h3 {
+  font-family: var(--thq-serif-font);
+  letter-spacing: 0;
+}
+
+.rspress-doc pre {
+  border: 1px solid #18211f;
+  border-radius: var(--thq-radius);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: Reduced motion must override theme animations. */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: Reduced motion must override theme animations. */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: Reduced motion must override theme transitions. */
+    transition-duration: 0.01ms !important;
+  }
+}
