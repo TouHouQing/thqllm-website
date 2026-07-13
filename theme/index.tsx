@@ -5,6 +5,7 @@ import { ParameterTable } from './components/mdx/ParameterTable';
 import { ProjectLink } from './components/mdx/ProjectLink';
 import { ProjectDocSwitcher } from './components/ProjectDocSwitcher';
 import { HomeLayout } from './layouts/HomeLayout';
+import { NotFoundLayout } from './layouts/NotFoundLayout';
 import './index.css';
 
 type MdxComponentMap = NonNullable<LayoutProps['components']>;
@@ -19,6 +20,7 @@ export function Layout() {
   return (
     <BasicLayout
       HomeLayout={HomeLayout}
+      NotFoundLayout={NotFoundLayout}
       afterNav={<ProjectDocSwitcher />}
       beforeDoc={<DocProjectHeader />}
       components={mdxComponents}
