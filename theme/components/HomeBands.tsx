@@ -8,7 +8,7 @@ export function ManualBand({ projects }: { projects: readonly ProjectDefinition[
   return (
     <section className={styles.manual} aria-labelledby="manual-title">
       <div>
-        <p>MANUAL / DOCUMENTATION</p>
+        <p>MANUAL / 使用文档</p>
         <h2 id="manual-title">使用文档</h2>
         <span>FluctGraph · THQ API · Toho Image Studio</span>
       </div>
