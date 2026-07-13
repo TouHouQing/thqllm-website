@@ -50,4 +50,28 @@ describe('project registry', () => {
       projectListSchema.parse([validProject, { ...validProject, id: 'sample-two' }]),
     ).toThrow(/Duplicate project order/);
   });
+
+  it('rejects duplicate project docs base paths', () => {
+    const result = projectListSchema.safeParse([
+      validProject,
+      {
+        ...validProject,
+        id: 'sample-two',
+        order: validProject.order + 1,
+      },
+    ]);
+
+    expect(result.success).toBe(false);
+
+    if (result.success) {
+      throw new Error('Expected duplicate project docs base path validation to fail');
+    }
+
+    expect(result.error.issues).toContainEqual(
+      expect.objectContaining({
+        message: 'Duplicate project docs base path: /docs/sample/',
+        path: [1, 'docs', 'basePath'],
+      }),
+    );
+  });
 });

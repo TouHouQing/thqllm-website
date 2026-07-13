@@ -42,6 +42,7 @@ export const projectListSchema = z
   .superRefine((projects, context) => {
     const ids = new Set<string>();
     const orders = new Set<number>();
+    const docsBasePaths = new Set<string>();
 
     projects.forEach((project, index) => {
       if (ids.has(project.id)) {
@@ -58,6 +59,20 @@ export const projectListSchema = z
           message: `Duplicate project order: ${project.order}`,
           path: [index, 'order'],
         });
+      }
+
+      const docsBasePath = project.docs?.basePath;
+
+      if (docsBasePath !== undefined) {
+        if (docsBasePaths.has(docsBasePath)) {
+          context.addIssue({
+            code: 'custom',
+            message: `Duplicate project docs base path: ${docsBasePath}`,
+            path: [index, 'docs', 'basePath'],
+          });
+        }
+
+        docsBasePaths.add(docsBasePath);
       }
 
       ids.add(project.id);
