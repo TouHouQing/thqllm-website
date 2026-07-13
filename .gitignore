@@ -4,3 +4,7 @@ node_modules/
 doc_build/
 .rspress/
 .DS_Store
+coverage/
+playwright-report/
+test-results/
+tmp/
