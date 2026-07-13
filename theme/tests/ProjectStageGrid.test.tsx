@@ -1,5 +1,5 @@
 import { MemoryRouter } from '@rspress/core/runtime';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import type { ComponentProps, PropsWithChildren } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { projects } from '../../src/data/projects';
@@ -52,5 +52,28 @@ describe('ProjectStageGrid', () => {
     );
 
     expect(screen.getByText('文档准备中')).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('counts only featured projects that are rendered', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <ProjectStageGrid
+          projects={[
+            projects[0],
+            {
+              ...projects[1],
+              id: 'hidden-project',
+              name: 'Hidden Project',
+              featured: false,
+            },
+          ]}
+        />
+      </MemoryRouter>,
+    );
+    const view = within(container);
+
+    expect(view.getAllByRole('article')).toHaveLength(1);
+    expect(view.queryByText('Hidden Project')).not.toBeInTheDocument();
+    expect(view.getByText('01 PROJECTS AVAILABLE')).toBeInTheDocument();
   });
 });

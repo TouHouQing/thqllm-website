@@ -9,6 +9,8 @@ interface ProjectStageGridProps {
 }
 
 export function ProjectStageGrid({ projects }: ProjectStageGridProps) {
+  const featuredProjects = getFeaturedProjects(projects);
+
   return (
     <section id="projects" className={styles.section} aria-labelledby="projects-title">
       <header className={styles.header}>
@@ -16,11 +18,11 @@ export function ProjectStageGrid({ projects }: ProjectStageGridProps) {
           <p>STAGE SELECT / PROJECT NETWORK</p>
           <h2 id="projects-title">项目选择</h2>
         </div>
-        <span>{String(projects.length).padStart(2, '0')} PROJECTS AVAILABLE</span>
+        <span>{String(featuredProjects.length).padStart(2, '0')} PROJECTS AVAILABLE</span>
       </header>
 
       <div className={styles.grid}>
-        {getFeaturedProjects(projects).map((project) => (
+        {featuredProjects.map((project) => (
           <article
             key={project.id}
             className={styles.card}
