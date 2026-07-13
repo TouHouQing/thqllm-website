@@ -10,7 +10,7 @@ const recoveryLinks = [
 export function NotFoundLayout() {
   return (
     <main className={styles.page}>
-      <div>
+      <div className={styles.content}>
         <p className={styles.status}>404 · ROUTE LOST</p>
         <h1 className={styles.title}>CONTINUE?</h1>
         <p className={styles.description}>没有找到这个页面。请选择下一步。</p>
