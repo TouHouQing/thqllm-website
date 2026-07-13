@@ -1,7 +1,7 @@
 # THQLLM 官网与文档门户设计规格
 
 - 日期：2026-07-13
-- 状态：设计已确认，等待规格复核
+- 状态：设计已确认，实施计划已完成
 - 域名：`thqllm.com`
 - 形态：纯前端静态官网与 Markdown/MDX 文档门户
 
@@ -54,7 +54,7 @@ THQLLM 官网承担两个同等重要的职责：
 | `/docs/thq-api/` | THQ API 文档空间 |
 | `/docs/toho-image-studio/` | Toho Image Studio 文档空间 |
 | `/notes/` | 开发札记与更新记录 |
-| `/about/` | 关于 THQLLM、项目原则和联系信息 |
+| `/about/` | 关于 THQLLM 与项目原则 |
 | `404` | 游戏 Continue 风格的静态错误页 |
 
 外部项目保持独立域名：
@@ -79,7 +79,13 @@ interface ProjectDefinition {
   categoryLabel: string;
   description: string;
   externalUrl: string;
-  docsBase?: string;
+  docs?: {
+    basePath: string;
+    sections: Array<{
+      text: string;
+      items: Array<{ text: string; slug: string }>;
+    }>;
+  };
   accent: "vermilion" | "cyan" | "gold" | "sakura";
   tags: string[];
   order: number;
@@ -89,17 +95,18 @@ interface ProjectDefinition {
 
 配置在构建阶段进行结构校验。缺少项目名、合法 URL、排序值或必要描述时，构建失败，避免发布残缺入口。
 
-`docsBase` 对首版三个项目为必填，对未来新增项目可选。未来尚未建立文档的项目仍可展示外部访问入口，但文档按钮显示“文档准备中”，不得生成空链接。
+`docs` 对首版三个项目为必填，对未来新增项目可选。它同时提供文档根路由和侧边栏结构。未来尚未建立文档的项目仍可展示外部访问入口，但文档按钮显示“文档准备中”，不得生成空链接。
 
 ### 5.2 文档内容
 
-文档按项目隔离：
+Rspress 的内容根目录使用 `site/`，避免把 `docs/superpowers/` 内部设计文档编译为公开页面。项目文档在内容根目录中按项目隔离：
 
 ```text
-docs/
-  fluctgraph/
-  thq-api/
-  toho-image-studio/
+site/
+  docs/
+    fluctgraph/
+    thq-api/
+    toho-image-studio/
 ```
 
 每个项目首版至少包含：
