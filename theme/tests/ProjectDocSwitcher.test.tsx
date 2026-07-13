@@ -87,7 +87,8 @@ describe('DocProjectHeader', () => {
 
     expect(screen.getByText('STAGE 01 · KNOWLEDGE GRAPH')).toBeInTheDocument();
     expect(screen.getByText('FluctGraph', { selector: 'strong' })).toBeInTheDocument();
-    const link = screen.getByRole('link', { name: '打开项目' });
+    expect(screen.getByText('打开项目')).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: '打开 FluctGraph' });
     expect(link).toHaveAttribute('href', 'https://graph.tohoqing.com/');
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noreferrer noopener');

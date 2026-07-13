@@ -17,7 +17,12 @@ export function DocProjectHeader() {
         {project.stageLabel} · {project.categoryLabel}
       </p>
       <strong>{project.name}</strong>
-      <a href={project.externalUrl} target="_blank" rel="noreferrer noopener">
+      <a
+        href={project.externalUrl}
+        target="_blank"
+        rel="noreferrer noopener"
+        aria-label={`打开 ${project.name}`}
+      >
         <ArrowUpRight aria-hidden="true" size={15} />
         打开项目
       </a>

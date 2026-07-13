@@ -9,12 +9,15 @@ interface ParameterRow {
 
 interface ParameterTableProps {
   rows: readonly ParameterRow[];
+  caption?: string;
 }
 
-export function ParameterTable({ rows }: ParameterTableProps) {
+export function ParameterTable({ rows, caption = '参数说明' }: ParameterTableProps) {
   return (
-    <div className={styles.tableScroll}>
+    // biome-ignore lint/a11y/noNoninteractiveTabindex: Scrollable tables must be keyboard reachable.
+    <section className={styles.tableScroll} aria-label={caption} tabIndex={0}>
       <table className={styles.parameterTable}>
+        <caption className={styles.visuallyHidden}>{caption}</caption>
         <thead>
           <tr>
             <th scope="col">参数</th>
@@ -36,6 +39,6 @@ export function ParameterTable({ rows }: ParameterTableProps) {
           ))}
         </tbody>
       </table>
-    </div>
+    </section>
   );
 }

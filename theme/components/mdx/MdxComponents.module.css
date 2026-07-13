@@ -82,6 +82,24 @@
   overflow-y: hidden;
 }
 
+.tableScroll:focus-visible {
+  outline: 3px solid var(--thq-gold);
+  outline-offset: 3px;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  border: 0;
+  white-space: nowrap;
+}
+
 .tableScroll > .parameterTable {
   width: 100%;
   min-width: 600px;
