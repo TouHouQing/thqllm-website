@@ -84,7 +84,7 @@ function RenderedDocLayout(props: DocLayoutProps) {
             {afterSidebar}
           </aside>
         ) : showSidebarPlaceholder ? (
-          <aside
+          <div
             className={`rp-doc-layout__sidebar-placeholder${
               isLegacyPlaceholder ? ' rp-doc-layout__sidebar-placeholder--legacy' : ''
             }`}
@@ -124,7 +124,7 @@ function RenderedDocLayout(props: DocLayoutProps) {
             {afterOutline}
           </aside>
         ) : (
-          <aside
+          <div
             className="rp-doc-layout__outline-placeholder"
             style={isDocWide ? { width: '0' } : {}}
           />
