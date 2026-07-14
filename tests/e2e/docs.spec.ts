@@ -112,6 +112,7 @@ test('FluctGraph documentation desktop visual regression', async ({ page, isMobi
   test.skip(Boolean(isMobile), 'Desktop snapshot only');
 
   await openDeterministicDocs(page, '/docs/fluctgraph/');
+  await expect(page.locator('.rp-last-updated')).toBeVisible();
 
   await expect(page).toHaveScreenshot('docs-desktop.png', {
     animations: 'disabled',

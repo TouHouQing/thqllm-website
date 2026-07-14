@@ -1,0 +1,3 @@
+.rp-last-updated > p > span:first-of-type {
+  visibility: hidden;
+}

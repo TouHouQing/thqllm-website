@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
@@ -5,14 +6,24 @@ export default defineConfig({
   fullyParallel: true,
   retries: process.env.CI ? 2 : 0,
   reporter: [['list'], ['html', { open: 'never' }]],
+  expect: {
+    toHaveScreenshot: {
+      pathTemplate: '{snapshotDir}/{testFileDir}/{testFileName}-snapshots/{arg}{-projectName}{ext}',
+      stylePath: path.resolve(import.meta.dirname, 'tests/e2e/visual-regression.css'),
+    },
+  },
   use: {
     baseURL: 'http://127.0.0.1:4173',
+    timezoneId: 'UTC',
     trace: 'on-first-retry',
   },
   webServer: {
     command: 'pnpm build && pnpm preview --host 127.0.0.1 --port 4173',
+    env: {
+      TZ: 'UTC',
+    },
     url: 'http://127.0.0.1:4173',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120_000,
   },
   projects: [
