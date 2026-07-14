@@ -67,7 +67,7 @@
   cursor: pointer;
 }
 
-.link:first-child {
+.primaryLink {
   border-color: var(--thq-gold);
   color: var(--thq-ink-deep);
   background: var(--thq-gold);

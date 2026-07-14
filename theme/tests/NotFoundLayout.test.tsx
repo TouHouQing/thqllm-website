@@ -42,7 +42,14 @@ describe('NotFoundLayout', () => {
     expect(searchForm).toHaveAttribute('action', '/docs/fluctgraph/');
     expect(searchForm).toHaveAttribute('method', 'get');
 
+    const homeLink = screen.getByRole('link', { name: '返回首页' });
+    const projectLink = screen.getByRole('link', { name: '查看项目' });
     const searchButton = screen.getByRole('button', { name: '搜索文档' });
+
+    expect(homeLink.className).toContain('primaryLink');
+    expect(projectLink.className).not.toContain('primaryLink');
+    expect(searchButton.className).not.toContain('primaryLink');
+
     expect(searchButton).toBeInTheDocument();
     expect(searchButton).toHaveAttribute('type', 'submit');
     expect(screen.queryByRole('link', { name: '搜索文档' })).not.toBeInTheDocument();

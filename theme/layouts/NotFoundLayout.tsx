@@ -48,7 +48,11 @@ export function NotFoundLayout() {
 
         <nav className={styles.actions} aria-label="错误页恢复操作">
           {recoveryLinks.map((link) => (
-            <Link key={link.href} className={styles.link} href={link.href}>
+            <Link
+              key={link.href}
+              className={link.href === '/' ? `${styles.link} ${styles.primaryLink}` : styles.link}
+              href={link.href}
+            >
               {link.label}
             </Link>
           ))}
