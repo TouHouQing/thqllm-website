@@ -10,7 +10,12 @@ import {
   Sidebar,
   useWatchToc,
 } from '@rspress/core/theme-original';
+import { cloneElement, type ReactElement } from 'react';
 import '@rspress/core/dist/theme/layout/DocLayout/index.css';
+
+type SidebarMenuElementProps = {
+  onIsSidebarOpenChange: (isOpen: boolean) => void;
+};
 
 export function DocLayout(props: DocLayoutProps) {
   if (import.meta.env.SSG_MD) {
@@ -61,10 +66,17 @@ function RenderedDocLayout(props: DocLayoutProps) {
   const { isOutlineOpen, isSidebarOpen, sidebarMenu, asideLayoutRef, sidebarLayoutRef } =
     useSidebarMenu(beforeOutline, afterOutline);
   const { rspressDocRef } = useWatchToc();
+  const sidebarMenuElement = sidebarMenu as ReactElement<SidebarMenuElementProps>;
+  const toggleableSidebarMenu = cloneElement(sidebarMenuElement, {
+    // Rspress 2.0.17 opens the sidebar unconditionally; keep its state and make the trigger toggle it.
+    onIsSidebarOpenChange: (nextIsOpen: boolean) => {
+      sidebarMenuElement.props.onIsSidebarOpenChange(nextIsOpen && !isSidebarOpen);
+    },
+  });
 
   return (
     <>
-      {showSidebarMenu && <div className="rp-doc-layout__menu">{sidebarMenu}</div>}
+      {showSidebarMenu && <div className="rp-doc-layout__menu">{toggleableSidebarMenu}</div>}
       {beforeDoc}
       <div
         className={`rp-doc-layout__container${

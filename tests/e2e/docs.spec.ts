@@ -275,6 +275,123 @@ test('mobile search restores focus to its trigger after Escape', async ({ page, 
   await expect(mobileSearchButton).toBeFocused();
 });
 
+test('mobile documentation panels close from the same trigger and restore content interaction', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'Mobile documentation controls only');
+
+  await page.goto('/docs/fluctgraph/');
+
+  const menuButton = page.getByRole('button', { name: '菜单', exact: true });
+  const sidebar = page.getByRole('complementary', {
+    name: '文档导航',
+    includeHidden: true,
+  });
+
+  await menuButton.click();
+  await expect(sidebar).toHaveClass(/rp-doc-layout__sidebar--open/);
+  await expect(sidebar).toBeVisible();
+
+  const [menuBox, firstSidebarItemBox] = await Promise.all([
+    page.locator('.rp-doc-layout__menu').boundingBox(),
+    sidebar.locator('.rp-sidebar-group').first().boundingBox(),
+  ]);
+  if (!menuBox || !firstSidebarItemBox) {
+    throw new Error('Mobile document menu and first sidebar item must have layout boxes');
+  }
+  expect(firstSidebarItemBox.y).toBeGreaterThanOrEqual(menuBox.y + menuBox.height);
+
+  await menuButton.click();
+  await expect(sidebar).not.toHaveClass(/rp-doc-layout__sidebar--open/);
+  await expect
+    .poll(() =>
+      sidebar.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        return getComputedStyle(element).opacity === '0' && bounds.right <= 0;
+      }),
+    )
+    .toBe(true);
+
+  await page.getByRole('link', { name: /^下一页(?:\s|$)/ }).click();
+  await expect(page).toHaveURL(/\/docs\/fluctgraph\/quick-start(?:\.html|\/)?$/);
+
+  const outlineButton = page.getByRole('button', { name: '目录', exact: true });
+  const outline = page.getByRole('complementary', {
+    name: '页内目录',
+    includeHidden: true,
+  });
+
+  await outlineButton.click();
+  await expect(outline).toHaveClass(/rp-doc-layout__outline--open/);
+  await expect(outline).toBeVisible();
+
+  const [outlineMenuBox, firstOutlineItemBox] = await Promise.all([
+    page.locator('.rp-doc-layout__menu').boundingBox(),
+    outline.locator('.rp-toc-item').first().boundingBox(),
+  ]);
+  if (!outlineMenuBox || !firstOutlineItemBox) {
+    throw new Error('Mobile document menu and first outline item must have layout boxes');
+  }
+  expect(firstOutlineItemBox.y).toBeGreaterThanOrEqual(outlineMenuBox.y + outlineMenuBox.height);
+
+  await outlineButton.click();
+  await expect(outline).not.toHaveClass(/rp-doc-layout__outline--open/);
+  await expect(outline).toHaveCSS('visibility', 'hidden');
+
+  await page.getByRole('link', { name: /^上一页(?:\s|$)/ }).click();
+  await expect(page).toHaveURL(/\/docs\/fluctgraph\/(?:index\.html)?$/);
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test('tablet documentation outline stays below its toggle and restores content interaction', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(Boolean(isMobile), 'Custom tablet viewport only needs one browser project');
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto('/docs/fluctgraph/');
+
+  const outlineButton = page.getByRole('button', { name: '目录', exact: true });
+  const outline = page.getByRole('complementary', {
+    name: '页内目录',
+    includeHidden: true,
+  });
+  const menu = page.locator('.rp-doc-layout__menu');
+
+  await outlineButton.click();
+  await expect(outline).toHaveClass(/rp-doc-layout__outline--open/);
+  await expect(outline).toBeVisible();
+
+  const [menuLayer, outlineLayer, menuBox, firstOutlineItemBox] = await Promise.all([
+    menu.evaluate((element) => Number(getComputedStyle(element).zIndex)),
+    outline.evaluate((element) => Number(getComputedStyle(element).zIndex)),
+    menu.boundingBox(),
+    outline.locator('.rp-toc-item').first().boundingBox(),
+  ]);
+  expect(menuLayer).toBeGreaterThan(outlineLayer);
+  if (!menuBox || !firstOutlineItemBox) {
+    throw new Error('Tablet document menu and first outline item must have layout boxes');
+  }
+  expect(firstOutlineItemBox.y).toBeGreaterThanOrEqual(menuBox.y + menuBox.height);
+
+  await outlineButton.click();
+  await expect(outline).not.toHaveClass(/rp-doc-layout__outline--open/);
+  await expect(outline).toHaveCSS('visibility', 'hidden');
+
+  await page.getByRole('link', { name: /^下一页(?:\s|$)/ }).click();
+  await expect(page).toHaveURL(/\/docs\/fluctgraph\/quick-start(?:\.html|\/)?$/);
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+});
+
 test('THQ API documentation has no detectable accessibility violations', async ({ page }) => {
   await page.goto('/docs/thq-api/');
   await expect(page.getByRole('heading', { level: 1, name: /THQ API/i })).toBeVisible();
