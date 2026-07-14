@@ -242,6 +242,8 @@ test('custom 404 Enter key opens search without page errors and Escape restores 
 
   const searchInput = page.getByLabel('SearchPanelInput');
   await expect(searchInput).toBeVisible();
+  await searchInput.click();
+  await expect(searchInput).toBeFocused();
   expect(pageErrors).toEqual([]);
 
   await page.keyboard.press('Escape');

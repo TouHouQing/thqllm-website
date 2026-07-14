@@ -24,17 +24,15 @@ vi.mock('@rspress/core/theme-original', () => ({
   }) =>
     focused ? (
       <div role="dialog" aria-label="站点搜索">
-        <button
-          type="button"
-          onClick={() => setFocused(false)}
+        <input
+          aria-label="SearchPanelInput"
+          onClick={() => setFocused(true)}
           onKeyDown={(event) => {
             if (event.key === 'Escape') {
               setFocused(false);
             }
           }}
-        >
-          关闭搜索
-        </button>
+        />
       </div>
     ) : null,
   SvgWrapper: () => <svg aria-hidden="true" />,
@@ -53,8 +51,9 @@ describe('SiteSearch', () => {
     await user.click(mobileSearch);
     expect(screen.getAllByRole('dialog', { name: '站点搜索' })).toHaveLength(1);
 
-    await user.tab();
-    expect(screen.getByRole('button', { name: '关闭搜索' })).toHaveFocus();
+    const searchInput = screen.getByRole('textbox', { name: 'SearchPanelInput' });
+    await user.click(searchInput);
+    expect(searchInput).toHaveFocus();
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog', { name: '站点搜索' })).not.toBeInTheDocument();
     expect(mobileSearch).toHaveFocus();
@@ -62,7 +61,7 @@ describe('SiteSearch', () => {
     await user.keyboard('{Enter}');
     expect(screen.getAllByRole('dialog', { name: '站点搜索' })).toHaveLength(1);
 
-    await user.tab();
+    await user.click(screen.getByRole('textbox', { name: 'SearchPanelInput' }));
     await user.keyboard('{Escape}');
     expect(mobileSearch).toHaveFocus();
 
@@ -78,7 +77,10 @@ describe('SiteSearch', () => {
     await user.click(desktopSearch);
     expect(screen.getAllByRole('dialog', { name: '站点搜索' })).toHaveLength(1);
 
-    await user.click(screen.getByRole('button', { name: '关闭搜索' }));
+    const searchInput = screen.getByRole('textbox', { name: 'SearchPanelInput' });
+    await user.click(searchInput);
+    expect(searchInput).toHaveFocus();
+    await user.keyboard('{Escape}');
     expect(desktopSearch).toHaveFocus();
   });
 });

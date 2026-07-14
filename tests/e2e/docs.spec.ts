@@ -77,6 +77,8 @@ test('mobile search restores focus to its trigger after Escape', async ({ page, 
 
   const searchInput = page.getByLabel('SearchPanelInput');
   await expect(searchInput).toBeVisible();
+  await searchInput.click();
+  await expect(searchInput).toBeFocused();
   await page.keyboard.press('Escape');
 
   await expect(searchInput).not.toBeVisible();

@@ -1,32 +1,45 @@
 import { NoSSR } from '@rspress/core/runtime';
 import { IconSearch, SearchButton, SearchPanel, SvgWrapper } from '@rspress/core/theme-original';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import styles from './SiteSearch.module.css';
 
 export const OPEN_SEARCH_EVENT = 'thqllm:open-search';
 
 export function SiteSearch() {
   const [focused, setFocused] = useState(false);
+  const focusedRef = useRef(false);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
 
-  const setSearchFocused = (nextFocused: boolean) => {
-    if (nextFocused && document.activeElement instanceof HTMLElement) {
-      restoreFocusRef.current = document.activeElement;
+  const openSearch = useCallback((restoreTarget: HTMLElement | null) => {
+    if (!focusedRef.current) {
+      restoreFocusRef.current = restoreTarget;
     }
-    setFocused(nextFocused);
-  };
+    focusedRef.current = true;
+    setFocused(true);
+  }, []);
+
+  const setSearchFocused = useCallback(
+    (nextFocused: boolean) => {
+      if (nextFocused) {
+        openSearch(document.activeElement instanceof HTMLElement ? document.activeElement : null);
+        return;
+      }
+      focusedRef.current = false;
+      setFocused(false);
+    },
+    [openSearch],
+  );
 
   useEffect(() => {
-    const openSearch = (event: Event) => {
-      restoreFocusRef.current = event.target instanceof HTMLElement ? event.target : null;
-      setFocused(true);
+    const handleOpenSearch = (event: Event) => {
+      openSearch(event.target instanceof HTMLElement ? event.target : null);
     };
 
-    window.addEventListener(OPEN_SEARCH_EVENT, openSearch as EventListener);
+    window.addEventListener(OPEN_SEARCH_EVENT, handleOpenSearch as EventListener);
     return () => {
-      window.removeEventListener(OPEN_SEARCH_EVENT, openSearch as EventListener);
+      window.removeEventListener(OPEN_SEARCH_EVENT, handleOpenSearch as EventListener);
     };
-  }, []);
+  }, [openSearch]);
 
   useEffect(() => {
     if (!focused && restoreFocusRef.current) {
@@ -43,8 +56,7 @@ export function SiteSearch() {
         type="button"
         aria-label="搜索"
         onClick={(event) => {
-          restoreFocusRef.current = event.currentTarget;
-          setFocused(true);
+          openSearch(event.currentTarget);
         }}
       >
         <SvgWrapper icon={IconSearch} aria-hidden="true" />
