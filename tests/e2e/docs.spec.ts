@@ -103,6 +103,17 @@ test('SearchPanel keeps Enter safe without breaking keyboard navigation', async 
   expect(suggestionHref).not.toBeNull();
   const expectedSuggestionUrl = new URL(suggestionHref ?? '', page.url());
 
+  await searchInput.dispatchEvent('keydown', {
+    bubbles: true,
+    cancelable: true,
+    code: 'Enter',
+    isComposing: true,
+    key: 'Enter',
+  });
+  await expect(searchInput).toBeVisible();
+  await expect(page).toHaveURL(/\/docs\/fluctgraph\/$/);
+  expectNoPageErrors('pressing composing Enter with a current suggestion');
+
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL((url) => {
     return (
@@ -112,6 +123,110 @@ test('SearchPanel keeps Enter safe without breaking keyboard navigation', async 
     );
   });
   expectNoPageErrors('following the current search suggestion with Enter');
+});
+
+test('SearchPanel does not navigate stale suggestions while a new query is pending', async ({
+  page,
+}) => {
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => {
+    pageErrors.push(error);
+  });
+
+  await page.goto('/docs/fluctgraph/');
+  await page.keyboard.press('ControlOrMeta+k');
+
+  const searchInput = page.getByLabel('SearchPanelInput');
+  await expect(searchInput).toBeVisible();
+  const originalUrl = page.url();
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await searchInput.fill('Toho Image Studio 概览');
+    await expect(page.locator('.rp-suggest-item--current .rp-suggest-item__link')).toBeVisible();
+
+    const pendingQuery = `zzzzqv-stale-query-${attempt}-7f3a9b2c`;
+    await searchInput.evaluate((element, nextQuery) => {
+      const input = element as HTMLInputElement;
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      if (!setValue) {
+        throw new Error('HTMLInputElement value setter is unavailable');
+      }
+
+      setValue.call(input, nextQuery);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          bubbles: true,
+          cancelable: true,
+          code: 'Enter',
+          key: 'Enter',
+        }),
+      );
+    }, pendingQuery);
+
+    await expect(page).toHaveURL(originalUrl);
+    await expect(searchInput).toBeVisible();
+    await expect(searchInput).toHaveValue(pendingQuery);
+    expect(pageErrors, `stale-query attempt ${attempt + 1} emitted a pageerror`).toEqual([]);
+
+    await expect(page.locator('.rp-no-search-result')).toContainText(pendingQuery);
+  }
+});
+
+test('SearchPanel leaves later global Enter listeners intact', async ({ page, isMobile }) => {
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => {
+    pageErrors.push(error);
+  });
+
+  await page.goto('/docs/fluctgraph/');
+
+  const searchButton = isMobile
+    ? page.getByRole('button', { name: '搜索', exact: true })
+    : page.getByRole('button', { name: /^搜索(?:\s|$)/ });
+  await expect(searchButton).toBeVisible();
+  await page.evaluate(() => {
+    const testWindow = window as typeof window & {
+      __thqllmGlobalEnterTargets?: string[];
+    };
+    testWindow.__thqllmGlobalEnterTargets = [];
+    window.addEventListener('keydown', (event) => {
+      if (event.code !== 'Enter') {
+        return;
+      }
+
+      const label =
+        event.target instanceof HTMLInputElement ? `input:${event.target.value}` : 'search-trigger';
+      testWindow.__thqllmGlobalEnterTargets?.push(label);
+    });
+  });
+
+  await searchButton.focus();
+  await page.keyboard.press('Enter');
+
+  const searchInput = page.getByLabel('SearchPanelInput');
+  await expect(searchInput).toBeVisible();
+  expect(pageErrors, 'closed search Enter emitted a pageerror').toEqual([]);
+
+  await searchInput.focus();
+  await page.keyboard.press('Enter');
+  await expect(searchInput).toBeVisible();
+  expect(pageErrors, 'empty query Enter emitted a pageerror').toEqual([]);
+
+  const noResultQuery = 'zzzzqv-global-listener-7f3a9b2c';
+  await searchInput.fill(noResultQuery);
+  await expect(page.locator('.rp-no-search-result')).toContainText(noResultQuery);
+  await page.keyboard.press('Enter');
+  await expect(searchInput).toBeVisible();
+  expect(pageErrors, 'no-result Enter emitted a pageerror').toEqual([]);
+
+  const globalEnterTargets = await page.evaluate(() => {
+    const testWindow = window as typeof window & {
+      __thqllmGlobalEnterTargets?: string[];
+    };
+    return testWindow.__thqllmGlobalEnterTargets ?? [];
+  });
+  expect(globalEnterTargets).toEqual(['search-trigger', 'input:', `input:${noResultQuery}`]);
 });
 
 test('FluctGraph documentation uses the Chinese Rspress shell', async ({ page, isMobile }) => {

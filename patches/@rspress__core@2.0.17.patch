@@ -1,0 +1,277 @@
+diff --git a/dist/eject-theme/components/Search/SearchPanel.tsx b/dist/eject-theme/components/Search/SearchPanel.tsx
+index 07ae1c1fa0c1a0633c26672a547408addd4c66e9..edcb2aab5887b1103336bff72cf817a10c107410 100644
+--- a/dist/eject-theme/components/Search/SearchPanel.tsx
++++ b/dist/eject-theme/components/Search/SearchPanel.tsx
+@@ -72,6 +72,10 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
+   const [searchResult, setSearchResult] = useState<MatchResult>([]);
+   const searchInputRef = useRef<HTMLInputElement | null>(null);
+   const [isSearching, setIsSearching] = useState(false);
++  // Compatibility fix for pinned Rspress 2.0.17 undefined.link and stale-result
++  // races. Revisit this patch when upgrading Rspress.
++  const searchPendingRef = useRef(false);
++  const searchRequestIdRef = useRef(0);
+   const [resultTabIndex, setResultTabIndex] = useState(0);
+   const [currentSuggestionIndex, setCurrentSuggestionIndex] = useState(0);
+   const pageSearcherRef = useRef<PageSearcher | null>(null);
+@@ -185,13 +189,29 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
+ 
+     const query = searchInputRef.current?.value;
+     if (query) {
++      const requestId = searchRequestIdRef.current;
+       const matched = await searcher.match(query);
++      if (
++        searchRequestIdRef.current !== requestId ||
++        searchInputRef.current?.value !== query
++      ) {
++        return;
++      }
+       setSearchResult(matched || DEFAULT_RESULT);
++      searchPendingRef.current = false;
+       setIsSearching(false);
+     }
+   }
+ 
++  const resetSearchPending = () => {
++    searchRequestIdRef.current += 1;
++    searchPendingRef.current = false;
++    setIsSearching(false);
++  };
++
+   const clearSearchState = () => {
++    resetSearchPending();
++    setQuery('');
+     setFocused(false);
+     setResultTabIndex(0);
+     setCurrentSuggestionIndex(0);
+@@ -246,7 +266,13 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
+            * prevent enter key event when IME is composing, it's more friendly for CJK users.
+            * @see https://github.com/web-infra-dev/rspress/issues/1861
+            */
+-          if (e.isComposing) {
++          if (!focused) {
++            return;
++          }
++          if (e.isComposing || searchPendingRef.current) {
++            return;
++          }
++          if (!searchInputRef.current?.value) {
+             return;
+           }
+           if (
+@@ -258,6 +284,9 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
+               normalizeSuggestions(currentSuggestions).values(),
+             ).flat();
+             const suggestion = flatSuggestions[currentSuggestionIndex];
++            if (!suggestion) {
++              return;
++            }
+             navigate(suggestion.link);
+             clearSearchState();
+           }
+@@ -284,9 +313,12 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
+ 
+   useEffect(() => {
+     if (focused) {
++      searchPendingRef.current = false;
++      setIsSearching(false);
+       setSearchResult(DEFAULT_RESULT);
+       initSearch();
+     } else {
++      resetSearchPending();
+       setQuery('');
+     }
+   }, [focused]);
+@@ -322,9 +354,8 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
+     }
+   }, [lang, version, versionedSearch]);
+ 
+-  const handleQueryChangedImpl = async (value: string) => {
++  const handleQueryChangedImpl = async (value: string, requestId: number) => {
+     let newQuery = value;
+-    setQuery(newQuery);
+     if (newQuery) {
+       const searchResult: MatchResult = [];
+ 
+@@ -369,16 +400,34 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
+ 
+       // only setSearchResult when query is current query value
+       const currQuery = searchInputRef.current?.value;
+-      if (currQuery === newQuery) {
++      if (searchRequestIdRef.current === requestId && currQuery === value) {
+         // Reset current suggestion index to 0 when search query changes
+         setCurrentSuggestionIndex(0);
+         setSearchResult(searchResult || DEFAULT_RESULT);
++        searchPendingRef.current = false;
+         setIsSearching(false);
+       }
+     }
+   };
+ 
+   const handleQueryChange = useDebounce(handleQueryChangedImpl);
++  const handleInputChange = (value: string) => {
++    const requestId = searchRequestIdRef.current + 1;
++    searchRequestIdRef.current = requestId;
++    setQuery(value);
++    setCurrentSuggestionIndex(0);
++    setSearchResult(DEFAULT_RESULT);
++
++    if (!value) {
++      searchPendingRef.current = false;
++      setIsSearching(false);
++      return;
++    }
++
++    searchPendingRef.current = true;
++    setIsSearching(true);
++    handleQueryChange(value, requestId);
++  };
+ 
+   const renderSearchResult = (result: MatchResult, isSearching: boolean) => {
+     if (result.length === 1) {
+@@ -518,7 +567,7 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
+                     autoComplete="off"
+                     autoFocus
+                     inputMode="search"
+-                    onChange={e => handleQueryChange(e.target.value)}
++                    onChange={e => handleInputChange(e.target.value)}
+                   />
+                   <label>
+                     <SvgWrapper
+@@ -531,7 +580,7 @@ export function SearchPanel({ focused, setFocused }: SearchPanelProps) {
+                             clearSearchState();
+                           } else {
+                             searchInputRef.current.value = '';
+-                            setQuery('');
++                            handleInputChange('');
+                           }
+                         }
+                       }}
+diff --git a/dist/theme/components/Search/SearchPanel.js b/dist/theme/components/Search/SearchPanel.js
+index cdab103aa4a5088f872da628a6b7851da2b33fbc..a4840dfac572a7838fb0cf57c8b9a295d2fbe639 100644
+--- a/dist/theme/components/Search/SearchPanel.js
++++ b/dist/theme/components/Search/SearchPanel.js
+@@ -34,6 +34,9 @@ function SearchPanel({ focused, setFocused }) {
+     const [searchResult, setSearchResult] = useState([]);
+     const searchInputRef = useRef(null);
+     const [isSearching, setIsSearching] = useState(false);
++    // Compatibility fix for pinned Rspress 2.0.17 undefined.link and stale-result races. Revisit this patch when upgrading Rspress.
++    const searchPendingRef = useRef(false);
++    const searchRequestIdRef = useRef(0);
+     const [resultTabIndex, setResultTabIndex] = useState(0);
+     const [currentSuggestionIndex, setCurrentSuggestionIndex] = useState(0);
+     const pageSearcherRef = useRef(null);
+@@ -98,12 +101,22 @@ function SearchPanel({ focused, setFocused }) {
+         setInitStatus('inited');
+         const query = searchInputRef.current?.value;
+         if (query) {
++            const requestId = searchRequestIdRef.current;
+             const matched = await searcher.match(query);
++            if (searchRequestIdRef.current !== requestId || searchInputRef.current?.value !== query) return;
+             setSearchResult(matched || DEFAULT_RESULT);
++            searchPendingRef.current = false;
+             setIsSearching(false);
+         }
+     }
++    const resetSearchPending = ()=>{
++        searchRequestIdRef.current += 1;
++        searchPendingRef.current = false;
++        setIsSearching(false);
++    };
+     const clearSearchState = ()=>{
++        resetSearchPending();
++        setQuery('');
+         setFocused(false);
+         setResultTabIndex(0);
+         setCurrentSuggestionIndex(0);
+@@ -139,10 +152,13 @@ function SearchPanel({ focused, setFocused }) {
+                     }
+                     break;
+                 case KEY_CODE.ENTER:
+-                    if (e.isComposing) return;
++                    if (!focused) return;
++                    if (e.isComposing || searchPendingRef.current) return;
++                    if (!searchInputRef.current?.value) return;
+                     if (currentSuggestionIndex >= 0 && currentRenderType === RenderType.Default) {
+                         const flatSuggestions = Array.from(normalizeSuggestions(currentSuggestions).values()).flat();
+                         const suggestion = flatSuggestions[currentSuggestionIndex];
++                        if (!suggestion) return;
+                         navigate(suggestion.link);
+                         clearSearchState();
+                     }
+@@ -168,9 +184,14 @@ function SearchPanel({ focused, setFocused }) {
+     ]);
+     useEffect(()=>{
+         if (focused) {
++            searchPendingRef.current = false;
++            setIsSearching(false);
+             setSearchResult(DEFAULT_RESULT);
+             initSearch();
+-        } else setQuery('');
++        } else {
++            resetSearchPending();
++            setQuery('');
++        }
+     }, [
+         focused
+     ]);
+@@ -199,9 +220,8 @@ function SearchPanel({ focused, setFocused }) {
+         version,
+         versionedSearch
+     ]);
+-    const handleQueryChangedImpl = async (value)=>{
++    const handleQueryChangedImpl = async (value, requestId)=>{
+         let newQuery = value;
+-        setQuery(newQuery);
+         if (newQuery) {
+             const searchResult = [];
+             if ("beforeSearch" in __rspack_external_virtual_search_hooks_705b6e40) {
+@@ -224,14 +244,30 @@ function SearchPanel({ focused, setFocused }) {
+                 await __rspack_external_virtual_search_hooks_705b6e40[key](newQuery, searchResult);
+             }
+             const currQuery = searchInputRef.current?.value;
+-            if (currQuery === newQuery) {
++            if (searchRequestIdRef.current === requestId && currQuery === value) {
+                 setCurrentSuggestionIndex(0);
+                 setSearchResult(searchResult || DEFAULT_RESULT);
++                searchPendingRef.current = false;
+                 setIsSearching(false);
+             }
+         }
+     };
+     const handleQueryChange = useDebounce(handleQueryChangedImpl);
++    const handleInputChange = (value)=>{
++        const requestId = searchRequestIdRef.current + 1;
++        searchRequestIdRef.current = requestId;
++        setQuery(value);
++        setCurrentSuggestionIndex(0);
++        setSearchResult(DEFAULT_RESULT);
++        if (!value) {
++            searchPendingRef.current = false;
++            setIsSearching(false);
++            return;
++        }
++        searchPendingRef.current = true;
++        setIsSearching(true);
++        handleQueryChange(value, requestId);
++    };
+     const renderSearchResult = (result, isSearching)=>{
+         if (1 === result.length) {
+             const currentSearchResult = result[0].result;
+@@ -340,7 +376,7 @@ function SearchPanel({ focused, setFocused }) {
+                                         autoComplete: "off",
+                                         autoFocus: true,
+                                         inputMode: "search",
+-                                        onChange: (e)=>handleQueryChange(e.target.value)
++                                        onChange: (e)=>handleInputChange(e.target.value)
+                                     }),
+                                     /*#__PURE__*/ jsx("label", {
+                                         children: /*#__PURE__*/ jsx(SvgWrapper, {
+@@ -351,7 +387,7 @@ function SearchPanel({ focused, setFocused }) {
+                                                     e.stopPropagation();
+                                                     if (query) {
+                                                         searchInputRef.current.value = '';
+-                                                        setQuery('');
++                                                        handleInputChange('');
+                                                     } else clearSearchState();
+                                                 }
+                                             }

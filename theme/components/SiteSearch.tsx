@@ -1,39 +1,14 @@
 import { NoSSR } from '@rspress/core/runtime';
 import { IconSearch, SearchButton, SearchPanel, SvgWrapper } from '@rspress/core/theme-original';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import styles from './SiteSearch.module.css';
 
 export const OPEN_SEARCH_EVENT = 'thqllm:open-search';
-
-const CURRENT_DEFAULT_SUGGESTION_SELECTOR = '.rp-suggest-item--current .rp-suggest-item__link';
-const useIsomorphicLayoutEffect = typeof document === 'undefined' ? useEffect : useLayoutEffect;
 
 export function SiteSearch() {
   const [focused, setFocused] = useState(false);
   const focusedRef = useRef(false);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
-
-  useIsomorphicLayoutEffect(() => {
-    // Compatibility guard for pinned Rspress 2.0.17, whose passive-effect
-    // listener dereferences a missing suggestion for every document Enter.
-    // The current default suggestion classes are its stable rendered DOM contract.
-    const guardUnsafeEnter = (event: KeyboardEvent) => {
-      if (event.code !== 'Enter' || event.isComposing) {
-        return;
-      }
-
-      const hasCurrentDefaultSuggestion =
-        focusedRef.current && document.querySelector(CURRENT_DEFAULT_SUGGESTION_SELECTOR) !== null;
-      if (!hasCurrentDefaultSuggestion) {
-        event.stopImmediatePropagation();
-      }
-    };
-
-    document.addEventListener('keydown', guardUnsafeEnter);
-    return () => {
-      document.removeEventListener('keydown', guardUnsafeEnter);
-    };
-  }, []);
 
   const openSearch = useCallback((restoreTarget: HTMLElement | null) => {
     if (!focusedRef.current) {
