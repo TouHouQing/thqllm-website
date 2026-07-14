@@ -39,6 +39,81 @@ test('FluctGraph full-text search finds the Toho Image Studio overview', async (
   await expect(page.getByText(/Toho Image Studio 概览/).first()).toBeVisible();
 });
 
+test('SearchPanel keeps Enter safe without breaking keyboard navigation', async ({
+  page,
+  isMobile,
+}) => {
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => {
+    pageErrors.push(error);
+  });
+  const expectNoPageErrors = (stage: string) => {
+    expect(pageErrors, `${stage} emitted a pageerror`).toEqual([]);
+  };
+
+  await page.goto('/docs/fluctgraph/');
+
+  const searchButton = isMobile
+    ? page.getByRole('button', { name: '搜索', exact: true })
+    : page.getByRole('button', { name: /^搜索(?:\s|$)/ });
+  await searchButton.focus();
+  await expect(searchButton).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  const searchInput = page.getByLabel('SearchPanelInput');
+  await expect(searchInput).toBeVisible();
+  expectNoPageErrors('opening search from the visible trigger');
+
+  await searchInput.focus();
+  await page.keyboard.press('Enter');
+  await expect(searchInput).toBeVisible();
+  expectNoPageErrors('pressing Enter with an empty query');
+
+  const noResultQuery = 'zzzzqv-no-search-hit-7f3a9b2c';
+  await searchInput.fill(noResultQuery);
+  await expect(page.locator('.rp-no-search-result')).toContainText(noResultQuery);
+  await page.keyboard.press('Enter');
+  await expect(searchInput).toBeVisible();
+  expectNoPageErrors('pressing Enter with no search results');
+
+  await page.keyboard.press('Escape');
+  await expect(searchInput).not.toBeVisible();
+  expectNoPageErrors('closing the no-result panel');
+
+  await page.goto('/');
+  const docsLink = page
+    .getByRole('navigation', { name: '首页主菜单' })
+    .getByRole('link', { name: /使用文档/ });
+  await docsLink.focus();
+  await expect(docsLink).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/docs\/fluctgraph\/$/);
+  await expect(page.getByRole('heading', { level: 1, name: /FluctGraph/i })).toBeVisible();
+  expectNoPageErrors('following a regular link with Enter');
+
+  await page.keyboard.press('ControlOrMeta+k');
+  await expect(searchInput).toBeVisible();
+  expectNoPageErrors('reopening search with the keyboard shortcut');
+  await searchInput.fill('Toho Image Studio 概览');
+
+  const currentSuggestion = page.locator('.rp-suggest-item--current .rp-suggest-item__link');
+  await expect(currentSuggestion).toBeVisible();
+  expectNoPageErrors('rendering a current search suggestion');
+  const suggestionHref = await currentSuggestion.getAttribute('href');
+  expect(suggestionHref).not.toBeNull();
+  const expectedSuggestionUrl = new URL(suggestionHref ?? '', page.url());
+
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL((url) => {
+    return (
+      url.pathname === expectedSuggestionUrl.pathname &&
+      url.search === expectedSuggestionUrl.search &&
+      url.hash === expectedSuggestionUrl.hash
+    );
+  });
+  expectNoPageErrors('following the current search suggestion with Enter');
+});
+
 test('FluctGraph documentation uses the Chinese Rspress shell', async ({ page, isMobile }) => {
   await page.goto('/docs/fluctgraph/');
 
