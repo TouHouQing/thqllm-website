@@ -1,10 +1,12 @@
 import { Layout as BasicLayout, type LayoutProps } from '@rspress/core/theme-original';
-import { AccessibilityGuards } from './components/AccessibilityGuards';
 import { DocProjectHeader } from './components/DocProjectHeader';
 import { ApiEndpoint } from './components/mdx/ApiEndpoint';
 import { ParameterTable } from './components/mdx/ParameterTable';
 import { ProjectLink } from './components/mdx/ProjectLink';
 import { ProjectDocSwitcher } from './components/ProjectDocSwitcher';
+
+export { DocLayout } from './layouts/DocLayout';
+
 import { HomeLayout } from './layouts/HomeLayout';
 import { NotFoundLayout } from './layouts/NotFoundLayout';
 import './index.css';
@@ -22,12 +24,7 @@ export function Layout() {
     <BasicLayout
       HomeLayout={HomeLayout}
       NotFoundLayout={NotFoundLayout}
-      afterNav={
-        <>
-          <ProjectDocSwitcher />
-          <AccessibilityGuards />
-        </>
-      }
+      afterNav={<ProjectDocSwitcher />}
       beforeDoc={<DocProjectHeader />}
       components={mdxComponents}
     />

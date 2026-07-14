@@ -4,6 +4,7 @@ import { pluginLlms } from '@rspress/plugin-llms';
 import { pluginSitemap } from '@rspress/plugin-sitemap';
 import { projects } from './src/data/projects';
 import { createSidebarConfig } from './src/lib/projects';
+import { rehypeAccessibleHeaderAnchors } from './src/lib/rehypeAccessibleHeaderAnchors';
 
 export default defineConfig({
   root: path.join(__dirname, 'site'),
@@ -28,6 +29,7 @@ export default defineConfig({
     link: {
       checkDeadLinks: true,
     },
+    rehypePlugins: [rehypeAccessibleHeaderAnchors],
   },
   plugins: [
     pluginSitemap({
