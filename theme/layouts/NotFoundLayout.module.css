@@ -56,8 +56,11 @@
   border-radius: 4px;
   color: var(--thq-paper);
   font-family: var(--thq-serif-font);
+  font-size: 1rem;
   font-weight: 700;
   text-decoration: none;
+  background: transparent;
+  cursor: pointer;
 }
 
 .link:first-child {
@@ -69,6 +72,11 @@
 .link:hover {
   color: var(--thq-ink-deep);
   background: var(--thq-paper);
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--thq-gold);
+  outline-offset: 2px;
 }
 
 .link:active {

@@ -1,13 +1,23 @@
 import { Link } from '@rspress/core/theme-original';
+import { OPEN_SEARCH_EVENT } from '../components/SiteSearch';
 import styles from './NotFoundLayout.module.css';
 
 const recoveryLinks = [
   { href: '/', label: '返回首页' },
   { href: '/projects/', label: '查看项目' },
-  { href: '/docs/fluctgraph/', label: '搜索文档' },
 ] as const;
 
 export function NotFoundLayout() {
+  const openSearch = () => {
+    window.dispatchEvent(
+      new CustomEvent(OPEN_SEARCH_EVENT, {
+        detail: {
+          source: 'not-found-layout',
+        },
+      }),
+    );
+  };
+
   return (
     <main className={styles.page}>
       <div className={styles.content}>
@@ -21,6 +31,9 @@ export function NotFoundLayout() {
               {link.label}
             </Link>
           ))}
+          <button className={styles.link} type="button" onClick={openSearch}>
+            搜索文档
+          </button>
         </nav>
       </div>
     </main>

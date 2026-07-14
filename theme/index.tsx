@@ -3,7 +3,9 @@ import { DocProjectHeader } from './components/DocProjectHeader';
 import { ApiEndpoint } from './components/mdx/ApiEndpoint';
 import { ParameterTable } from './components/mdx/ParameterTable';
 import { ProjectLink } from './components/mdx/ProjectLink';
+import { NoScriptNavigation } from './components/NoScriptNavigation';
 import { ProjectDocSwitcher } from './components/ProjectDocSwitcher';
+import { SiteSearch } from './components/SiteSearch';
 
 export { DocLayout } from './layouts/DocLayout';
 
@@ -24,7 +26,12 @@ export function Layout() {
     <BasicLayout
       HomeLayout={HomeLayout}
       NotFoundLayout={NotFoundLayout}
-      afterNav={<ProjectDocSwitcher />}
+      afterNav={
+        <>
+          <NoScriptNavigation />
+          <ProjectDocSwitcher />
+        </>
+      }
       beforeDoc={<DocProjectHeader />}
       components={mdxComponents}
     />
@@ -32,3 +39,4 @@ export function Layout() {
 }
 
 export * from '@rspress/core/theme-original';
+export { SiteSearch as Search };

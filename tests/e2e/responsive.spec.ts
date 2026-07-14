@@ -109,6 +109,34 @@ test('home remains useful without JavaScript', async ({ browser }) => {
   }
 });
 
+test('mobile pages keep core navigation available without JavaScript', async ({ browser }) => {
+  const context = await browser.newContext({
+    baseURL: baseUrl,
+    javaScriptEnabled: false,
+    viewport: { width: 390, height: 844 },
+  });
+
+  try {
+    const page = await context.newPage();
+    await page.goto('/docs/fluctgraph/');
+
+    const fallbackNavigation = page.getByRole('navigation', {
+      name: '无 JavaScript 导航',
+    });
+    await expect(fallbackNavigation).toBeVisible();
+    await fallbackNavigation.getByRole('link', { name: 'THQ API 文档' }).click();
+    await expect(page).toHaveURL(/\/docs\/thq-api\/$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'THQ API' })).toBeVisible();
+
+    await page.goto('/about/');
+    await fallbackNavigation.getByRole('link', { name: '项目', exact: true }).click();
+    await expect(page).toHaveURL(/\/projects\/$/);
+    await expect(page.getByRole('heading', { level: 1, name: '项目', exact: true })).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
 test('custom 404 offers working recovery actions', async ({ page }) => {
   await page.goto('/route-that-does-not-exist/');
 
@@ -124,13 +152,23 @@ test('custom 404 offers working recovery actions', async ({ page }) => {
     'href',
     '/projects/',
   );
-  await expect(recoveryNavigation.getByRole('link', { name: '搜索文档' })).toHaveAttribute(
-    'href',
-    '/docs/fluctgraph/',
-  );
+  await expect(recoveryNavigation.getByRole('button', { name: '搜索文档' })).toBeVisible();
 
   await recoveryNavigation.getByRole('link', { name: '查看项目' }).click();
   await expect(page).toHaveURL(/\/projects\/$/);
+});
+
+test('custom 404 opens the site search panel from the recovery button', async ({ page }) => {
+  await page.goto('/route-that-does-not-exist/');
+
+  const searchButton = page
+    .getByRole('navigation', { name: '错误页恢复操作' })
+    .getByRole('button', { name: '搜索文档' });
+  await expect(searchButton).toBeVisible();
+
+  await searchButton.click();
+
+  await expect(page.getByLabel('SearchPanelInput')).toBeVisible();
 });
 
 test('home mobile visual regression', async ({ page, isMobile }) => {
