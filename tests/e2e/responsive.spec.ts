@@ -109,7 +109,12 @@ test('home remains useful without JavaScript', async ({ browser }) => {
   }
 });
 
-test('mobile pages keep core navigation available without JavaScript', async ({ browser }) => {
+test('mobile pages keep core navigation available without JavaScript', async ({
+  browser,
+  isMobile,
+}) => {
+  test.skip(Boolean(isMobile), 'Custom mobile context only needs one browser project');
+
   const context = await browser.newContext({
     baseURL: baseUrl,
     javaScriptEnabled: false,

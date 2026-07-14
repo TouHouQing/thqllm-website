@@ -18,9 +18,21 @@ const projectDocLinks = projects
 
 const fallbackLinks = [...primaryLinks, ...projectDocLinks];
 
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 function renderNoScriptMarkup() {
   const links = fallbackLinks
-    .map((link) => `<a class="${styles.link}" href="${link.href}">${link.label}</a>`)
+    .map(
+      (link) =>
+        `<a class="${styles.link}" href="${escapeHtml(link.href)}">${escapeHtml(link.label)}</a>`,
+    )
     .join('');
 
   return `<div class="${styles.shell}"><nav class="${styles.nav}" aria-label="无 JavaScript 导航">${links}</nav></div>`;

@@ -4,10 +4,6 @@ import { useEffect, useState } from 'react';
 
 export const OPEN_SEARCH_EVENT = 'thqllm:open-search';
 
-export type OpenSearchDetail = {
-  source?: string;
-};
-
 export function SiteSearch() {
   const [focused, setFocused] = useState(false);
 
