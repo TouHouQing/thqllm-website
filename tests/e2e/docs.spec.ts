@@ -39,6 +39,29 @@ test('FluctGraph full-text search finds the Toho Image Studio overview', async (
   await expect(page.getByText(/Toho Image Studio 概览/).first()).toBeVisible();
 });
 
+test('FluctGraph documentation uses the Chinese Rspress shell', async ({ page, isMobile }) => {
+  await page.goto('/docs/fluctgraph/');
+
+  await expect(page.getByText(/^最后更新于:/)).toBeVisible();
+  await expect(page.getByRole('link', { name: /^下一页(?:\s|$)/ })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zh');
+
+  if (isMobile) {
+    await expect(page.getByRole('button', { name: '菜单', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '目录', exact: true })).toBeVisible();
+    await page.keyboard.press('ControlOrMeta+k');
+  } else {
+    const searchButton = page.getByRole('button', { name: /^搜索(?:\s|$)/ });
+    await expect(searchButton).toBeVisible();
+    await expect(
+      page.getByRole('complementary', { name: '页内目录' }).getByText('目录', { exact: true }),
+    ).toBeVisible();
+    await searchButton.click();
+  }
+
+  await expect(page.getByLabel('SearchPanelInput')).toHaveAttribute('placeholder', '搜索');
+});
+
 test('THQ API documentation has no detectable accessibility violations', async ({ page }) => {
   await page.goto('/docs/thq-api/');
   await expect(page.getByRole('heading', { level: 1, name: /THQ API/i })).toBeVisible();
@@ -110,11 +133,25 @@ test('project switcher loads the selected documentation root', async ({ page, is
 
 test('FluctGraph documentation desktop visual regression', async ({ page, isMobile }) => {
   test.skip(Boolean(isMobile), 'Desktop snapshot only');
+  test.skip(process.platform !== 'darwin', 'Visual snapshots are reviewed on macOS only');
 
   await openDeterministicDocs(page, '/docs/fluctgraph/');
   await expect(page.locator('.rp-last-updated')).toBeVisible();
 
   await expect(page).toHaveScreenshot('docs-desktop.png', {
+    animations: 'disabled',
+    fullPage: true,
+  });
+});
+
+test('FluctGraph documentation mobile visual regression', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Mobile snapshot only');
+  test.skip(process.platform !== 'darwin', 'Visual snapshots are reviewed on macOS only');
+
+  await openDeterministicDocs(page, '/docs/fluctgraph/');
+  await expect(page.getByText(/^最后更新于:/)).toBeVisible();
+
+  await expect(page).toHaveScreenshot('docs-mobile.png', {
     animations: 'disabled',
     fullPage: true,
   });

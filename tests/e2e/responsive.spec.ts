@@ -253,6 +253,7 @@ test('custom 404 Enter key opens search without page errors and Escape restores 
 
 test('home mobile visual regression', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'Mobile snapshot only');
+  test.skip(process.platform !== 'darwin', 'Visual snapshots are reviewed on macOS only');
 
   await openDeterministicMobileHome(page);
 

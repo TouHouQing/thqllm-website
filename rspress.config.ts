@@ -9,7 +9,7 @@ import { rehypeAccessibleHeaderAnchors } from './src/lib/rehypeAccessibleHeaderA
 export default defineConfig({
   root: path.join(__dirname, 'site'),
   outDir: path.join(__dirname, 'doc_build'),
-  lang: 'zh-CN',
+  lang: 'zh',
   title: 'THQLLM',
   description: '模型中转、AI 编程、图像生成与实验工具的统一项目入口。',
   icon: '/favicon.svg',

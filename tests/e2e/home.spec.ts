@@ -84,6 +84,7 @@ test('home has no detectable accessibility violations', async ({ page }) => {
 
 test('home desktop visual regression', async ({ page, isMobile }) => {
   test.skip(Boolean(isMobile), 'Desktop snapshot only');
+  test.skip(process.platform !== 'darwin', 'Visual snapshots are reviewed on macOS only');
 
   await openDeterministicHome(page);
 

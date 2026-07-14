@@ -29,9 +29,9 @@ pnpm verify
 
 1. Add a validated entry to `src/data/projects.ts` with a unique `id` and `order` and an HTTPS `externalUrl`.
 2. For every new project, update the registered-project count in `src/data/projects.test.ts` and the visible project-name summary in `theme/components/HomeBands.tsx`.
-3. Regenerate and manually review the homepage desktop and mobile visual baselines because both the Hero node count and Manual list change.
+3. Regenerate and manually review the homepage desktop and mobile visual baselines on macOS because both the Hero node count and Manual list change. Adding a project or otherwise changing the homepage visuals also requires regenerating and checking `site/public/og-cover.png`.
 4. If the project has `docs`, configure `docs.basePath` and `docs.sections`, add matching Markdown/MDX under `site/docs/<project-id>/`, and keep them aligned.
-5. For a documented project, update the sidebar enumeration in `src/lib/projects.test.ts`, the documentation-root enumeration in `tests/e2e/docs.spec.ts`, and the relevant `requiredOutputs` and URL expectations in `scripts/verify-build.mjs`; regenerate and manually review the documentation desktop visual baseline because the project switcher changes.
+5. For a documented project, update the sidebar enumeration in `src/lib/projects.test.ts`, the documentation-root enumeration in `tests/e2e/docs.spec.ts`, and the relevant `requiredOutputs` and URL expectations in `scripts/verify-build.mjs`; regenerate and manually review both the documentation desktop and mobile visual baselines because the project switcher changes.
 6. If `featured: true`, update `theme/tests/ProjectStageGrid.test.tsx` and the homepage featured count and project enumeration in `tests/e2e/home.spec.ts` and `scripts/verify-build.mjs`.
 7. Run `pnpm verify`.
 
@@ -43,8 +43,8 @@ pnpm verify
 
 ## Visual baselines
 
-Playwright visual snapshots use operating-system suffixes because CJK font rasterization differs across platforms. The reviewed baselines in this repository are the macOS `-darwin.png` files.
+Playwright visual snapshots are maintained and executed only on macOS/Darwin. The reviewed baselines in this repository are the `-darwin.png` files.
 
-When adding Linux or another CI platform, run `pnpm test:e2e:update` on that platform and commit the genuinely generated baselines with the corresponding suffix. Do not copy or rename PNG files from another platform.
+On Linux, `pnpm test:e2e` and `pnpm verify` still run behavior, responsive, and accessibility coverage; visual cases skip themselves. Do not generate, copy, rename, or commit `*-linux.png` baselines.
 
-After running `pnpm test:e2e:update`, inspect every generated PNG and confirm there is no blank media, incorrect cropping, overlapping text, hidden controls, or overflow. Then run `pnpm test:e2e` before committing.
+On macOS, after running `pnpm test:e2e:update`, inspect every changed PNG and confirm there is no blank media, incorrect cropping, overlapping text, hidden controls, or horizontal overflow. Then run `pnpm test:e2e` before committing.
