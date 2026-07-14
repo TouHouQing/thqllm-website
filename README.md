@@ -7,6 +7,8 @@ Pure-static project portal and documentation site for `thqllm.com`, built with R
 - Node.js `^20.19.0 || ^22.13.0 || >=24.0.0`
 - pnpm `11.7.0`
 
+Run pnpm commands from the repository root without `--ignore-workspace`. The root `pnpm-workspace.yaml` carries the required Rspress patched dependency configuration; ignoring the workspace makes `pnpm install --frozen-lockfile` fail with a configuration mismatch.
+
 For first setup, install dependencies and Playwright's Chromium browser:
 
 ```bash
