@@ -78,6 +78,13 @@ test('home remains useful without JavaScript', async ({ browser }) => {
       page.getByRole('navigation', { name: '首页主菜单' }).getByRole('link', { name: /项目选择/ }),
     ).toBeVisible();
     await expect(page.getByRole('link', { name: '进入 FluctGraph' })).toBeVisible();
+
+    await page
+      .getByRole('link', { name: /使用文档/ })
+      .first()
+      .click();
+    await expect(page).toHaveURL(/\/docs\/fluctgraph\/$/);
+    await expect(page.getByRole('heading', { level: 1, name: /FluctGraph/i })).toBeVisible();
   } finally {
     await context.close();
   }

@@ -48,6 +48,69 @@ test('THQ API documentation has no detectable accessibility violations', async (
   expect(results.violations).toEqual([]);
 });
 
+test('client navigation from home preserves documentation accessibility', async ({ page }) => {
+  await page.goto('/');
+  await page
+    .getByRole('link', { name: /使用文档/ })
+    .first()
+    .click();
+  await expect(page.getByRole('heading', { level: 1, name: /FluctGraph/i })).toBeVisible();
+
+  const results = await new AxeBuilder({ page }).analyze();
+
+  expect(results.violations).toEqual([]);
+});
+
+test('static documentation keeps landmarks and hidden anchors accessible', async ({ browser }) => {
+  const context = await browser.newContext({
+    baseURL: 'http://127.0.0.1:4173',
+    javaScriptEnabled: false,
+  });
+
+  try {
+    const page = await context.newPage();
+    await page.goto('/docs/thq-api/');
+
+    await expect(page.locator('.rp-doc-layout__sidebar')).toHaveAttribute(
+      'aria-label',
+      '文档导航',
+    );
+    await expect(page.locator('.rp-doc-layout__outline')).toHaveAttribute('aria-label', '页内目录');
+
+    const hiddenAnchors = page.locator('.rp-header-anchor[aria-hidden="true"]');
+    expect(await hiddenAnchors.count()).toBeGreaterThan(0);
+    for (const anchor of await hiddenAnchors.all()) {
+      await expect(anchor).toHaveAttribute('tabindex', '-1');
+    }
+  } finally {
+    await context.close();
+  }
+});
+
+test('project switcher loads the selected documentation root', async ({ page, isMobile }) => {
+  await page.goto('/docs/fluctgraph/');
+
+  const mobileSwitcher = page.getByRole('combobox', { name: '切换当前项目文档' });
+  if (isMobile) {
+    await mobileSwitcher.selectOption('thq-api');
+  } else {
+    await page.getByRole('link', { name: 'THQ API 文档' }).click();
+  }
+
+  await expect(page).toHaveURL(/\/docs\/thq-api\/$/);
+  await expect(page.getByRole('heading', { level: 1, name: /THQ API/i })).toBeVisible();
+  if (isMobile) {
+    await expect(mobileSwitcher).toHaveValue('thq-api');
+  } else {
+    await expect(
+      page.getByRole('navigation', { name: '切换项目文档' }).locator('strong'),
+    ).toHaveText('THQ API');
+  }
+
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations).toEqual([]);
+});
+
 test('FluctGraph documentation desktop visual regression', async ({ page, isMobile }) => {
   test.skip(Boolean(isMobile), 'Desktop snapshot only');
 
