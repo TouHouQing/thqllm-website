@@ -8,7 +8,7 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
   expect: {
     toHaveScreenshot: {
-      pathTemplate: '{snapshotDir}/{testFileDir}/{testFileName}-snapshots/{arg}{-projectName}{ext}',
+      // Keep Playwright's platform suffix because CJK font rasterization differs by operating system.
       stylePath: path.resolve(import.meta.dirname, 'tests/e2e/visual-regression.css'),
     },
   },
