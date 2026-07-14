@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
 
 const baseUrl = 'http://127.0.0.1:4173';
@@ -7,6 +8,12 @@ const responsiveViewports = [
   { width: 360, height: 800 },
 ] as const;
 const responsivePaths = ['/', '/projects/', '/docs/fluctgraph/'] as const;
+const topLevelRoutes = [
+  { path: '/projects/', heading: '项目' },
+  { path: '/notes/', heading: '开发札记' },
+  { path: '/about/', heading: '关于 THQLLM' },
+  { path: '/route-that-does-not-exist/', heading: 'CONTINUE?' },
+] as const;
 
 async function openDeterministicMobileHome(page: Page) {
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -43,6 +50,18 @@ for (const viewport of responsiveViewports) {
       expect(overflow).toBeLessThanOrEqual(1);
     });
   }
+}
+
+for (const route of topLevelRoutes) {
+  test(`${route.path} has no detectable accessibility violations`, async ({ page }) => {
+    await page.goto(route.path);
+    await expect(
+      page.getByRole('heading', { level: 1, name: route.heading, exact: true }),
+    ).toBeVisible();
+
+    const results = await new AxeBuilder({ page }).analyze();
+    expect(results.violations).toEqual([]);
+  });
 }
 
 test('home canvas honors reduced motion', async ({ page }) => {
