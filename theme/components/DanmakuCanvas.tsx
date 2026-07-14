@@ -1,5 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { createDanmakuFrame } from '../../src/lib/danmaku';
+import {
+  createDanmakuFrame,
+  DANMAKU_BULLET_RADIUS_X,
+  DANMAKU_BULLET_RADIUS_Y,
+  DANMAKU_BULLET_SHADOW_BLUR,
+} from '../../src/lib/danmaku';
 
 const MOBILE_BREAKPOINT = 640;
 const MOBILE_BULLET_COUNT = 16;
@@ -30,16 +35,22 @@ export function DanmakuCanvas() {
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
       context.clearRect(0, 0, width, height);
 
-      const bulletCount = width <= MOBILE_BREAKPOINT ? MOBILE_BULLET_COUNT : DESKTOP_BULLET_COUNT;
-      for (const bullet of createDanmakuFrame(width, height, angle, bulletCount)) {
+      const preset = width <= MOBILE_BREAKPOINT ? 'mobile' : 'desktop';
+      const bulletCount = preset === 'mobile' ? MOBILE_BULLET_COUNT : DESKTOP_BULLET_COUNT;
+      const bullets = createDanmakuFrame(width, height, angle, bulletCount, preset);
+      if (reducedMotion) {
+        canvas.dataset.danmakuFrame = JSON.stringify(bullets);
+      }
+
+      for (const bullet of bullets) {
         context.save();
         context.translate(bullet.x, bullet.y);
         context.rotate(bullet.rotation);
         context.fillStyle = bullet.color;
         context.shadowColor = bullet.color;
-        context.shadowBlur = 8;
+        context.shadowBlur = DANMAKU_BULLET_SHADOW_BLUR;
         context.beginPath();
-        context.ellipse(0, 0, 4, 9, 0, 0, Math.PI * 2);
+        context.ellipse(0, 0, DANMAKU_BULLET_RADIUS_X, DANMAKU_BULLET_RADIUS_Y, 0, 0, Math.PI * 2);
         context.fill();
         context.restore();
       }

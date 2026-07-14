@@ -1,9 +1,14 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
+import { DANMAKU_BULLET_PROTECTION_RADIUS } from '../../src/lib/danmaku';
 
 const baseUrl = 'http://127.0.0.1:4173';
 const responsiveViewports = [
   { width: 1024, height: 768 },
+  { width: 390, height: 844 },
+  { width: 360, height: 800 },
+] as const;
+const mobileDanmakuViewports = [
   { width: 390, height: 844 },
   { width: 360, height: 800 },
 ] as const;
@@ -33,6 +38,27 @@ async function openDeterministicMobileHome(page: Page) {
       }),
     );
   });
+}
+
+interface DanmakuFramePosition {
+  x: number;
+  y: number;
+}
+
+interface RelativeRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+function overlapsProtectedRect(bullet: DanmakuFramePosition, rect: RelativeRect): boolean {
+  return (
+    bullet.x + DANMAKU_BULLET_PROTECTION_RADIUS > rect.left &&
+    bullet.x - DANMAKU_BULLET_PROTECTION_RADIUS < rect.right &&
+    bullet.y + DANMAKU_BULLET_PROTECTION_RADIUS > rect.top &&
+    bullet.y - DANMAKU_BULLET_PROTECTION_RADIUS < rect.bottom
+  );
 }
 
 for (const viewport of responsiveViewports) {
@@ -68,8 +94,75 @@ test('home canvas honors reduced motion', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
 
-  await expect(page.getByTestId('danmaku-canvas')).toHaveAttribute('data-motion', 'reduced');
+  const canvas = page.getByTestId('danmaku-canvas');
+  await expect(canvas).toHaveAttribute('data-motion', 'reduced');
+  await expect(canvas).toHaveAttribute('data-danmaku-frame', /^\[/);
 });
+
+for (const viewport of mobileDanmakuViewports) {
+  test(`home mobile danmaku stays outside the actual main-menu bounds at ${viewport.width}x${viewport.height}`, async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(!isMobile, 'Mobile geometry only needs the mobile browser project');
+
+    await page.setViewportSize(viewport);
+    await openDeterministicMobileHome(page);
+
+    const canvas = page.getByTestId('danmaku-canvas');
+    const frameJson = await canvas.getAttribute('data-danmaku-frame');
+    expect(frameJson).not.toBeNull();
+    const frame = JSON.parse(frameJson ?? '[]') as DanmakuFramePosition[];
+    const geometry = await page.evaluate(() => {
+      const canvasElement = document.querySelector('[data-testid="danmaku-canvas"]');
+      const menu = document.querySelector('nav[aria-label="首页主菜单"]');
+
+      if (!(canvasElement instanceof HTMLCanvasElement) || !(menu instanceof HTMLElement)) {
+        throw new Error('Missing home danmaku canvas or main menu');
+      }
+
+      const canvasRect = canvasElement.getBoundingClientRect();
+      const menuRects = Array.from(menu.querySelectorAll('a'), (link) => {
+        const rect = link.getBoundingClientRect();
+        return {
+          left: rect.left - canvasRect.left,
+          top: rect.top - canvasRect.top,
+          right: rect.right - canvasRect.left,
+          bottom: rect.bottom - canvasRect.top,
+        };
+      });
+
+      return {
+        canvas: {
+          width: canvasRect.width,
+          height: canvasRect.height,
+        },
+        menuRects,
+        overflow: document.documentElement.scrollWidth - window.innerWidth,
+      };
+    });
+    const overlappingBulletIndices = frame.flatMap((bullet, bulletIndex) =>
+      geometry.menuRects.some((rect) => overlapsProtectedRect(bullet, rect)) ? [bulletIndex] : [],
+    );
+    const outOfBounds = frame.flatMap((bullet, bulletIndex) =>
+      bullet.x - DANMAKU_BULLET_PROTECTION_RADIUS < 0 ||
+      bullet.x + DANMAKU_BULLET_PROTECTION_RADIUS > geometry.canvas.width ||
+      bullet.y - DANMAKU_BULLET_PROTECTION_RADIUS < 0 ||
+      bullet.y + DANMAKU_BULLET_PROTECTION_RADIUS > geometry.canvas.height
+        ? [bulletIndex]
+        : [],
+    );
+
+    expect(frame).toHaveLength(16);
+    expect(geometry.menuRects).toHaveLength(4);
+    expect(
+      overlappingBulletIndices,
+      `${viewport.width}x${viewport.height} has ${overlappingBulletIndices.length} protected menu overlaps`,
+    ).toEqual([]);
+    expect(outOfBounds, `${viewport.width}x${viewport.height} has clipped bullets`).toEqual([]);
+    expect(geometry.overflow).toBeLessThanOrEqual(1);
+  });
+}
 
 test('home remains navigable when hero images fail', async ({ page }) => {
   await page.route('**/assets/hero/*.webp', (route) => route.abort());
