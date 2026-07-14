@@ -253,6 +253,46 @@ test('custom 404 Enter key opens search without page errors and Escape restores 
   expect(pageErrors).toEqual([]);
 });
 
+test('custom 404 keeps the title on a single line on narrow screens without overflow', async ({
+  page,
+}) => {
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 360, height: 800 },
+  ] as const) {
+    await page.setViewportSize(viewport);
+    await page.goto('/route-that-does-not-exist/');
+
+    const title = page.getByRole('heading', { level: 1, name: 'CONTINUE?' });
+    await expect(title).toBeVisible();
+
+    const metrics = await title.evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const rects = Array.from(range.getClientRects());
+      const titleRect = element.getBoundingClientRect();
+
+      return {
+        lineCount: rects.length,
+        left: titleRect.left,
+        right: titleRect.right,
+        top: titleRect.top,
+        bottom: titleRect.bottom,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        overflow: document.documentElement.scrollWidth - window.innerWidth,
+      };
+    });
+
+    expect(metrics.lineCount).toBe(1);
+    expect(metrics.left).toBeGreaterThanOrEqual(0);
+    expect(metrics.right).toBeLessThanOrEqual(metrics.viewportWidth);
+    expect(metrics.top).toBeGreaterThanOrEqual(0);
+    expect(metrics.bottom).toBeLessThanOrEqual(metrics.viewportHeight);
+    expect(metrics.overflow).toBeLessThanOrEqual(1);
+  }
+});
+
 test('home mobile visual regression', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'Mobile snapshot only');
   test.skip(process.platform !== 'darwin', 'Visual snapshots are reviewed on macOS only');
