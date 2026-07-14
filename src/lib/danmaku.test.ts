@@ -17,6 +17,67 @@ function overlapsProtectedRect(bullet: { x: number; y: number }, rect: Exclusion
   );
 }
 
+function createMobileLayout(menuBottom: number, scrollHintTop: number) {
+  return {
+    preset: 'mobile',
+    exclusionBand: {
+      menuBottom,
+      scrollHintTop,
+    },
+  } as const;
+}
+
+function inspectCompleteOrbit(
+  width: number,
+  height: number,
+  menuBottom: number,
+  scrollHintTop: number,
+) {
+  const exclusionRects = [
+    { left: 0, top: 0, right: width, bottom: menuBottom },
+    { left: 0, top: scrollHintTop, right: width, bottom: height },
+  ];
+  let overlapCount = 0;
+  let outOfBoundsCount = 0;
+  let firstOverlap: { angle: number; index: number } | undefined;
+  let firstOutOfBounds: { angle: number; index: number } | undefined;
+
+  for (let step = 0; step < 1440; step += 1) {
+    const angle = (Math.PI * 2 * step) / 1440;
+    const frame = createDanmakuFrame(
+      width,
+      height,
+      angle,
+      16,
+      createMobileLayout(menuBottom, scrollHintTop),
+    );
+
+    for (const [index, bullet] of frame.entries()) {
+      if (exclusionRects.some((rect) => overlapsProtectedRect(bullet, rect))) {
+        overlapCount += 1;
+        firstOverlap ??= { angle, index };
+      }
+
+      if (
+        bullet.x - DANMAKU_BULLET_PROTECTION_RADIUS < 0 ||
+        bullet.x + DANMAKU_BULLET_PROTECTION_RADIUS > width ||
+        bullet.y - DANMAKU_BULLET_PROTECTION_RADIUS < 0 ||
+        bullet.y + DANMAKU_BULLET_PROTECTION_RADIUS > height
+      ) {
+        outOfBoundsCount += 1;
+        firstOutOfBounds ??= { angle, index };
+      }
+    }
+  }
+
+  return {
+    overlapCount,
+    outOfBoundsCount,
+    firstOverlap,
+    firstOutOfBounds,
+  };
+}
+
 describe('createDanmakuFrame', () => {
   it('returns a deterministic number of bullets', () => {
     const first = createDanmakuFrame(800, 600, 0, 24);
@@ -41,52 +102,29 @@ describe('createDanmakuFrame', () => {
   });
 
   it('returns a deterministic mobile frame', () => {
-    const width = 360;
-    const height = 640;
-    const first = createDanmakuFrame(width, height, 0, 16, 'mobile');
-    const second = createDanmakuFrame(width, height, 0, 16, 'mobile');
+    const width = 390;
+    const height = 679;
+    const layout = createMobileLayout(361, 637);
+    const first = createDanmakuFrame(width, height, 0, 16, layout);
+    const second = createDanmakuFrame(width, height, 0, 16, layout);
 
     expect(first).toEqual(second);
     expect(first).toHaveLength(16);
   });
 
-  it('keeps the complete mobile orbit in bounds and outside the menu exclusion rectangle', () => {
-    const width = 360;
-    const height = 640;
-    const menuRect = {
-      left: 16,
-      top: 168,
-      right: width - 16,
-      bottom: 349,
-    };
-    let overlapCount = 0;
-    let outOfBoundsCount = 0;
-    let firstOverlap: { angle: number; index: number } | undefined;
-    let firstOutOfBounds: { angle: number; index: number } | undefined;
+  it('adapts the complete mobile orbit to the available exclusion band', () => {
+    const orbit = inspectCompleteOrbit(320, 568, 352, 526);
 
-    for (let step = 0; step < 1440; step += 1) {
-      const angle = (Math.PI * 2 * step) / 1440;
-      const frame = createDanmakuFrame(width, height, angle, 16, 'mobile');
+    expect(orbit.overlapCount, `first overlap: ${JSON.stringify(orbit.firstOverlap)}`).toBe(0);
+    expect(
+      orbit.outOfBoundsCount,
+      `first out of bounds: ${JSON.stringify(orbit.firstOutOfBounds)}`,
+    ).toBe(0);
+  });
 
-      for (const [index, bullet] of frame.entries()) {
-        if (overlapsProtectedRect(bullet, menuRect)) {
-          overlapCount += 1;
-          firstOverlap ??= { angle, index };
-        }
+  it('returns no mobile bullets when the safe band cannot fit a useful orbit', () => {
+    const frame = createDanmakuFrame(640, 360, 0, 16, createMobileLayout(280, 318));
 
-        if (
-          bullet.x - DANMAKU_BULLET_PROTECTION_RADIUS < 0 ||
-          bullet.x + DANMAKU_BULLET_PROTECTION_RADIUS > width ||
-          bullet.y - DANMAKU_BULLET_PROTECTION_RADIUS < 0 ||
-          bullet.y + DANMAKU_BULLET_PROTECTION_RADIUS > height
-        ) {
-          outOfBoundsCount += 1;
-          firstOutOfBounds ??= { angle, index };
-        }
-      }
-    }
-
-    expect(overlapCount, `first overlap: ${JSON.stringify(firstOverlap)}`).toBe(0);
-    expect(outOfBoundsCount, `first out of bounds: ${JSON.stringify(firstOutOfBounds)}`).toBe(0);
+    expect(frame).toEqual([]);
   });
 });

@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
-import { DANMAKU_BULLET_PROTECTION_RADIUS } from '../../src/lib/danmaku';
+import { createDanmakuFrame, DANMAKU_BULLET_PROTECTION_RADIUS } from '../../src/lib/danmaku';
 
 const baseUrl = 'http://127.0.0.1:4173';
 const responsiveViewports = [
@@ -9,9 +9,17 @@ const responsiveViewports = [
   { width: 360, height: 800 },
 ] as const;
 const mobileDanmakuViewports = [
-  { width: 390, height: 844 },
+  { width: 320, height: 568 },
   { width: 360, height: 800 },
+  { width: 375, height: 667 },
+  { width: 390, height: 844 },
+  { width: 480, height: 800 },
+  { width: 640, height: 844 },
+  { width: 640, height: 480 },
+  { width: 640, height: 360 },
 ] as const;
+const MOBILE_DANMAKU_BULLET_COUNT = 16;
+const MOBILE_DANMAKU_ORBIT_SAMPLES = 1440;
 const responsivePaths = ['/', '/projects/', '/docs/fluctgraph/'] as const;
 const topLevelRoutes = [
   { path: '/projects/', heading: '项目' },
@@ -52,6 +60,27 @@ interface RelativeRect {
   bottom: number;
 }
 
+interface DanmakuLayoutMetrics {
+  canvas: {
+    width: number;
+    height: number;
+  };
+  exclusionRects: RelativeRect[];
+  menuBottom: number;
+  scrollHintTop: number;
+  overflow: number;
+}
+
+function createMobileLayout(layout: DanmakuLayoutMetrics) {
+  return {
+    preset: 'mobile',
+    exclusionBand: {
+      menuBottom: layout.menuBottom,
+      scrollHintTop: layout.scrollHintTop,
+    },
+  } as const;
+}
+
 function overlapsProtectedRect(bullet: DanmakuFramePosition, rect: RelativeRect): boolean {
   return (
     bullet.x + DANMAKU_BULLET_PROTECTION_RADIUS > rect.left &&
@@ -59,6 +88,90 @@ function overlapsProtectedRect(bullet: DanmakuFramePosition, rect: RelativeRect)
     bullet.y + DANMAKU_BULLET_PROTECTION_RADIUS > rect.top &&
     bullet.y - DANMAKU_BULLET_PROTECTION_RADIUS < rect.bottom
   );
+}
+
+async function readDanmakuLayout(page: Page): Promise<DanmakuLayoutMetrics> {
+  return page.evaluate(() => {
+    const root = document.querySelector('[data-danmaku-root]');
+    const canvasElement = root?.querySelector('[data-testid="danmaku-canvas"]');
+    const menuElements = root?.querySelectorAll('[data-danmaku-exclusion="menu"]');
+    const scrollHint = root?.querySelector('[data-danmaku-exclusion="scroll-hint"]');
+
+    if (
+      !(root instanceof HTMLElement) ||
+      !(canvasElement instanceof HTMLCanvasElement) ||
+      !menuElements ||
+      !(scrollHint instanceof HTMLElement)
+    ) {
+      throw new Error('Missing home danmaku root, canvas, or exclusions');
+    }
+
+    const canvasRect = canvasElement.getBoundingClientRect();
+    const toRelativeRect = (element: Element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        left: rect.left - canvasRect.left,
+        top: rect.top - canvasRect.top,
+        right: rect.right - canvasRect.left,
+        bottom: rect.bottom - canvasRect.top,
+      };
+    };
+    const menuRects = Array.from(menuElements, toRelativeRect);
+    const scrollHintRect = toRelativeRect(scrollHint);
+
+    return {
+      canvas: {
+        width: canvasRect.width,
+        height: canvasRect.height,
+      },
+      exclusionRects: [...menuRects, scrollHintRect],
+      menuBottom: Math.max(...menuRects.map((rect) => rect.bottom)),
+      scrollHintTop: scrollHintRect.top,
+      overflow: document.documentElement.scrollWidth - window.innerWidth,
+    };
+  });
+}
+
+function inspectCompleteMobileOrbit(layout: DanmakuLayoutMetrics) {
+  let overlapCount = 0;
+  let clippedCount = 0;
+  let firstOverlap: { step: number; bulletIndex: number } | undefined;
+  let firstClipped: { step: number; bulletIndex: number } | undefined;
+
+  for (let step = 0; step < MOBILE_DANMAKU_ORBIT_SAMPLES; step += 1) {
+    const angle = (Math.PI * 2 * step) / MOBILE_DANMAKU_ORBIT_SAMPLES;
+    const frame = createDanmakuFrame(
+      layout.canvas.width,
+      layout.canvas.height,
+      angle,
+      MOBILE_DANMAKU_BULLET_COUNT,
+      createMobileLayout(layout),
+    );
+
+    for (const [bulletIndex, bullet] of frame.entries()) {
+      if (layout.exclusionRects.some((rect) => overlapsProtectedRect(bullet, rect))) {
+        overlapCount += 1;
+        firstOverlap ??= { step, bulletIndex };
+      }
+
+      if (
+        bullet.x - DANMAKU_BULLET_PROTECTION_RADIUS < 0 ||
+        bullet.x + DANMAKU_BULLET_PROTECTION_RADIUS > layout.canvas.width ||
+        bullet.y - DANMAKU_BULLET_PROTECTION_RADIUS < 0 ||
+        bullet.y + DANMAKU_BULLET_PROTECTION_RADIUS > layout.canvas.height
+      ) {
+        clippedCount += 1;
+        firstClipped ??= { step, bulletIndex };
+      }
+    }
+  }
+
+  return {
+    overlapCount,
+    clippedCount,
+    firstOverlap,
+    firstClipped,
+  };
 }
 
 for (const viewport of responsiveViewports) {
@@ -100,7 +213,7 @@ test('home canvas honors reduced motion', async ({ page }) => {
 });
 
 for (const viewport of mobileDanmakuViewports) {
-  test(`home mobile danmaku stays outside the actual main-menu bounds at ${viewport.width}x${viewport.height}`, async ({
+  test(`home mobile danmaku complete orbit avoids actual controls at ${viewport.width}x${viewport.height}`, async ({
     page,
     isMobile,
   }) => {
@@ -113,56 +226,93 @@ for (const viewport of mobileDanmakuViewports) {
     const frameJson = await canvas.getAttribute('data-danmaku-frame');
     expect(frameJson).not.toBeNull();
     const frame = JSON.parse(frameJson ?? '[]') as DanmakuFramePosition[];
-    const geometry = await page.evaluate(() => {
-      const canvasElement = document.querySelector('[data-testid="danmaku-canvas"]');
-      const menu = document.querySelector('nav[aria-label="首页主菜单"]');
-
-      if (!(canvasElement instanceof HTMLCanvasElement) || !(menu instanceof HTMLElement)) {
-        throw new Error('Missing home danmaku canvas or main menu');
-      }
-
-      const canvasRect = canvasElement.getBoundingClientRect();
-      const menuRects = Array.from(menu.querySelectorAll('a'), (link) => {
-        const rect = link.getBoundingClientRect();
-        return {
-          left: rect.left - canvasRect.left,
-          top: rect.top - canvasRect.top,
-          right: rect.right - canvasRect.left,
-          bottom: rect.bottom - canvasRect.top,
-        };
-      });
-
-      return {
-        canvas: {
-          width: canvasRect.width,
-          height: canvasRect.height,
-        },
-        menuRects,
-        overflow: document.documentElement.scrollWidth - window.innerWidth,
-      };
-    });
-    const overlappingBulletIndices = frame.flatMap((bullet, bulletIndex) =>
-      geometry.menuRects.some((rect) => overlapsProtectedRect(bullet, rect)) ? [bulletIndex] : [],
+    const layout = await readDanmakuLayout(page);
+    const expectedReducedFrame = createDanmakuFrame(
+      layout.canvas.width,
+      layout.canvas.height,
+      0,
+      MOBILE_DANMAKU_BULLET_COUNT,
+      createMobileLayout(layout),
     );
-    const outOfBounds = frame.flatMap((bullet, bulletIndex) =>
-      bullet.x - DANMAKU_BULLET_PROTECTION_RADIUS < 0 ||
-      bullet.x + DANMAKU_BULLET_PROTECTION_RADIUS > geometry.canvas.width ||
-      bullet.y - DANMAKU_BULLET_PROTECTION_RADIUS < 0 ||
-      bullet.y + DANMAKU_BULLET_PROTECTION_RADIUS > geometry.canvas.height
-        ? [bulletIndex]
-        : [],
-    );
+    const orbit = inspectCompleteMobileOrbit(layout);
 
-    expect(frame).toHaveLength(16);
-    expect(geometry.menuRects).toHaveLength(4);
+    expect(frame).toEqual(expectedReducedFrame);
+    if (viewport.width === 390 && viewport.height === 844) {
+      expect(frame.length).toBeGreaterThanOrEqual(12);
+    } else {
+      expect([0, MOBILE_DANMAKU_BULLET_COUNT]).toContain(frame.length);
+    }
+    expect(layout.exclusionRects).toHaveLength(5);
     expect(
-      overlappingBulletIndices,
-      `${viewport.width}x${viewport.height} has ${overlappingBulletIndices.length} protected menu overlaps`,
-    ).toEqual([]);
-    expect(outOfBounds, `${viewport.width}x${viewport.height} has clipped bullets`).toEqual([]);
-    expect(geometry.overflow).toBeLessThanOrEqual(1);
+      {
+        overlapCount: orbit.overlapCount,
+        clippedCount: orbit.clippedCount,
+        overflow: layout.overflow,
+      },
+      `first overlap ${JSON.stringify(orbit.firstOverlap)}, first clipped ${JSON.stringify(orbit.firstClipped)}`,
+    ).toEqual({
+      overlapCount: 0,
+      clippedCount: 0,
+      overflow: 0,
+    });
   });
 }
+
+test('home mobile danmaku adapts to enlarged menu text and controls', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'Mobile geometry only needs the mobile browser project');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openDeterministicMobileHome(page);
+  await page.addStyleTag({
+    content: `
+      [data-danmaku-exclusion="menu"] {
+        min-height: 52px !important;
+      }
+
+      [data-danmaku-exclusion="menu"] > * {
+        font-size: 20px !important;
+      }
+    `,
+  });
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+  );
+
+  const layout = await readDanmakuLayout(page);
+  const expectedReducedFrame = createDanmakuFrame(
+    layout.canvas.width,
+    layout.canvas.height,
+    0,
+    MOBILE_DANMAKU_BULLET_COUNT,
+    createMobileLayout(layout),
+  );
+  const orbit = inspectCompleteMobileOrbit(layout);
+
+  await expect
+    .poll(async () => {
+      const frameJson = await page.getByTestId('danmaku-canvas').getAttribute('data-danmaku-frame');
+      return JSON.parse(frameJson ?? '[]') as DanmakuFramePosition[];
+    })
+    .toEqual(expectedReducedFrame);
+  expect(
+    {
+      overlapCount: orbit.overlapCount,
+      clippedCount: orbit.clippedCount,
+      overflow: layout.overflow,
+    },
+    `first overlap ${JSON.stringify(orbit.firstOverlap)}, first clipped ${JSON.stringify(orbit.firstClipped)}`,
+  ).toEqual({
+    overlapCount: 0,
+    clippedCount: 0,
+    overflow: 0,
+  });
+});
 
 test('home remains navigable when hero images fail', async ({ page }) => {
   await page.route('**/assets/hero/*.webp', (route) => route.abort());

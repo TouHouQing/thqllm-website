@@ -16,7 +16,7 @@ const menuItems = [
 
 export function HeroTitleScreen({ projectCount }: HeroTitleScreenProps) {
   return (
-    <section className={styles.hero} aria-labelledby="thq-home-title">
+    <section className={styles.hero} aria-labelledby="thq-home-title" data-danmaku-root>
       <picture className={styles.picture}>
         <source media="(max-width: 640px)" srcSet="/assets/hero/thqllm-title-mobile.webp" />
         <img
@@ -52,6 +52,7 @@ export function HeroTitleScreen({ projectCount }: HeroTitleScreenProps) {
               href={item.href}
               className={styles.menuItem}
               data-active={index === 0 ? 'true' : undefined}
+              data-danmaku-exclusion="menu"
             >
               <span>{item.index}</span>
               <strong>{item.label}</strong>
@@ -76,7 +77,7 @@ export function HeroTitleScreen({ projectCount }: HeroTitleScreenProps) {
         </div>
       </dl>
 
-      <a className={styles.scrollHint} href="#projects">
+      <a className={styles.scrollHint} href="#projects" data-danmaku-exclusion="scroll-hint">
         <span>进入项目选择</span>
         <ChevronDown aria-hidden="true" size={16} />
       </a>

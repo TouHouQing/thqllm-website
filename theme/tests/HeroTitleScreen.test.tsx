@@ -36,4 +36,17 @@ describe('HeroTitleScreen', () => {
     expect(container.textContent).not.toContain('智能结界');
     expect(container.textContent).not.toContain('结界');
   });
+
+  it('marks every mobile danmaku exclusion with stable data attributes', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <HeroTitleScreen projectCount={3} />
+      </MemoryRouter>,
+    );
+
+    const root = container.querySelector('[data-danmaku-root]');
+    expect(root).not.toBeNull();
+    expect(root?.querySelectorAll('[data-danmaku-exclusion="menu"]')).toHaveLength(4);
+    expect(root?.querySelectorAll('[data-danmaku-exclusion="scroll-hint"]')).toHaveLength(1);
+  });
 });

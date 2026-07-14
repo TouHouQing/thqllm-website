@@ -4,6 +4,7 @@ import {
   DANMAKU_BULLET_RADIUS_X,
   DANMAKU_BULLET_RADIUS_Y,
   DANMAKU_BULLET_SHADOW_BLUR,
+  type DanmakuLayout,
 } from '../../src/lib/danmaku';
 
 const MOBILE_BREAKPOINT = 640;
@@ -21,6 +22,16 @@ export function DanmakuCanvas() {
     const context = canvas.getContext('2d');
     if (!context) return;
 
+    const root = canvas.closest('[data-danmaku-root]');
+    const menuExclusions = Array.from(
+      root?.querySelectorAll<HTMLElement>('[data-danmaku-exclusion="menu"]') ?? [],
+    );
+    const scrollHintExclusion = root?.querySelector<HTMLElement>(
+      '[data-danmaku-exclusion="scroll-hint"]',
+    );
+    const exclusionElements = scrollHintExclusion
+      ? [...menuExclusions, scrollHintExclusion]
+      : menuExclusions;
     const reducedMotion =
       typeof window.matchMedia === 'function' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -30,14 +41,14 @@ export function DanmakuCanvas() {
     let width = 0;
     let height = 0;
     let ratio = 1;
+    let layout: DanmakuLayout | null = null;
 
     const draw = () => {
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
       context.clearRect(0, 0, width, height);
 
-      const preset = width <= MOBILE_BREAKPOINT ? 'mobile' : 'desktop';
-      const bulletCount = preset === 'mobile' ? MOBILE_BULLET_COUNT : DESKTOP_BULLET_COUNT;
-      const bullets = createDanmakuFrame(width, height, angle, bulletCount, preset);
+      const bulletCount = layout === 'desktop' ? DESKTOP_BULLET_COUNT : MOBILE_BULLET_COUNT;
+      const bullets = layout ? createDanmakuFrame(width, height, angle, bulletCount, layout) : [];
       if (reducedMotion) {
         canvas.dataset.danmakuFrame = JSON.stringify(bullets);
       }
@@ -63,6 +74,25 @@ export function DanmakuCanvas() {
       ratio = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.round(width * ratio);
       canvas.height = Math.round(height * ratio);
+
+      if (width > MOBILE_BREAKPOINT) {
+        layout = 'desktop';
+      } else if (menuExclusions.length > 0 && scrollHintExclusion) {
+        const menuBottom = Math.max(
+          ...menuExclusions.map((element) => element.getBoundingClientRect().bottom - bounds.top),
+        );
+        const scrollHintTop = scrollHintExclusion.getBoundingClientRect().top - bounds.top;
+        layout = {
+          preset: 'mobile',
+          exclusionBand: {
+            menuBottom,
+            scrollHintTop,
+          },
+        };
+      } else {
+        layout = null;
+      }
+
       draw();
     };
 
@@ -82,16 +112,26 @@ export function DanmakuCanvas() {
     if (typeof ResizeObserver === 'function') {
       resizeObserver = new ResizeObserver(resize);
       resizeObserver.observe(canvas);
+      for (const element of exclusionElements) {
+        resizeObserver.observe(element);
+      }
     } else {
       window.addEventListener('resize', resize);
     }
 
     resize();
+    let disposed = false;
+    void document.fonts?.ready.then(() => {
+      if (!disposed) {
+        resize();
+      }
+    });
     if (!reducedMotion) {
       frameId = window.requestAnimationFrame(animate);
     }
 
     return () => {
+      disposed = true;
       resizeObserver?.disconnect();
       if (!resizeObserver) {
         window.removeEventListener('resize', resize);
