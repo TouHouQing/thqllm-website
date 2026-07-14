@@ -1,0 +1,21 @@
+:global(.rp-nav__right .rp-search-button--mobile) {
+  display: none;
+}
+
+.mobileButton {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .mobileButton {
+    display: flex;
+  }
+}

@@ -49,7 +49,7 @@ test('FluctGraph documentation uses the Chinese Rspress shell', async ({ page, i
   if (isMobile) {
     await expect(page.getByRole('button', { name: '菜单', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: '目录', exact: true })).toBeVisible();
-    await page.keyboard.press('ControlOrMeta+k');
+    await page.getByRole('button', { name: '搜索', exact: true }).click();
   } else {
     const searchButton = page.getByRole('button', { name: /^搜索(?:\s|$)/ });
     await expect(searchButton).toBeVisible();

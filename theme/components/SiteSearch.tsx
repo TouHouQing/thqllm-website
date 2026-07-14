@@ -1,6 +1,7 @@
 import { NoSSR } from '@rspress/core/runtime';
-import { SearchButton, SearchPanel } from '@rspress/core/theme-original';
+import { IconSearch, SearchButton, SearchPanel, SvgWrapper } from '@rspress/core/theme-original';
 import { useEffect, useRef, useState } from 'react';
+import styles from './SiteSearch.module.css';
 
 export const OPEN_SEARCH_EVENT = 'thqllm:open-search';
 
@@ -30,6 +31,14 @@ export function SiteSearch() {
   return (
     <>
       <SearchButton setFocused={setFocused} />
+      <button
+        className={styles.mobileButton}
+        type="button"
+        aria-label="搜索"
+        onClick={() => setFocused(true)}
+      >
+        <SvgWrapper icon={IconSearch} aria-hidden="true" />
+      </button>
       <NoSSR>
         <SearchPanel focused={focused} setFocused={setFocused} />
       </NoSSR>
