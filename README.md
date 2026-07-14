@@ -27,11 +27,13 @@ pnpm verify
 
 ## Add a project
 
-1. Add a validated entry to `src/data/projects.ts` with a unique `id` and `order`, an HTTPS `externalUrl`, and, when it has documentation, `docs.basePath` and `docs.sections`.
-2. Add Markdown/MDX under `site/docs/<project-id>/` for the entries configured in `docs.sections`.
-3. Update the registered-project count assertion in `src/data/projects.test.ts`.
-4. If `featured: true`, update the homepage enumeration and count assertions in `scripts/verify-build.mjs` and `tests/e2e/home.spec.ts`, then regenerate and manually review the affected homepage visual baselines.
-5. Run `pnpm verify`.
+1. Add a validated entry to `src/data/projects.ts` with a unique `id` and `order` and an HTTPS `externalUrl`.
+2. For every new project, update the registered-project count in `src/data/projects.test.ts` and the visible project-name summary in `theme/components/HomeBands.tsx`.
+3. Regenerate and manually review the homepage desktop and mobile visual baselines because both the Hero node count and Manual list change.
+4. If the project has `docs`, configure `docs.basePath` and `docs.sections`, add matching Markdown/MDX under `site/docs/<project-id>/`, and keep them aligned.
+5. For a documented project, update the sidebar enumeration in `src/lib/projects.test.ts`, the documentation-root enumeration in `tests/e2e/docs.spec.ts`, and the relevant `requiredOutputs` and URL expectations in `scripts/verify-build.mjs`; regenerate and manually review the documentation desktop visual baseline because the project switcher changes.
+6. If `featured: true`, update `theme/tests/ProjectStageGrid.test.tsx` and the homepage featured count and project enumeration in `tests/e2e/home.spec.ts` and `scripts/verify-build.mjs`.
+7. Run `pnpm verify`.
 
 ## Content boundaries
 
