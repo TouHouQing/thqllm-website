@@ -9,6 +9,13 @@ export function SiteSearch() {
   const [focused, setFocused] = useState(false);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
 
+  const setSearchFocused = (nextFocused: boolean) => {
+    if (nextFocused && document.activeElement instanceof HTMLElement) {
+      restoreFocusRef.current = document.activeElement;
+    }
+    setFocused(nextFocused);
+  };
+
   useEffect(() => {
     const openSearch = (event: Event) => {
       restoreFocusRef.current = event.target instanceof HTMLElement ? event.target : null;
@@ -30,17 +37,20 @@ export function SiteSearch() {
 
   return (
     <>
-      <SearchButton setFocused={setFocused} />
+      <SearchButton setFocused={setSearchFocused} />
       <button
         className={styles.mobileButton}
         type="button"
         aria-label="搜索"
-        onClick={() => setFocused(true)}
+        onClick={(event) => {
+          restoreFocusRef.current = event.currentTarget;
+          setFocused(true);
+        }}
       >
         <SvgWrapper icon={IconSearch} aria-hidden="true" />
       </button>
       <NoSSR>
-        <SearchPanel focused={focused} setFocused={setFocused} />
+        <SearchPanel focused={focused} setFocused={setSearchFocused} />
       </NoSSR>
     </>
   );

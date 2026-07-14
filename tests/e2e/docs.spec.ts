@@ -49,7 +49,12 @@ test('FluctGraph documentation uses the Chinese Rspress shell', async ({ page, i
   if (isMobile) {
     await expect(page.getByRole('button', { name: '菜单', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: '目录', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: '搜索', exact: true }).click();
+    const mobileSearchButton = page.getByRole('button', { name: '搜索', exact: true });
+    const mobileSearchBox = await mobileSearchButton.boundingBox();
+    expect(mobileSearchBox).not.toBeNull();
+    expect(mobileSearchBox?.width).toBe(40);
+    expect(mobileSearchBox?.height).toBe(40);
+    await mobileSearchButton.click();
   } else {
     const searchButton = page.getByRole('button', { name: /^搜索(?:\s|$)/ });
     await expect(searchButton).toBeVisible();
@@ -60,6 +65,22 @@ test('FluctGraph documentation uses the Chinese Rspress shell', async ({ page, i
   }
 
   await expect(page.getByLabel('SearchPanelInput')).toHaveAttribute('placeholder', '搜索');
+});
+
+test('mobile search restores focus to its trigger after Escape', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Mobile search trigger only');
+
+  await page.goto('/docs/fluctgraph/');
+
+  const mobileSearchButton = page.getByRole('button', { name: '搜索', exact: true });
+  await mobileSearchButton.click();
+
+  const searchInput = page.getByLabel('SearchPanelInput');
+  await expect(searchInput).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  await expect(searchInput).not.toBeVisible();
+  await expect(mobileSearchButton).toBeFocused();
 });
 
 test('THQ API documentation has no detectable accessibility violations', async ({ page }) => {
