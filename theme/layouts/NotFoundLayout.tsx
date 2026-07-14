@@ -1,4 +1,5 @@
 import { Link } from '@rspress/core/theme-original';
+import type { FormEvent, KeyboardEvent } from 'react';
 import { OPEN_SEARCH_EVENT } from '../components/SiteSearch';
 import styles from './NotFoundLayout.module.css';
 
@@ -8,14 +9,34 @@ const recoveryLinks = [
 ] as const;
 
 export function NotFoundLayout() {
-  const openSearch = () => {
-    window.dispatchEvent(
-      new CustomEvent(OPEN_SEARCH_EVENT, {
-        detail: {
-          source: 'not-found-layout',
-        },
-      }),
-    );
+  const openSearch = (trigger: HTMLElement | null) => {
+    trigger?.focus();
+
+    const event = new CustomEvent(OPEN_SEARCH_EVENT, {
+      detail: {
+        source: 'not-found-layout',
+      },
+      bubbles: true,
+    });
+
+    if (trigger) {
+      trigger.dispatchEvent(event);
+      return;
+    }
+
+    window.dispatchEvent(event);
+  };
+
+  const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trigger = event.currentTarget.querySelector<HTMLButtonElement>('button[type="submit"]');
+    openSearch(trigger);
+  };
+
+  const handleSearchKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === 'Enter') {
+      event.stopPropagation();
+    }
   };
 
   return (
@@ -31,9 +52,13 @@ export function NotFoundLayout() {
               {link.label}
             </Link>
           ))}
-          <button className={styles.link} type="button" onClick={openSearch}>
-            搜索文档
-          </button>
+          <search className={styles.searchForm} aria-label="错误页站点搜索">
+            <form action="/docs/fluctgraph/" method="get" onSubmit={handleSearchSubmit}>
+              <button className={styles.link} type="submit" onKeyDown={handleSearchKeyDown}>
+                搜索文档
+              </button>
+            </form>
+          </search>
         </nav>
       </div>
     </main>

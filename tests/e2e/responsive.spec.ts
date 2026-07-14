@@ -125,6 +125,11 @@ test('mobile pages keep core navigation available without JavaScript', async ({
     const page = await context.newPage();
     await page.goto('/docs/fluctgraph/');
 
+    const initialOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    );
+    expect(initialOverflow).toBeLessThanOrEqual(1);
+
     const fallbackNavigation = page.getByRole('navigation', {
       name: '无 JavaScript 导航',
     });
@@ -137,6 +142,11 @@ test('mobile pages keep core navigation available without JavaScript', async ({
     await fallbackNavigation.getByRole('link', { name: '项目', exact: true }).click();
     await expect(page).toHaveURL(/\/projects\/$/);
     await expect(page.getByRole('heading', { level: 1, name: '项目', exact: true })).toBeVisible();
+
+    const finalOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    );
+    expect(finalOverflow).toBeLessThanOrEqual(1);
   } finally {
     await context.close();
   }
@@ -157,7 +167,14 @@ test('custom 404 offers working recovery actions', async ({ page }) => {
     'href',
     '/projects/',
   );
-  await expect(recoveryNavigation.getByRole('button', { name: '搜索文档' })).toBeVisible();
+  const searchRegion = recoveryNavigation.getByRole('search', { name: '错误页站点搜索' });
+  const searchForm = searchRegion.locator('form');
+  await expect(searchForm).toHaveAttribute('action', '/docs/fluctgraph/');
+  await expect(searchForm).toHaveAttribute('method', 'get');
+  await expect(searchRegion.getByRole('button', { name: '搜索文档' })).toHaveAttribute(
+    'type',
+    'submit',
+  );
 
   await recoveryNavigation.getByRole('link', { name: '查看项目' }).click();
   await expect(page).toHaveURL(/\/projects\/$/);
@@ -174,6 +191,64 @@ test('custom 404 opens the site search panel from the recovery button', async ({
   await searchButton.click();
 
   await expect(page.getByLabel('SearchPanelInput')).toBeVisible();
+});
+
+test('static 404 keeps search recovery working without JavaScript', async ({
+  browser,
+  isMobile,
+}) => {
+  test.skip(Boolean(isMobile), 'Custom no-JS context only needs one browser project');
+
+  const context = await browser.newContext({
+    baseURL: baseUrl,
+    javaScriptEnabled: false,
+    viewport: { width: 390, height: 844 },
+  });
+
+  try {
+    const page = await context.newPage();
+    await page.goto('/404.html');
+
+    const searchButton = page.getByRole('button', { name: '搜索文档' });
+    await expect(searchButton).toBeVisible();
+
+    await searchButton.click();
+
+    await expect(page).toHaveURL((url) => url.pathname === '/docs/fluctgraph/');
+    await expect(page.getByRole('heading', { level: 1, name: /FluctGraph/i })).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
+test('custom 404 Enter key opens search without page errors and Escape restores focus', async ({
+  page,
+}) => {
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => {
+    pageErrors.push(error);
+  });
+
+  await page.goto('/route-that-does-not-exist/');
+
+  const searchButton = page
+    .getByRole('navigation', { name: '错误页恢复操作' })
+    .getByRole('button', { name: '搜索文档' });
+
+  await searchButton.focus();
+  await expect(searchButton).toBeFocused();
+
+  await page.keyboard.press('Enter');
+
+  const searchInput = page.getByLabel('SearchPanelInput');
+  await expect(searchInput).toBeVisible();
+  expect(pageErrors).toEqual([]);
+
+  await page.keyboard.press('Escape');
+
+  await expect(searchInput).not.toBeVisible();
+  await expect(searchButton).toBeFocused();
+  expect(pageErrors).toEqual([]);
 });
 
 test('home mobile visual regression', async ({ page, isMobile }) => {

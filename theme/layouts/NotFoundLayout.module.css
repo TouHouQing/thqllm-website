@@ -46,6 +46,10 @@
   margin-top: 32px;
 }
 
+.searchForm {
+  display: contents;
+}
+
 .link {
   display: inline-flex;
   min-height: 40px;

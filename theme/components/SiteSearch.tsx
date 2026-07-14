@@ -1,14 +1,16 @@
 import { NoSSR } from '@rspress/core/runtime';
 import { SearchButton, SearchPanel } from '@rspress/core/theme-original';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export const OPEN_SEARCH_EVENT = 'thqllm:open-search';
 
 export function SiteSearch() {
   const [focused, setFocused] = useState(false);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    const openSearch = () => {
+    const openSearch = (event: Event) => {
+      restoreFocusRef.current = event.target instanceof HTMLElement ? event.target : null;
       setFocused(true);
     };
 
@@ -17,6 +19,13 @@ export function SiteSearch() {
       window.removeEventListener(OPEN_SEARCH_EVENT, openSearch as EventListener);
     };
   }, []);
+
+  useEffect(() => {
+    if (!focused && restoreFocusRef.current) {
+      restoreFocusRef.current.focus();
+      restoreFocusRef.current = null;
+    }
+  }, [focused]);
 
   return (
     <>
