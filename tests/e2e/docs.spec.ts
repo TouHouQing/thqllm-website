@@ -71,10 +71,7 @@ test('static documentation keeps landmarks and hidden anchors accessible', async
     const page = await context.newPage();
     await page.goto('/docs/thq-api/');
 
-    await expect(page.locator('.rp-doc-layout__sidebar')).toHaveAttribute(
-      'aria-label',
-      '文档导航',
-    );
+    await expect(page.locator('.rp-doc-layout__sidebar')).toHaveAttribute('aria-label', '文档导航');
     await expect(page.locator('.rp-doc-layout__outline')).toHaveAttribute('aria-label', '页内目录');
 
     const hiddenAnchors = page.locator('.rp-header-anchor[aria-hidden="true"]');
