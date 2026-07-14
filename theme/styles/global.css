@@ -89,8 +89,12 @@ body {
 }
 
 @media (width <= 1279px) {
-  :root {
-    --thq-doc-switcher-height: 42px;
+  .rp-doc-layout__container {
+    --thq-doc-panel-top-fallback: calc(
+      var(--rp-nav-height) +
+      var(--rp-banner-height, 0px) +
+      var(--rp-sidebar-menu-height)
+    );
   }
 
   .rp-doc-layout__menu {
@@ -99,25 +103,29 @@ body {
   }
 
   .rp-doc-layout__outline {
-    top: calc(
-      var(--rp-nav-height) +
-      var(--rp-banner-height, 0px) +
-      var(--rp-sidebar-menu-height) +
-      var(--thq-doc-switcher-height)
-    );
+    top: var(--thq-doc-panel-top, var(--thq-doc-panel-top-fallback));
+    max-height: max(0px, calc(100vh - var(--thq-doc-panel-top, var(--thq-doc-panel-top-fallback))));
     margin-top: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .rp-doc-layout__outline > .rp-outline {
+    min-height: 0;
+  }
+
+  .rp-doc-layout__outline .rp-outline__toc {
+    max-height: none;
   }
 }
 
 @media (width <= 768px) {
   .rp-doc-layout__sidebar {
-    padding-top: calc(var(--rp-sidebar-menu-height) + var(--thq-doc-switcher-height));
-  }
-}
-
-@media (width <= 700px) {
-  :root {
-    --thq-doc-switcher-height: 74px;
+    top: var(--thq-doc-panel-top, var(--thq-doc-panel-top-fallback));
+    bottom: auto;
+    height: max(0px, calc(100vh - var(--thq-doc-panel-top, var(--thq-doc-panel-top-fallback))));
+    max-height: max(0px, calc(100vh - var(--thq-doc-panel-top, var(--thq-doc-panel-top-fallback))));
   }
 }
 

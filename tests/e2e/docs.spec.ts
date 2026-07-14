@@ -1,11 +1,12 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 
 const documentationRoots = [
   { path: '/docs/fluctgraph/', projectName: 'FluctGraph' },
   { path: '/docs/thq-api/', projectName: 'THQ API' },
   { path: '/docs/toho-image-studio/', projectName: 'Toho Image Studio' },
 ] as const;
+const docPanelTopProperty = '--thq-doc-panel-top';
 
 async function openDeterministicDocs(page: Page, path: string) {
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -13,6 +14,74 @@ async function openDeterministicDocs(page: Page, path: string) {
   await page.evaluate(async () => {
     await document.fonts.ready;
   });
+}
+
+async function readPanelMetrics(page: Page, panel: Locator) {
+  const [menuBox, panelBox] = await Promise.all([
+    page.locator('.rp-doc-layout__menu').boundingBox(),
+    panel.boundingBox(),
+  ]);
+  const viewport = page.viewportSize();
+
+  if (!menuBox || !panelBox || !viewport) {
+    return {
+      bottomOverflow: Number.POSITIVE_INFINITY,
+      topDelta: Number.POSITIVE_INFINITY,
+    };
+  }
+
+  return {
+    bottomOverflow: panelBox.y + panelBox.height - viewport.height,
+    topDelta: Math.abs(panelBox.y - (menuBox.y + menuBox.height)),
+  };
+}
+
+async function expectPanelAlignedWithinViewport(page: Page, panel: Locator) {
+  await expect
+    .poll(async () => (await readPanelMetrics(page, panel)).topDelta)
+    .toBeLessThanOrEqual(1);
+  await expect
+    .poll(async () => (await readPanelMetrics(page, panel)).bottomOverflow)
+    .toBeLessThanOrEqual(1);
+}
+
+async function expectPanelTopVariableMatchesMenu(page: Page) {
+  const container = page.locator('.rp-doc-layout__container');
+
+  await expect
+    .poll(async () => {
+      const [menuBox, propertyValue] = await Promise.all([
+        page.locator('.rp-doc-layout__menu').boundingBox(),
+        container.evaluate(
+          (element, property) => element.style.getPropertyValue(property),
+          docPanelTopProperty,
+        ),
+      ]);
+      const panelTop = Number.parseFloat(propertyValue);
+
+      if (!menuBox || !Number.isFinite(panelTop)) {
+        return Number.POSITIVE_INFINITY;
+      }
+
+      return Math.abs(panelTop - (menuBox.y + menuBox.height));
+    })
+    .toBeLessThanOrEqual(1);
+}
+
+async function expectItemInsidePanel(panel: Locator, item: Locator) {
+  await expect
+    .poll(async () => {
+      const [panelBox, itemBox] = await Promise.all([panel.boundingBox(), item.boundingBox()]);
+      if (!panelBox || !itemBox) {
+        return false;
+      }
+
+      return (
+        itemBox.y >= panelBox.y - 1 &&
+        itemBox.y + itemBox.height <= panelBox.y + panelBox.height + 1
+      );
+    })
+    .toBe(true);
 }
 
 for (const documentationRoot of documentationRoots) {
@@ -390,6 +459,151 @@ test('tablet documentation outline stays below its toggle and restores content i
     () => document.documentElement.scrollWidth - window.innerWidth,
   );
   expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test('short mobile documentation panels track the sticky menu and keep internal content reachable', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'Short mobile documentation panels only');
+  await page.setViewportSize({ width: 390, height: 320 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/docs/toho-image-studio/quick-start/');
+  await page.locator('html').evaluate((element) => {
+    element.style.fontSize = '200%';
+  });
+  await page.evaluate(() => {
+    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+    window.scrollTo(0, Math.min(600, maxScroll));
+  });
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+
+  const nav = page.locator('.rp-nav');
+  const menu = page.locator('.rp-doc-layout__menu');
+  await expect
+    .poll(async () => {
+      const [navBox, menuBox] = await Promise.all([nav.boundingBox(), menu.boundingBox()]);
+      if (!navBox || !menuBox) {
+        return Number.POSITIVE_INFINITY;
+      }
+
+      return Math.abs(menuBox.y - (navBox.y + navBox.height));
+    })
+    .toBeLessThanOrEqual(1);
+
+  const sidebarButton = page.locator('.rp-sidebar-menu__left');
+  const sidebar = page.locator('.rp-doc-layout__sidebar');
+  await sidebarButton.click();
+  await expect(sidebar).toHaveClass(/rp-doc-layout__sidebar--open/);
+  await expectPanelAlignedWithinViewport(page, sidebar);
+  await expectPanelTopVariableMatchesMenu(page);
+
+  const sidebarScrollRange = await sidebar.evaluate(
+    (element) => element.scrollHeight - element.clientHeight,
+  );
+  expect(sidebarScrollRange).toBeGreaterThan(0);
+  await sidebar.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect.poll(() => sidebar.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await expectItemInsidePanel(
+    sidebar,
+    sidebar.getByRole('link', { name: '更新记录', exact: true }),
+  );
+
+  await sidebarButton.click();
+  await expect(sidebar).not.toHaveClass(/rp-doc-layout__sidebar--open/);
+
+  const outlineButton = page.locator('.rp-sidebar-menu__right');
+  const outline = page.locator('.rp-doc-layout__outline');
+  await outlineButton.click();
+  await expect(outline).toHaveClass(/rp-doc-layout__outline--open/);
+  await expectPanelAlignedWithinViewport(page, outline);
+  await expectPanelTopVariableMatchesMenu(page);
+
+  const outlineToc = outline.locator('.rp-outline__toc');
+  const outlineScrollRange = await outlineToc.evaluate(
+    (element) => element.scrollHeight - element.clientHeight,
+  );
+  expect(outlineScrollRange).toBeGreaterThan(0);
+  await outlineToc.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect.poll(() => outlineToc.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await expectItemInsidePanel(outlineToc, outline.locator('.rp-toc-item').last());
+  await expectItemInsidePanel(outline, outline.locator('.rp-scroll-to-top'));
+
+  await outlineButton.click();
+  await expect(outline).not.toHaveClass(/rp-doc-layout__outline--open/);
+  await expect(outline).toHaveCSS('visibility', 'hidden');
+
+  await page.getByRole('link', { name: /^下一页(?:\s|$)/ }).click();
+  await expect(page).toHaveURL(/\/docs\/toho-image-studio\/(?:index\.html)?$/);
+});
+
+test('documentation panels follow live menu reflow without leaking into desktop layout', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(Boolean(isMobile), 'Custom responsive contexts only need one browser project');
+
+  for (const scenario of [
+    { width: 390, change: 'font' },
+    { width: 1024, change: 'project-name' },
+  ] as const) {
+    await page.setViewportSize({ width: scenario.width, height: 844 });
+    await page.goto('/docs/fluctgraph/');
+    await expectPanelTopVariableMatchesMenu(page);
+
+    const container = page.locator('.rp-doc-layout__container');
+    const initialPanelTop = await container.evaluate(
+      (element, property) => Number.parseFloat(element.style.getPropertyValue(property)),
+      docPanelTopProperty,
+    );
+
+    if (scenario.change === 'font') {
+      await page.locator('html').evaluate((element) => {
+        element.style.fontSize = '200%';
+      });
+    } else {
+      await page
+        .getByRole('navigation', { name: '切换项目文档' })
+        .locator('strong')
+        .evaluate((element) => {
+          element.textContent = 'FluctGraph knowledge graph workspace '.repeat(12);
+        });
+    }
+
+    await expectPanelTopVariableMatchesMenu(page);
+    const updatedPanelTop = await container.evaluate(
+      (element, property) => Number.parseFloat(element.style.getPropertyValue(property)),
+      docPanelTopProperty,
+    );
+    if (scenario.change === 'project-name') {
+      expect(Math.abs(updatedPanelTop - initialPanelTop)).toBeGreaterThan(5);
+    }
+
+    const outlineButton = page.locator('.rp-sidebar-menu__right');
+    const outline = page.locator('.rp-doc-layout__outline');
+    await outlineButton.click();
+    await expect(outline).toHaveClass(/rp-doc-layout__outline--open/);
+    await expectPanelAlignedWithinViewport(page, outline);
+    await outlineButton.click();
+    await expect(outline).not.toHaveClass(/rp-doc-layout__outline--open/);
+  }
+
+  await page.setViewportSize({ width: 1280, height: 844 });
+  const container = page.locator('.rp-doc-layout__container');
+  await expect
+    .poll(() =>
+      container.evaluate(
+        (element, property) => element.style.getPropertyValue(property),
+        docPanelTopProperty,
+      ),
+    )
+    .toBe('');
+  await expect(page.locator('.rp-sidebar-menu')).toHaveCSS('display', 'none');
+  await expect(page.locator('.rp-doc-layout__outline')).toHaveCSS('position', 'sticky');
 });
 
 test('THQ API documentation has no detectable accessibility violations', async ({ page }) => {

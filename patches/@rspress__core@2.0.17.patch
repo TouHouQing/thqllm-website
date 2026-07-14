@@ -146,6 +146,19 @@ index 07ae1c1fa0c1a0633c26672a547408addd4c66e9..edcb2aab5887b1103336bff72cf817a1
                            }
                          }
                        }}
+diff --git a/dist/eject-theme/components/SidebarMenu/index.tsx b/dist/eject-theme/components/SidebarMenu/index.tsx
+index 888dffc9d7b5e74c468a0883e9715eca49da3806..6e22cc522ed6131813b1a411acfc6c7616eeb4c3 100644
+--- a/dist/eject-theme/components/SidebarMenu/index.tsx
++++ b/dist/eject-theme/components/SidebarMenu/index.tsx
+@@ -52,7 +52,7 @@ export const SidebarMenu = forwardRef(
+     const showSidebar = sidebarConfig === true;
+ 
+     function openSidebar() {
+-      onIsSidebarOpenChange(true);
++      onIsSidebarOpenChange(!isSidebarOpen);
+     }
+ 
+     function closeSidebar() {
 diff --git a/dist/theme/components/Search/SearchPanel.js b/dist/theme/components/Search/SearchPanel.js
 index cdab103aa4a5088f872da628a6b7851da2b33fbc..a4840dfac572a7838fb0cf57c8b9a295d2fbe639 100644
 --- a/dist/theme/components/Search/SearchPanel.js
@@ -275,3 +288,16 @@ index cdab103aa4a5088f872da628a6b7851da2b33fbc..a4840dfac572a7838fb0cf57c8b9a295
                                                      } else clearSearchState();
                                                  }
                                              }
+diff --git a/dist/theme/components/SidebarMenu/index.js b/dist/theme/components/SidebarMenu/index.js
+index b6d0da31e7892843b8aeeaf6f6b631394a5e3527..785f27e5af6cd2ef0c7e9642d97ba79fecff5c69 100644
+--- a/dist/theme/components/SidebarMenu/index.js
++++ b/dist/theme/components/SidebarMenu/index.js
+@@ -14,7 +14,7 @@ const SidebarMenu = /*#__PURE__*/ forwardRef(({ isSidebarOpen, onIsSidebarOpenCh
+     const { frontmatter: { sidebar: sidebarConfig = true, outline: showOutline = true } } = useFrontmatter();
+     const showSidebar = true === sidebarConfig;
+     function openSidebar() {
+-        onIsSidebarOpenChange(true);
++        onIsSidebarOpenChange(!isSidebarOpen);
+     }
+     function closeSidebar() {
+         onIsSidebarOpenChange(false);

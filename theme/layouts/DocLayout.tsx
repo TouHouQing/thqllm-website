@@ -10,12 +10,10 @@ import {
   Sidebar,
   useWatchToc,
 } from '@rspress/core/theme-original';
-import { cloneElement, type ReactElement } from 'react';
+import { useEffect, useRef } from 'react';
 import '@rspress/core/dist/theme/layout/DocLayout/index.css';
 
-type SidebarMenuElementProps = {
-  onIsSidebarOpenChange: (isOpen: boolean) => void;
-};
+const DOC_PANEL_TOP_PROPERTY = '--thq-doc-panel-top';
 
 export function DocLayout(props: DocLayoutProps) {
   if (import.meta.env.SSG_MD) {
@@ -66,22 +64,84 @@ function RenderedDocLayout(props: DocLayoutProps) {
   const { isOutlineOpen, isSidebarOpen, sidebarMenu, asideLayoutRef, sidebarLayoutRef } =
     useSidebarMenu(beforeOutline, afterOutline);
   const { rspressDocRef } = useWatchToc();
-  const sidebarMenuElement = sidebarMenu as ReactElement<SidebarMenuElementProps>;
-  const toggleableSidebarMenu = cloneElement(sidebarMenuElement, {
-    // Rspress 2.0.17 opens the sidebar unconditionally; keep its state and make the trigger toggle it.
-    onIsSidebarOpenChange: (nextIsOpen: boolean) => {
-      sidebarMenuElement.props.onIsSidebarOpenChange(nextIsOpen && !isSidebarOpen);
-    },
-  });
+  const menuLayoutRef = useRef<HTMLDivElement>(null);
+  const containerLayoutRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const menu = menuLayoutRef.current;
+    const container = containerLayoutRef.current;
+    if (!showSidebarMenu || !menu || !container) {
+      return;
+    }
+
+    let animationFrame: number | null = null;
+    let disposed = false;
+
+    const updatePanelTop = () => {
+      animationFrame = null;
+
+      if (window.innerWidth >= 1280) {
+        container.style.removeProperty(DOC_PANEL_TOP_PROPERTY);
+        return;
+      }
+
+      container.style.setProperty(
+        DOC_PANEL_TOP_PROPERTY,
+        `${Math.max(0, menu.getBoundingClientRect().bottom)}px`,
+      );
+    };
+
+    const schedulePanelTopUpdate = () => {
+      if (animationFrame === null) {
+        animationFrame = window.requestAnimationFrame(updatePanelTop);
+      }
+    };
+
+    const resizeObserver = new ResizeObserver(schedulePanelTopUpdate);
+    resizeObserver.observe(menu);
+    if (menu.parentElement) {
+      for (const sibling of menu.parentElement.children) {
+        if (sibling === menu) {
+          break;
+        }
+        resizeObserver.observe(sibling);
+      }
+    }
+
+    window.addEventListener('scroll', schedulePanelTopUpdate, { passive: true });
+    window.addEventListener('resize', schedulePanelTopUpdate);
+    schedulePanelTopUpdate();
+    void document.fonts?.ready.then(() => {
+      if (!disposed) {
+        schedulePanelTopUpdate();
+      }
+    });
+
+    return () => {
+      disposed = true;
+      resizeObserver.disconnect();
+      window.removeEventListener('scroll', schedulePanelTopUpdate);
+      window.removeEventListener('resize', schedulePanelTopUpdate);
+      if (animationFrame !== null) {
+        window.cancelAnimationFrame(animationFrame);
+      }
+      container.style.removeProperty(DOC_PANEL_TOP_PROPERTY);
+    };
+  }, [showSidebarMenu]);
 
   return (
     <>
-      {showSidebarMenu && <div className="rp-doc-layout__menu">{toggleableSidebarMenu}</div>}
+      {showSidebarMenu && (
+        <div className="rp-doc-layout__menu" ref={menuLayoutRef}>
+          {sidebarMenu}
+        </div>
+      )}
       {beforeDoc}
       <div
         className={`rp-doc-layout__container${
           showSidebarMenu ? '' : ' rp-doc-layout__container--no-menu'
         }`}
+        ref={containerLayoutRef}
       >
         {showSidebar ? (
           <aside
