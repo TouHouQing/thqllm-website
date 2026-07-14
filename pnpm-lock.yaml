@@ -5,9 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  '@rspress/core@2.0.17':
-    hash: 4ea29e12445c3a391ec01ece8c201356db40bf6ff20c31f65a5f54b587e3ec4b
-    path: patches/@rspress__core@2.0.17.patch
+  '@rspress/core@2.0.17': 4ea29e12445c3a391ec01ece8c201356db40bf6ff20c31f65a5f54b587e3ec4b
 
 importers:
 

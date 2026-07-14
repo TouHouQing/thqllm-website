@@ -7,11 +7,6 @@
   "engines": {
     "node": "^20.19.0 || ^22.13.0 || >=24.0.0"
   },
-  "pnpm": {
-    "patchedDependencies": {
-      "@rspress/core@2.0.17": "patches/@rspress__core@2.0.17.patch"
-    }
-  },
   "scripts": {
     "build": "rspress build",
     "check": "biome check .",
