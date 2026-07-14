@@ -12,7 +12,7 @@ export function DocProjectHeader() {
   }
 
   return (
-    <header className={styles.projectHeader}>
+    <section className={styles.projectHeader} aria-label={`${project.name} 项目信息`}>
       <p>
         {project.stageLabel} · {project.categoryLabel}
       </p>
@@ -26,6 +26,6 @@ export function DocProjectHeader() {
         <ArrowUpRight aria-hidden="true" size={15} />
         打开项目
       </a>
-    </header>
+    </section>
   );
 }

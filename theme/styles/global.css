@@ -36,6 +36,43 @@ body {
   letter-spacing: 0;
 }
 
+.rp-search-button {
+  border-color: #6f817d;
+  color: var(--thq-paper);
+  background: #405550;
+}
+
+.rp-search-button__word,
+.rp-search-button__icon {
+  color: var(--thq-paper);
+}
+
+.rp-search-button__hotkey {
+  border-color: #82918e;
+  color: var(--thq-paper);
+  background: var(--thq-ink);
+}
+
+.rp-search-button:hover {
+  border-color: #82918e;
+  color: var(--thq-paper);
+  background: #536661;
+}
+
+.rp-search-button:hover .rp-search-button__word,
+.rp-search-button:hover .rp-search-button__icon,
+.rp-search-button:hover .rp-search-button__hotkey {
+  color: var(--thq-paper);
+}
+
+.rp-nav-menu__item--active .rp-nav-menu__item__container {
+  color: var(--thq-gold);
+  font-weight: 800;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+}
+
 .rp-doc-layout__container,
 .rp-doc-layout__doc {
   background: var(--thq-paper);
@@ -61,6 +98,12 @@ body {
 .rspress-doc pre {
   border: 1px solid #18211f;
   border-radius: var(--thq-radius);
+}
+
+.rp-last-updated > p,
+.rp-last-updated > p > span,
+.rp-prev-next-page__item__desc {
+  color: var(--thq-text-muted);
 }
 
 @media (prefers-reduced-motion: reduce) {
