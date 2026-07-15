@@ -1,7 +1,7 @@
 import { MemoryRouter } from '@rspress/core/runtime';
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import type { ComponentProps, PropsWithChildren } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { projects } from '../../src/data/projects';
 import { ProjectStageGrid } from '../components/ProjectStageGrid';
 
@@ -26,13 +26,25 @@ function getProject(projectId: string) {
 
 const fluctgraph = getProject('fluctgraph');
 const thqApi = getProject('thq-api');
+const pendingProject = {
+  ...fluctgraph,
+  id: 'pending-project',
+  name: 'Pending Project',
+  externalUrl: 'https://pending.example.com/',
+  docs: undefined,
+  order: 4,
+  featured: true,
+};
+
+afterEach(cleanup);
 
 describe('ProjectStageGrid', () => {
   it('renders the registry-derived count and canonical safe links', () => {
-    const featuredProjects = projects.filter((project) => project.featured);
+    const fixture = [...projects, pendingProject];
+    const featuredProjects = fixture.filter((project) => project.featured);
     const { container } = render(
       <MemoryRouter>
-        <ProjectStageGrid projects={projects} />
+        <ProjectStageGrid projects={fixture} />
       </MemoryRouter>,
     );
 
@@ -57,7 +69,7 @@ describe('ProjectStageGrid', () => {
   });
 
   it('shows a non-link state when a future project has no docs', () => {
-    render(
+    const { container } = render(
       <MemoryRouter>
         <ProjectStageGrid
           projects={[
@@ -73,7 +85,7 @@ describe('ProjectStageGrid', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText('文档准备中')).toHaveAttribute('aria-disabled', 'true');
+    expect(within(container).getByText('文档准备中')).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('counts only featured projects that are rendered', () => {

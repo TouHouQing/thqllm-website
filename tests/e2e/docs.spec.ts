@@ -1,11 +1,21 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Locator, type Page, test } from '@playwright/test';
+import { projects } from '../../src/data/projects';
 
-const documentationRoots = [
-  { path: '/docs/fluctgraph/', projectName: 'FluctGraph' },
-  { path: '/docs/thq-api/', projectName: 'THQ API' },
-  { path: '/docs/toho-image-studio/', projectName: 'Toho Image Studio' },
-] as const;
+const documentationRoots = projects
+  .flatMap((project) =>
+    project.docs
+      ? [
+          {
+            order: project.order,
+            path: project.docs.basePath,
+            projectName: project.name,
+          },
+        ]
+      : [],
+  )
+  .toSorted((left, right) => left.order - right.order)
+  .map(({ path, projectName }) => ({ path, projectName }));
 const docPanelTopProperty = '--thq-doc-panel-top';
 const docPanelFocusableSelector = [
   'a[href]',
