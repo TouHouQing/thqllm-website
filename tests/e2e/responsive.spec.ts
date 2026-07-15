@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
+import { projects } from '../../src/data/projects';
 import { createDanmakuFrame, DANMAKU_BULLET_PROTECTION_RADIUS } from '../../src/lib/danmaku';
 
 const baseUrl = 'http://127.0.0.1:4173';
@@ -39,6 +40,16 @@ const topLevelRoutes = [
   { path: '/about/', heading: '关于 THQLLM' },
   { path: '/route-that-does-not-exist/', heading: 'CONTINUE?' },
 ] as const;
+
+function getHudLabels(registry: readonly { docs?: unknown }[]) {
+  const docsCount = registry.filter((project) => project.docs).length;
+  return {
+    nodes: `${String(registry.length).padStart(2, '0')} NODES`,
+    docs: `${String(docsCount).padStart(2, '0')} DOCS`,
+  };
+}
+
+const expectedHud = getHudLabels(projects);
 
 async function openDeterministicMobileHome(page: Page) {
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -84,6 +95,29 @@ async function enlargeDocumentText(page: Page, selector: string, normalFontSize:
       }),
   );
 }
+
+test('HUD expectations derive from registry counts with an added undocumented project', ({
+  isMobile,
+}) => {
+  test.skip(Boolean(isMobile), 'Registry expectation check only needs one project');
+
+  const pendingProject = {
+    ...projects[0],
+    id: 'pending-undocumented-project',
+    order: projects.length + 1,
+    featured: false,
+    docs: undefined,
+  };
+  const registryWithPendingProject = [...projects, pendingProject];
+  const derived = getHudLabels(registryWithPendingProject);
+  const expectedProjectCount = registryWithPendingProject.length;
+  const expectedDocsCount = projects.filter((project) => project.docs).length;
+
+  expect(derived).toEqual({
+    nodes: `${String(expectedProjectCount).padStart(2, '0')} NODES`,
+    docs: `${String(expectedDocsCount).padStart(2, '0')} DOCS`,
+  });
+});
 
 interface TextStyleMetrics {
   fontSize: number;
@@ -636,8 +670,8 @@ test('home preserves wide enlarged text reflow, factual HUD, and usable controls
     expect.soft(normalMetrics.titleLineCount, evidence).toBe(1);
     expect.soft(normalMetrics.documentOverflow, evidence).toBeLessThanOrEqual(1);
     expect.soft(normalMetrics.hudDisplay, evidence).not.toBe('none');
-    expect.soft(normalMetrics.hudText, evidence).toContain('03 NODES');
-    expect.soft(normalMetrics.hudText, evidence).toContain('03 DOCS');
+    expect.soft(normalMetrics.hudText, evidence).toContain(expectedHud.nodes);
+    expect.soft(normalMetrics.hudText, evidence).toContain(expectedHud.docs);
     expect.soft(normalMetrics.hudText, evidence).not.toContain('ONLINE');
     expect.soft(metrics.viewportWidth, evidence).toBe(viewport.width);
     expect.soft(metrics.viewportHeight, evidence).toBe(viewport.height);
@@ -650,7 +684,7 @@ test('home preserves wide enlarged text reflow, factual HUD, and usable controls
     expect.soft(metrics.documentOverflow, evidence).toBeLessThanOrEqual(1);
     expect.soft(metrics.heroHeight, evidence).toBeGreaterThan(normalMetrics.heroHeight);
     expect.soft(metrics.hudDisplay, evidence).not.toBe('none');
-    expect.soft(metrics.hudText, evidence).toContain('03 DOCS');
+    expect.soft(metrics.hudText, evidence).toContain(expectedHud.docs);
     expect.soft(metrics.hudText, evidence).not.toContain('ONLINE');
     expect.soft(metrics.hudViewportOverflow, evidence).toBeLessThanOrEqual(1);
     expect.soft(metrics.hudHeroOverflow, evidence).toBeLessThanOrEqual(1);
@@ -1035,7 +1069,7 @@ test('home stays HUD-safe with Georgia fallback across tablet scale boundaries',
       expect.soft(metrics.documentOverflow, evidence).toBeLessThanOrEqual(1);
       expect.soft(metrics.projectsGap, evidence).toBeLessThanOrEqual(1);
       expect.soft(metrics.hudDisplay, evidence).not.toBe('none');
-      expect.soft(metrics.hudText, evidence).toContain('03 DOCS');
+      expect.soft(metrics.hudText, evidence).toContain(expectedHud.docs);
     }
   }
 
