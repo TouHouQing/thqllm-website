@@ -72,10 +72,12 @@
 }
 
 .lockup {
+  /* Keep a font-independent inline lane for the HUD as rem text grows. */
+  --thq-hud-inline-reserve: min(256px, max(0px, calc(47.5rem - 760px)));
   display: flex;
   align-items: flex-start;
   gap: 16px;
-  max-width: 650px;
+  max-width: min(650px, calc(100% - var(--thq-hud-inline-reserve)));
   text-shadow:
     0 3px 1px rgb(54 28 33 / 44%),
     0 7px 20px rgb(8 21 19 / 24%);

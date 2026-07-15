@@ -24,8 +24,14 @@ pnpm dev
 pnpm test
 pnpm build
 pnpm test:e2e
+pnpm capture:og
 pnpm verify
 ```
+
+`pnpm capture:og` builds a deterministic 1200x630, DPR 1, reduced-motion PNG at
+`site/public/og-cover.png`. It starts and cleans up its own local preview. Use
+`pnpm capture:og -- --output /tmp/thqllm-og.png --port 4318` for another output
+path or port, and add `--skip-build` when reusing an existing `doc_build`.
 
 ## Add a project
 

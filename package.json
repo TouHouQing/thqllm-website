@@ -13,6 +13,7 @@
     "check:fix": "biome check --write .",
     "dev": "rspress dev",
     "preview": "rspress preview",
+    "capture:og": "node scripts/capture-og.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

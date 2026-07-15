@@ -28,6 +28,8 @@ const wideEnlargedTextViewports = [
   { width: 1024, height: 768 },
   { width: 1440, height: 900 },
 ] as const;
+const georgiaFallbackBoundaryWidths = [641, 768, 900, 901] as const;
+const georgiaFallbackScales = [125, 150, 175, 200] as const;
 const MOBILE_DANMAKU_BULLET_COUNT = 16;
 const MOBILE_DANMAKU_ORBIT_SAMPLES = 1440;
 const responsivePaths = ['/', '/projects/', '/docs/fluctgraph/'] as const;
@@ -838,6 +840,206 @@ test('home keeps intermediate tablet text clear of the HUD and menu bounds', asy
   expect.soft(metrics.menuDetailOverflow, evidence).toBeLessThanOrEqual(1);
   expect.soft(metrics.documentOverflow, evidence).toBeLessThanOrEqual(1);
   expect.soft(metrics.hudDisplay, evidence).not.toBe('none');
+});
+
+test('home stays HUD-safe with Georgia fallback across tablet scale boundaries', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(Boolean(isMobile), 'Georgia fallback geometry only');
+
+  let blockedCormorantRequests = 0;
+  await page.route('**/static/font/cormorant-garamond-*', async (route) => {
+    blockedCormorantRequests += 1;
+    await route.abort();
+  });
+
+  for (const width of georgiaFallbackBoundaryWidths) {
+    await page.setViewportSize({ width, height: 900 });
+    await openDeterministicMobileHome(page);
+    const normalMetrics = await page.evaluate(() => {
+      const title = document.getElementById('thq-home-title');
+      const menuDetail = document.querySelector('nav[aria-label="首页主菜单"] a:first-child small');
+
+      if (!(title instanceof HTMLHeadingElement) || !(menuDetail instanceof HTMLElement)) {
+        throw new Error('Missing Georgia fallback normal target');
+      }
+
+      const range = document.createRange();
+      range.selectNodeContents(title);
+      return {
+        titleFontSize: Number.parseFloat(getComputedStyle(title).fontSize),
+        menuDetailFontSize: Number.parseFloat(getComputedStyle(menuDetail).fontSize),
+        titleLineCount: Array.from(range.getClientRects()).filter(
+          (rect) => rect.width > 0 && rect.height > 0,
+        ).length,
+        fontFamily: getComputedStyle(title).fontFamily,
+      };
+    });
+
+    if (width === 768) {
+      expect(normalMetrics.titleLineCount).toBe(1);
+    }
+
+    for (const scale of georgiaFallbackScales) {
+      await page.locator('html').evaluate((element, value) => {
+        element.style.fontSize = value;
+      }, `${scale}%`);
+      await page.waitForFunction(
+        ({ selector, expectedMinimum }) => {
+          const target = document.querySelector(selector);
+          return (
+            target instanceof HTMLElement &&
+            Number.parseFloat(getComputedStyle(target).fontSize) >= expectedMinimum
+          );
+        },
+        {
+          selector: '#thq-home-title',
+          expectedMinimum: normalMetrics.titleFontSize * (scale / 100) * 0.95,
+        },
+      );
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+          }),
+      );
+
+      const metrics = await page.evaluate(() => {
+        const hero = document.querySelector('[data-danmaku-root]');
+        const title = document.getElementById('thq-home-title');
+        const menu = document.querySelector('nav[aria-label="首页主菜单"]');
+        const hud = document.querySelector('dl[aria-label="站点信息"]');
+        const scrollHint = document.querySelector('[data-danmaku-exclusion="scroll-hint"]');
+        const projects = document.getElementById('projects');
+
+        if (
+          !(hero instanceof HTMLElement) ||
+          !(title instanceof HTMLHeadingElement) ||
+          !(menu instanceof HTMLElement) ||
+          !(hud instanceof HTMLDListElement) ||
+          !(scrollHint instanceof HTMLAnchorElement) ||
+          !(projects instanceof HTMLElement)
+        ) {
+          throw new Error('Missing Georgia fallback geometry target');
+        }
+
+        const textRects = (element: Element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          return Array.from(range.getClientRects()).filter(
+            (rect) => rect.width > 0 && rect.height > 0,
+          );
+        };
+        const unionRect = (rects: DOMRect[]) => {
+          const first = rects[0];
+          if (!first) {
+            throw new Error('Expected Georgia fallback text rect');
+          }
+
+          return rects.slice(1).reduce(
+            (union, rect) => ({
+              left: Math.min(union.left, rect.left),
+              top: Math.min(union.top, rect.top),
+              right: Math.max(union.right, rect.right),
+              bottom: Math.max(union.bottom, rect.bottom),
+            }),
+            {
+              left: first.left,
+              top: first.top,
+              right: first.right,
+              bottom: first.bottom,
+            },
+          );
+        };
+        const overlap = (
+          first: DOMRect | ReturnType<typeof unionRect>,
+          second: DOMRect | ReturnType<typeof unionRect>,
+        ) =>
+          Math.max(0, Math.min(first.right, second.right) - Math.max(first.left, second.left)) *
+          Math.max(0, Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top));
+        const containmentOverflow = (
+          inner: DOMRect | ReturnType<typeof unionRect>,
+          outer: DOMRect | ReturnType<typeof unionRect>,
+        ) =>
+          Math.max(
+            0,
+            outer.left - inner.left,
+            inner.right - outer.right,
+            outer.top - inner.top,
+            inner.bottom - outer.bottom,
+          );
+        const horizontalOverflow = (rect: DOMRect) =>
+          Math.max(0, -rect.left, rect.right - document.documentElement.clientWidth);
+        const titleRects = textRects(title);
+        const titleTextRect = unionRect(titleRects);
+        const heroRect = hero.getBoundingClientRect();
+        const menuRect = menu.getBoundingClientRect();
+        const hudRect = hud.getBoundingClientRect();
+        const scrollHintRect = scrollHint.getBoundingClientRect();
+        const menuDetails = Array.from(menu.querySelectorAll('small'));
+        const controls = [...menu.querySelectorAll('a'), scrollHint];
+        const controlRects = controls.map((control) => control.getBoundingClientRect());
+
+        return {
+          rootFontSize: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
+          titleLineCount: titleRects.length,
+          titleLineOverlap: titleRects.reduce((maximum, rect, index) => {
+            return titleRects
+              .slice(index + 1)
+              .reduce(
+                (pairMaximum, otherRect) => Math.max(pairMaximum, overlap(rect, otherRect)),
+                maximum,
+              );
+          }, 0),
+          titleHudOverlap: overlap(titleTextRect, hudRect),
+          titleHeroOverflow: containmentOverflow(titleTextRect, heroRect),
+          menuScrollHintOverlap: overlap(menuRect, scrollHintRect),
+          menuDetailOverflow: menuDetails.reduce((maximum, detail) => {
+            const itemRect = detail.parentElement?.getBoundingClientRect();
+            if (!itemRect) {
+              return maximum;
+            }
+
+            return textRects(detail).reduce(
+              (detailMaximum, rect) =>
+                Math.max(detailMaximum, itemRect.left - rect.left, rect.right - itemRect.right, 0),
+              maximum,
+            );
+          }, 0),
+          controlViewportOverflow: controlRects.reduce(
+            (maximum, rect) => Math.max(maximum, horizontalOverflow(rect)),
+            0,
+          ),
+          controlHeroOverflow: controlRects.reduce(
+            (maximum, rect) => Math.max(maximum, containmentOverflow(rect, heroRect)),
+            0,
+          ),
+          documentOverflow:
+            document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          projectsGap: Math.abs(projects.getBoundingClientRect().top - heroRect.bottom),
+          hudDisplay: getComputedStyle(hud).display,
+          hudText: hud.textContent,
+        };
+      });
+      const evidence = `${width}x900 Georgia fallback ${scale}%: normal=${JSON.stringify(normalMetrics)} enlarged=${JSON.stringify(metrics)}`;
+
+      expect.soft(metrics.rootFontSize, evidence).toBeCloseTo(16 * (scale / 100), 5);
+      expect.soft(metrics.titleLineOverlap, evidence).toBe(0);
+      expect.soft(metrics.titleHudOverlap, evidence).toBe(0);
+      expect.soft(metrics.titleHeroOverflow, evidence).toBeLessThanOrEqual(1);
+      expect.soft(metrics.menuScrollHintOverlap, evidence).toBe(0);
+      expect.soft(metrics.menuDetailOverflow, evidence).toBeLessThanOrEqual(1);
+      expect.soft(metrics.controlViewportOverflow, evidence).toBeLessThanOrEqual(1);
+      expect.soft(metrics.controlHeroOverflow, evidence).toBeLessThanOrEqual(1);
+      expect.soft(metrics.documentOverflow, evidence).toBeLessThanOrEqual(1);
+      expect.soft(metrics.projectsGap, evidence).toBeLessThanOrEqual(1);
+      expect.soft(metrics.hudDisplay, evidence).not.toBe('none');
+      expect.soft(metrics.hudText, evidence).toContain('03 DOCS');
+    }
+  }
+
+  expect(blockedCormorantRequests).toBeGreaterThan(0);
 });
 
 test('home preserves enlarged text geometry and navigation at narrow mobile sizes', async ({
