@@ -184,13 +184,20 @@ function waitForExit(child, timeoutMs) {
 }
 
 function runTaskkill(pid) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const taskkill = spawn('taskkill.exe', ['/PID', String(pid), '/T', '/F'], {
       windowsHide: true,
       stdio: ['ignore', 'ignore', 'ignore'],
     });
-    taskkill.once('error', () => resolve());
-    taskkill.once('exit', () => resolve());
+    taskkill.once('error', reject);
+    taskkill.once('exit', (code, signal) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      reject(new Error(`taskkill failed for process tree ${pid} with ${code ?? signal}`));
+    });
   });
 }
 
@@ -208,8 +215,13 @@ function stopProcessTree(child) {
 
   const stopPromise = (async () => {
     if (process.platform === 'win32') {
+      if (child.exitCode !== null || child.signalCode !== null) {
+        return;
+      }
       await runTaskkill(child.pid);
-      await waitForExit(child, shutdownTimeoutMs);
+      if (!(await waitForExit(child, shutdownTimeoutMs))) {
+        throw new Error(`Process tree ${child.pid} did not exit after taskkill`);
+      }
       return;
     }
 
@@ -236,8 +248,14 @@ function stopProcessTree(child) {
 }
 
 function createResourceTracker() {
-  const resources = new Set();
+  const cleanupPhasePriority = {
+    filesystem: 1,
+    runtime: 2,
+  };
+  const resources = [];
+  let registrationVersion = 0;
   let cleanupStarted = false;
+  let cleanupFinished = false;
   let cleanupPromise;
 
   function runResource(resource) {
@@ -245,41 +263,130 @@ function createResourceTracker() {
       return resource.promise;
     }
 
-    resource.started = true;
+    resource.state = 'running';
     resource.promise = Promise.resolve()
       .then(resource.cleanup)
-      .catch(() => undefined);
+      .then(
+        () => {
+          resource.state = 'completed';
+        },
+        (error) => {
+          resource.error = error;
+          resource.state = 'failed';
+          throw error;
+        },
+      );
     return resource.promise;
   }
 
-  function addCleanup(cleanup) {
+  function addCleanup(cleanup, options = {}) {
+    if (cleanupFinished) {
+      throw new Error('Cannot register cleanup after resource tracker completion');
+    }
+
     const resource = {
       cleanup,
+      error: undefined,
+      label: options.label ?? `resource ${registrationVersion + 1}`,
+      phase: options.phase ?? 'runtime',
       promise: undefined,
-      started: false,
+      sequence: registrationVersion,
+      state: 'pending',
     };
-    resources.add(resource);
-
-    if (cleanupStarted) {
-      void runResource(resource);
+    if (!(resource.phase in cleanupPhasePriority)) {
+      throw new Error(`Unknown cleanup phase: ${resource.phase}`);
     }
+    resources.push(resource);
+    registrationVersion += 1;
 
     return () => runResource(resource);
   }
 
+  function nextPendingResource() {
+    return resources
+      .filter((resource) => resource.state === 'pending')
+      .toSorted((left, right) => {
+        const phaseDifference =
+          cleanupPhasePriority[right.phase] - cleanupPhasePriority[left.phase];
+        return phaseDifference || right.sequence - left.sequence;
+      })[0];
+  }
+
+  function pendingRuntimeFailure() {
+    return resources.some(
+      (resource) => resource.phase === 'runtime' && resource.state === 'failed',
+    );
+  }
+
+  function skipUnsafeFilesystemCleanup() {
+    for (const resource of resources) {
+      if (resource.phase === 'filesystem' && resource.state === 'pending') {
+        resource.error = new Error(
+          `${resource.label} was not removed because runtime cleanup failed`,
+        );
+        resource.state = 'failed';
+      }
+    }
+  }
+
+  function cleanupFailures() {
+    return resources
+      .filter((resource) => resource.state === 'failed')
+      .map((resource) => {
+        const cause =
+          resource.error instanceof Error
+            ? resource.error
+            : new Error(String(resource.error ?? 'Unknown cleanup failure'));
+        return new Error(`${resource.label}: ${cause.message}`, { cause });
+      });
+  }
+
   async function drain() {
     cleanupStarted = true;
+    let quietPasses = 0;
 
     while (true) {
-      const pending = [...resources].filter((resource) => !resource.started);
-      if (pending.length > 0) {
-        await Promise.all(pending.map((resource) => runResource(resource)));
+      const pending = nextPendingResource();
+      if (pending) {
+        quietPasses = 0;
+        if (pending.phase === 'filesystem' && pendingRuntimeFailure()) {
+          skipUnsafeFilesystemCleanup();
+          continue;
+        }
+        await runResource(pending).catch(() => undefined);
         continue;
       }
 
-      await new Promise((resolve) => setImmediate(resolve));
-      if ([...resources].some((resource) => !resource.started)) {
+      const running = resources.filter((resource) => resource.state === 'running');
+      if (running.length > 0) {
+        quietPasses = 0;
+        await Promise.allSettled(running.map((resource) => resource.promise));
         continue;
+      }
+
+      const observedVersion = registrationVersion;
+      await new Promise((resolve) => setImmediate(resolve));
+      if (
+        registrationVersion !== observedVersion ||
+        nextPendingResource() ||
+        resources.some((resource) => resource.state === 'running')
+      ) {
+        quietPasses = 0;
+        continue;
+      }
+
+      quietPasses += 1;
+      if (quietPasses < 2) {
+        continue;
+      }
+
+      cleanupFinished = true;
+      const failures = cleanupFailures();
+      if (failures.length > 0) {
+        throw new AggregateError(
+          failures,
+          `Resource cleanup failed: ${failures.map((error) => error.message).join('; ')}`,
+        );
       }
       return;
     }
@@ -288,7 +395,10 @@ function createResourceTracker() {
   return {
     addCleanup,
     addChild(child) {
-      addCleanup(() => stopProcessTree(child));
+      addCleanup(() => stopProcessTree(child), {
+        label: `process tree ${child.pid ?? 'unknown'}`,
+        phase: 'runtime',
+      });
     },
     assertActive() {
       if (cleanupStarted) {
@@ -296,10 +406,16 @@ function createResourceTracker() {
       }
     },
     trackBrowser(browserPromise) {
-      addCleanup(async () => {
-        const browser = await browserPromise.catch(() => undefined);
-        await browser?.close().catch(() => undefined);
-      });
+      addCleanup(
+        async () => {
+          const browser = await browserPromise.catch(() => undefined);
+          await browser?.close();
+        },
+        {
+          label: 'Chromium browser',
+          phase: 'runtime',
+        },
+      );
     },
     cleanup() {
       cleanupPromise ??= drain();
@@ -324,7 +440,9 @@ function installSignalHandlers(tracker) {
 
       signalCleanup = tracker
         .cleanup()
-        .catch(() => undefined)
+        .catch((error) => {
+          console.error(error instanceof Error ? error.message : error);
+        })
         .finally(() => {
           process.exit(exitCode);
         });
@@ -421,7 +539,10 @@ function previewPortCandidates(preferredPort) {
 
 async function reservePort(candidate, tracker) {
   const server = createServer();
-  tracker.addCleanup(() => closeServer(server));
+  tracker.addCleanup(() => closeServer(server), {
+    label: `preview port ${candidate}`,
+    phase: 'runtime',
+  });
 
   try {
     await listen(server, candidate);
@@ -499,10 +620,16 @@ function stagePreviewMarker(previewRoot, tracker) {
   const markerFilePath = path.join(previewRoot, fileName);
   let writePromise = Promise.resolve();
 
-  tracker.addCleanup(async () => {
-    await writePromise.catch(() => undefined);
-    await rm(markerFilePath, { force: true });
-  });
+  tracker.addCleanup(
+    async () => {
+      await writePromise.catch(() => undefined);
+      await rm(markerFilePath, { force: true });
+    },
+    {
+      label: `preview marker ${markerFilePath}`,
+      phase: 'filesystem',
+    },
+  );
 
   writePromise = writeFile(markerFilePath, `${marker}\n`, 'utf8');
   emitTestEvent(`marker staged: ${markerFilePath}`);
@@ -520,11 +647,17 @@ async function createIsolatedPreview(sourceRoot, tracker) {
   const previewRoot = mkdtempSync(path.join(tmpdir(), previewRootPrefix));
   let copyPromise = Promise.resolve();
   let markerPromise = Promise.resolve();
-  tracker.addCleanup(async () => {
-    await copyPromise.catch(() => undefined);
-    await markerPromise.catch(() => undefined);
-    await rm(previewRoot, { force: true, recursive: true });
-  });
+  tracker.addCleanup(
+    async () => {
+      await copyPromise.catch(() => undefined);
+      await markerPromise.catch(() => undefined);
+      await rm(previewRoot, { force: true, recursive: true });
+    },
+    {
+      label: `preview root ${previewRoot}`,
+      phase: 'filesystem',
+    },
+  );
 
   emitTestEvent(`preview root: ${previewRoot}`);
   const identity = stagePreviewMarker(previewRoot, tracker);
@@ -535,10 +668,16 @@ async function createIsolatedPreview(sourceRoot, tracker) {
 
   const configRoot = mkdtempSync(path.join(tmpdir(), previewConfigPrefix));
   let configWritePromise = Promise.resolve();
-  tracker.addCleanup(async () => {
-    await configWritePromise.catch(() => undefined);
-    await rm(configRoot, { force: true, recursive: true });
-  });
+  tracker.addCleanup(
+    async () => {
+      await configWritePromise.catch(() => undefined);
+      await rm(configRoot, { force: true, recursive: true });
+    },
+    {
+      label: `preview config root ${configRoot}`,
+      phase: 'filesystem',
+    },
+  );
 
   const configPath = path.join(configRoot, 'rspress.config.ts');
   const sourceConfigUrl = pathToFileURL(sourceConfigPath).href;
@@ -863,7 +1002,10 @@ async function capture(options, tracker, hooks = {}) {
 
   await mkdir(path.dirname(options.outputPath), { recursive: true });
   const temporaryOutputPath = `${options.outputPath}.capture-${randomUUID()}.png`;
-  tracker.addCleanup(() => rm(temporaryOutputPath, { force: true }));
+  tracker.addCleanup(() => rm(temporaryOutputPath, { force: true }), {
+    label: `temporary capture ${temporaryOutputPath}`,
+    phase: 'filesystem',
+  });
   await page.screenshot({
     animations: 'disabled',
     clip: { x: 0, y: 0, width: captureWidth, height: captureHeight },

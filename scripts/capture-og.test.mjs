@@ -239,18 +239,32 @@ describe('capture-og', () => {
     }
   }, 120_000);
 
-  it('rejects a THQLLM-looking 2xx response without the run marker', async () => {
-    const fake = await startServer(0, (_request, response) => {
-      response.writeHead(200, { 'content-type': 'text/html' });
-      response.end('<html><title>THQLLM</title><body>THQLLM</body></html>');
+  it('rejects an exact THQLLM page when its isolated run marker endpoint is missing', async () => {
+    const previewRoot = await mkdtemp(path.join(tmpdir(), 'thqllm-capture-marker-missing-'));
+    const markerPath = '/__thqllm-capture-marker-missing.txt';
+    const fake = await startServer(0, (request, response) => {
+      if (request.url === '/') {
+        response.writeHead(200, { 'content-type': 'text/html' });
+        response.end('<html><head><title>THQLLM</title></head><body>THQLLM</body></html>');
+        return;
+      }
+
+      response.writeHead(404, { 'content-type': 'text/plain' });
+      response.end('missing marker');
     });
 
     try {
       await expect(
-        validatePreviewReady(`http://127.0.0.1:${fake.port}`, '/marker.txt', 'run-marker'),
-      ).rejects.toThrow(/marker/i);
+        validatePreviewReady(`http://127.0.0.1:${fake.port}`, {
+          marker: 'isolated-run-marker',
+          markerFilePath: path.join(previewRoot, markerPath.slice(1)),
+          markerPath,
+          previewRoot,
+        }),
+      ).rejects.toThrow(/marker returned HTTP 404/i);
     } finally {
       await closeServer(fake.server);
+      await rm(previewRoot, { force: true, recursive: true });
     }
   });
 
@@ -408,6 +422,81 @@ describe('capture-og', () => {
     expect(closeCount).toBe(1);
   });
 
+  it('waits for a delayed cleanup registered after cleanup has started', async () => {
+    const tracker = captureOg.createResourceTracker();
+    let cleanupResolved = false;
+    let lateCleanupFinished = false;
+    let resolveLateCleanupStarted;
+    let resolveLateCleanupFinished;
+    const lateCleanupStarted = new Promise((resolve) => {
+      resolveLateCleanupStarted = resolve;
+    });
+    const lateCleanupDone = new Promise((resolve) => {
+      resolveLateCleanupFinished = resolve;
+    });
+
+    tracker.addCleanup(async () => {
+      await new Promise((resolve) => setImmediate(resolve));
+      tracker.addCleanup(async () => {
+        resolveLateCleanupStarted();
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        lateCleanupFinished = true;
+        resolveLateCleanupFinished();
+      });
+    });
+
+    const cleanupPromise = tracker.cleanup().then(() => {
+      cleanupResolved = true;
+    });
+    await lateCleanupStarted;
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect.soft(lateCleanupFinished).toBe(false);
+    expect.soft(cleanupResolved).toBe(false);
+
+    await lateCleanupDone;
+    await cleanupPromise;
+    expect(lateCleanupFinished).toBe(true);
+  });
+
+  it('stops runtime resources before deleting filesystem roots', async () => {
+    const tracker = captureOg.createResourceTracker();
+    const cleanupOrder = [];
+
+    tracker.addCleanup(
+      async () => {
+        cleanupOrder.push('root:start');
+        cleanupOrder.push('root:end');
+      },
+      { label: 'preview root', phase: 'filesystem' },
+    );
+    tracker.addCleanup(
+      async () => {
+        cleanupOrder.push('child:start');
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        cleanupOrder.push('child:end');
+      },
+      { label: 'preview child', phase: 'runtime' },
+    );
+
+    await tracker.cleanup();
+
+    expect(cleanupOrder).toEqual(['child:start', 'child:end', 'root:start', 'root:end']);
+  });
+
+  it('rejects cleanup when a registered resource cannot be removed', async () => {
+    const tracker = captureOg.createResourceTracker();
+    tracker.addCleanup(
+      async () => {
+        throw new Error('preview root removal failed');
+      },
+      { label: 'preview root', phase: 'filesystem' },
+    );
+
+    await expect(tracker.cleanup()).rejects.toThrow(/preview root removal failed/i);
+  });
+
   it('fails when a required image cannot load or decode', async () => {
     const browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
@@ -509,6 +598,11 @@ describe('capture-og', () => {
 
         expect(result.code, description).not.toBe(0);
         expect(await readFile(outputPath)).toEqual(sentinel);
+        const expectedFailure =
+          fixtureKind === 'image'
+            ? 'Required image failed to load or decode'
+            : 'Required font unavailable';
+        expect(`${result.output.stdout}\n${result.output.stderr}`).toContain(expectedFailure);
 
         const previewRootMatch = result.output.stdout.match(
           /Capture preview root: ([^\r\n]+thqllm-capture-preview-[^\r\n]+)/,
