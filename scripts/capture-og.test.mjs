@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
-import { mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { cp, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -9,11 +9,14 @@ import path from 'node:path';
 import { chromium } from '@playwright/test';
 import sharp from 'sharp';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { validatePreviewReady, waitForPageAssets } from './capture-og.mjs';
+import * as captureOg from './capture-og.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const captureScript = path.join(import.meta.dirname, 'capture-og.mjs');
 const packageManager = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+const sharedBuildRoot = path.join(repoRoot, 'doc_build');
+
+const { validatePreviewReady, waitForPageAssets } = captureOg;
 
 async function startServer(port, handler) {
   const server = createServer(handler);
@@ -53,13 +56,13 @@ async function getAvailablePort() {
   return (await getAvailablePorts(1))[0];
 }
 
-function spawnCapture(outputPath, port, extraArgs = []) {
+function spawnCapture(outputPath, port, extraArgs = [], env = {}) {
   const child = spawn(
     process.execPath,
     [captureScript, '--output', outputPath, '--port', String(port), ...extraArgs],
     {
       cwd: repoRoot,
-      env: { ...process.env, CI: '1', TZ: 'UTC' },
+      env: { ...process.env, CI: '1', TZ: 'UTC', ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   );
@@ -102,6 +105,15 @@ async function runCapture(outputPath, port, extraArgs = []) {
   }
 
   return processHandle.output;
+}
+
+async function runCaptureFailure(outputPath, port, extraArgs = [], env = {}) {
+  const processHandle = spawnCapture(outputPath, port, extraArgs, env);
+  const result = await waitForExit(processHandle.child, 120_000);
+  return {
+    ...result,
+    output: processHandle.output,
+  };
 }
 
 async function waitForOutput(processHandle, pattern, timeoutMs = 30_000) {
@@ -242,6 +254,160 @@ describe('capture-og', () => {
     }
   });
 
+  it('rejects a legacy shared marker identity even when the fake page has the exact THQLLM title', async () => {
+    const markerName = '__thqllm-capture-marker-shared.txt';
+    const markerToken = 'shared-marker-token';
+    const markerPath = path.join(sharedBuildRoot, markerName);
+    await writeFile(markerPath, `${markerToken}\n`, 'utf8');
+    const fake = await startServer(0, async (request, response) => {
+      if (request.url === '/') {
+        response.writeHead(200, { 'content-type': 'text/html' });
+        response.end('<html><head><title>THQLLM</title></head><body>fake</body></html>');
+        return;
+      }
+
+      response.writeHead(200, { 'content-type': 'text/plain' });
+      response.end(await readFile(markerPath, 'utf8'));
+    });
+
+    try {
+      await expect(
+        validatePreviewReady(`http://127.0.0.1:${fake.port}`, {
+          marker: markerToken,
+          markerFilePath: markerPath,
+          markerPath: `/${markerName}`,
+          previewRoot: sharedBuildRoot,
+        }),
+      ).rejects.toThrow(/isolated/i);
+    } finally {
+      await closeServer(fake.server);
+      await rm(markerPath, { force: true });
+    }
+  });
+
+  it('retries a preview when a fake THQLLM page takes the released preferred port', async () => {
+    const tracker = captureOg.createResourceTracker();
+    const preferredPort = await getAvailablePort();
+    const sharedMarkerPath = path.join(sharedBuildRoot, '__thqllm-capture-marker-old-shared.txt');
+    let fake;
+
+    try {
+      await writeFile(sharedMarkerPath, 'old-shared-token\n', 'utf8');
+      const session = await captureOg.createIsolatedPreview(sharedBuildRoot, tracker);
+      const preview = await captureOg.startPreviewWithRetry({
+        configPath: session.configPath,
+        identity: session.identity,
+        preferredPort,
+        previewRoot: session.previewRoot,
+        tracker,
+        afterPortRelease: async ({ attempt, port }) => {
+          if (attempt !== 0) {
+            return;
+          }
+
+          fake = await startServer(port, async (request, response) => {
+            if (request.url === '/') {
+              response.writeHead(200, { 'content-type': 'text/html' });
+              response.end('<html><head><title>THQLLM</title></head><body>fake</body></html>');
+              return;
+            }
+
+            response.writeHead(200, { 'content-type': 'text/plain' });
+            response.end(await readFile(sharedMarkerPath, 'utf8'));
+          });
+        },
+      });
+
+      expect(preview.port).not.toBe(preferredPort);
+      expect(session.previewRoot).not.toBe(sharedBuildRoot);
+      expect(session.identity.markerFilePath.startsWith(`${session.previewRoot}${path.sep}`)).toBe(
+        true,
+      );
+      await expect(
+        captureOg.validatePreviewReady(preview.url, session.identity),
+      ).resolves.toBeUndefined();
+    } finally {
+      if (fake) {
+        await closeServer(fake.server);
+      }
+      await tracker.cleanup();
+      await rm(sharedMarkerPath, { force: true });
+    }
+  });
+
+  it('revalidates preview identity immediately before capture so a replacement is rejected', async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'thqllm-capture-replacement-'));
+    const outputPath = path.join(fixtureRoot, 'capture.png');
+    const sentinel = Buffer.from('untouched-after-replacement');
+    const tracker = captureOg.createResourceTracker();
+    let replacement;
+
+    await writeFile(outputPath, sentinel);
+
+    try {
+      await expect(
+        captureOg.capture(
+          {
+            outputPath,
+            port: await getAvailablePort(),
+            previewRoot: sharedBuildRoot,
+            skipBuild: true,
+          },
+          tracker,
+          {
+            beforeScreenshotIdentityCheck: async ({ preview }) => {
+              replacement = await startServer(0, (request, response) => {
+                if (request.url === '/') {
+                  response.writeHead(200, { 'content-type': 'text/html' });
+                  response.end(
+                    '<html><head><title>THQLLM</title></head><body>replacement</body></html>',
+                  );
+                  return;
+                }
+
+                response.writeHead(200, { 'content-type': 'text/plain' });
+                response.end('replacement-marker');
+              });
+              preview.url = `http://127.0.0.1:${replacement.port}/`;
+            },
+          },
+        ),
+      ).rejects.toThrow(/marker/i);
+
+      expect(await readFile(outputPath)).toEqual(sentinel);
+    } finally {
+      if (replacement) {
+        await closeServer(replacement.server);
+      }
+      await tracker.cleanup();
+      await rm(fixtureRoot, { force: true, recursive: true });
+    }
+  }, 60_000);
+
+  it('waits for a pending browser launch during idempotent cleanup', async () => {
+    const tracker = captureOg.createResourceTracker();
+    let resolveBrowser;
+    let closeCount = 0;
+    const browserPromise = new Promise((resolve) => {
+      resolveBrowser = resolve;
+    });
+
+    tracker.trackBrowser(browserPromise);
+    const cleanupPromise = tracker.cleanup();
+    await Promise.resolve();
+    expect(closeCount).toBe(0);
+
+    resolveBrowser({
+      close: async () => {
+        closeCount += 1;
+      },
+    });
+    await cleanupPromise;
+    await tracker.cleanup();
+
+    expect(closeCount).toBe(1);
+  });
+
   it('fails when a required image cannot load or decode', async () => {
     const browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
@@ -288,13 +454,86 @@ describe('capture-og', () => {
   });
 
   it.each([
+    ['image', 'missing hero image'],
+    ['font', 'missing required font'],
+  ])(
+    'fails through the complete capture process and preserves the output for a %s fixture',
+    async (fixtureKind, description) => {
+      const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'thqllm-capture-fixture-'));
+      const outputPath = path.join(fixtureRoot, 'capture.png');
+      const previewRoot = path.join(fixtureRoot, 'preview-source');
+      const sentinel = Buffer.from(`untouched-${fixtureKind}`);
+
+      await cp(sharedBuildRoot, previewRoot, { recursive: true });
+      await writeFile(outputPath, sentinel);
+
+      if (fixtureKind === 'image') {
+        const indexPath = path.join(previewRoot, 'index.html');
+        const indexHtml = await readFile(indexPath, 'utf8');
+        await writeFile(
+          indexPath,
+          indexHtml.replace(
+            '/assets/hero/thqllm-title-desktop.webp',
+            '/assets/hero/definitely-missing.webp',
+          ),
+          'utf8',
+        );
+      } else {
+        const cssPath = (await readdir(path.join(previewRoot, 'static/css'))).find((name) =>
+          name.endsWith('.css'),
+        );
+        if (!cssPath) {
+          throw new Error('Could not find the built stylesheet for the font fixture');
+        }
+
+        const stylesheetPath = path.join(previewRoot, 'static/css', cssPath);
+        const stylesheet = await readFile(stylesheetPath, 'utf8');
+        await writeFile(
+          stylesheetPath,
+          stylesheet.replaceAll(
+            /url\([^)]*cormorant-garamond-[^)]*\)/g,
+            'url(/static/font/definitely-missing.woff2)',
+          ),
+          'utf8',
+        );
+      }
+
+      const requestedPort = await getAvailablePort();
+      try {
+        const result = await runCaptureFailure(
+          outputPath,
+          requestedPort,
+          ['--skip-build', '--preview-root', previewRoot],
+          { THQLLM_CAPTURE_TEST_EVENTS: '1' },
+        );
+
+        expect(result.code, description).not.toBe(0);
+        expect(await readFile(outputPath)).toEqual(sentinel);
+
+        const previewRootMatch = result.output.stdout.match(
+          /Capture preview root: ([^\r\n]+thqllm-capture-preview-[^\r\n]+)/,
+        );
+        expect(previewRootMatch, 'capture must report its isolated temporary root').not.toBeNull();
+        await expect(stat(previewRootMatch?.[1] ?? '')).rejects.toMatchObject({
+          code: 'ENOENT',
+        });
+      } finally {
+        await rm(fixtureRoot, { force: true, recursive: true });
+      }
+    },
+    120_000,
+  );
+
+  it.each([
     'SIGINT',
     'SIGTERM',
   ])('idempotently cleans the preview process tree when the parent receives %s', async (signal) => {
     const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'thqllm-capture-signal-'));
     const outputPath = path.join(fixtureRoot, 'capture.png');
     const requestedPort = await getAvailablePort();
-    const processHandle = spawnCapture(outputPath, requestedPort, ['--skip-build']);
+    const processHandle = spawnCapture(outputPath, requestedPort, ['--skip-build'], {
+      THQLLM_CAPTURE_TEST_EVENTS: '1',
+    });
     let actualPort;
 
     try {
@@ -311,7 +550,7 @@ describe('capture-og', () => {
 
       expect(result.code).not.toBe(0);
       await waitForPortState(actualPort, false);
-      const markerFiles = (await readdir(path.join(repoRoot, 'doc_build'))).filter((name) =>
+      const markerFiles = (await readdir(sharedBuildRoot)).filter((name) =>
         name.startsWith('__thqllm-capture-marker-'),
       );
       expect(markerFiles).toEqual([]);
@@ -323,4 +562,50 @@ describe('capture-og', () => {
       await rm(fixtureRoot, { force: true, recursive: true });
     }
   }, 60_000);
+
+  it.each([
+    ['SIGINT', 130],
+    ['SIGTERM', 143],
+  ])(
+    'cleans marker and isolated preview root when %s arrives during marker staging',
+    async (signal, expectedExitCode) => {
+      const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'thqllm-capture-early-signal-'));
+      const outputPath = path.join(fixtureRoot, 'capture.png');
+      const requestedPort = await getAvailablePort();
+      const processHandle = spawnCapture(outputPath, requestedPort, ['--skip-build'], {
+        THQLLM_CAPTURE_TEST_EVENTS: '1',
+      });
+
+      try {
+        const markerMatch = await waitForOutput(
+          processHandle,
+          /Capture marker staged: ([^\r\n]+)/,
+          30_000,
+        );
+        const markerFilePath = markerMatch[1].trim();
+        const rootMatch = await waitForOutput(
+          processHandle,
+          /Capture preview root: ([^\r\n]+)/,
+          30_000,
+        );
+        const isolatedRoot = rootMatch[1].trim();
+
+        processHandle.child.kill(signal);
+        processHandle.child.kill(signal);
+        const result = await waitForExit(processHandle.child, 30_000);
+
+        expect(result.code).toBe(expectedExitCode);
+        await expect(stat(markerFilePath)).rejects.toMatchObject({ code: 'ENOENT' });
+        await expect(stat(isolatedRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+        await waitForPortState(requestedPort, false);
+      } finally {
+        if (processHandle.child.exitCode === null && processHandle.child.signalCode === null) {
+          processHandle.child.kill('SIGKILL');
+          await waitForExit(processHandle.child).catch(() => undefined);
+        }
+        await rm(fixtureRoot, { force: true, recursive: true });
+      }
+    },
+    60_000,
+  );
 });

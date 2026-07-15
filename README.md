@@ -32,6 +32,9 @@ pnpm verify
 `site/public/og-cover.png`. It starts and cleans up its own local preview. Use
 `pnpm capture:og -- --output /tmp/thqllm-og.png --port 4318` for another output
 path or port, and add `--skip-build` when reusing an existing `doc_build`.
+Every capture copies the selected build output into a fresh isolated preview
+root. `--preview-root <path>` selects another built-output fixture as the copy
+source without serving or modifying that source directory.
 
 ## Add a project
 

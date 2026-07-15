@@ -1,12 +1,16 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtempSync } from 'node:fs';
+import { cp, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from '@playwright/test';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
+const sharedBuildRoot = path.join(repoRoot, 'doc_build');
+const sourceConfigPath = path.join(repoRoot, 'rspress.config.ts');
 const defaultOutputPath = path.join(repoRoot, 'site/public/og-cover.png');
 const defaultPort = 4317;
 const previewHost = '127.0.0.1';
@@ -16,6 +20,8 @@ const serverTimeoutMs = 60_000;
 const fetchTimeoutMs = 2_000;
 const shutdownTimeoutMs = 5_000;
 const markerPrefix = '__thqllm-capture-marker-';
+const previewRootPrefix = 'thqllm-capture-preview-';
+const previewConfigPrefix = 'thqllm-capture-config-';
 const requiredFonts = [
   {
     descriptor: '700 16px "Cormorant Garamond"',
@@ -37,10 +43,11 @@ function printUsage() {
   console.log(`Usage: pnpm capture:og [options]
 
 Options:
-  --output <path>     PNG output path (default: site/public/og-cover.png)
-  --port <number>     Preferred preview port (default: ${defaultPort})
-  --skip-build        Reuse the existing doc_build output
-  --help              Show this help
+  --output <path>          PNG output path (default: site/public/og-cover.png)
+  --port <number>          Preferred preview port (default: ${defaultPort})
+  --preview-root <path>    Fixture output root to copy before previewing
+  --skip-build             Reuse the existing doc_build output
+  --help                   Show this help
 `);
 }
 
@@ -48,6 +55,7 @@ function parseArgs(argv) {
   const options = {
     outputPath: defaultOutputPath,
     port: defaultPort,
+    previewRoot: undefined,
     skipBuild: false,
   };
 
@@ -67,7 +75,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (argument === '--output' || argument === '--port') {
+    if (argument === '--output' || argument === '--port' || argument === '--preview-root') {
       const value = argv[index + 1];
       if (!value || value.startsWith('--')) {
         throw new Error(`${argument} requires a value`);
@@ -75,8 +83,10 @@ function parseArgs(argv) {
 
       if (argument === '--output') {
         options.outputPath = path.resolve(value);
-      } else {
+      } else if (argument === '--port') {
         options.port = Number(value);
+      } else {
+        options.previewRoot = path.resolve(value);
       }
       index += 1;
       continue;
@@ -97,13 +107,20 @@ function commandName() {
 }
 
 function commandEnvironment() {
+  const { HOST: _host, PORT: _port, ...inheritedEnvironment } = process.env;
   return {
-    ...process.env,
+    ...inheritedEnvironment,
     CI: '1',
     FORCE_COLOR: '0',
     NO_COLOR: '1',
     TZ: 'UTC',
   };
+}
+
+function emitTestEvent(message) {
+  if (process.env.THQLLM_CAPTURE_TEST_EVENTS === '1') {
+    console.log(`Capture ${message}`);
+  }
 }
 
 function appendOutput(target, chunk) {
@@ -168,12 +185,12 @@ function waitForExit(child, timeoutMs) {
 
 function runTaskkill(pid) {
   return new Promise((resolve) => {
-    const child = spawn('taskkill.exe', ['/PID', String(pid), '/T', '/F'], {
+    const taskkill = spawn('taskkill.exe', ['/PID', String(pid), '/T', '/F'], {
       windowsHide: true,
       stdio: ['ignore', 'ignore', 'ignore'],
     });
-    child.once('error', () => resolve());
-    child.once('exit', () => resolve());
+    taskkill.once('error', () => resolve());
+    taskkill.once('exit', () => resolve());
   });
 }
 
@@ -190,10 +207,6 @@ function stopProcessTree(child) {
   }
 
   const stopPromise = (async () => {
-    if (child.pid === undefined) {
-      return;
-    }
-
     if (process.platform === 'win32') {
       await runTaskkill(child.pid);
       await waitForExit(child, shutdownTimeoutMs);
@@ -203,19 +216,19 @@ function stopProcessTree(child) {
     try {
       process.kill(-child.pid, 'SIGTERM');
     } catch {
-      child.kill('SIGTERM');
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill('SIGTERM');
+      }
     }
     await waitForExit(child, shutdownTimeoutMs);
 
     try {
       process.kill(-child.pid, 0);
       process.kill(-child.pid, 'SIGKILL');
-      await waitForExit(child, shutdownTimeoutMs);
     } catch {
-      if (child.exitCode === null && child.signalCode === null) {
-        child.kill('SIGKILL');
-      }
+      child.kill('SIGKILL');
     }
+    await waitForExit(child, shutdownTimeoutMs);
   })();
 
   processTreeStops.set(child, stopPromise);
@@ -223,34 +236,73 @@ function stopProcessTree(child) {
 }
 
 function createResourceTracker() {
-  const children = new Set();
-  let browser;
-  let markerCleanup;
+  const resources = new Set();
+  let cleanupStarted = false;
   let cleanupPromise;
 
-  return {
-    addChild(child) {
-      children.add(child);
-    },
-    setBrowser(nextBrowser) {
-      browser = nextBrowser;
-    },
-    setMarkerCleanup(cleanup) {
-      markerCleanup = cleanup;
-    },
-    cleanup() {
-      if (cleanupPromise) {
-        return cleanupPromise;
+  function runResource(resource) {
+    if (resource.promise) {
+      return resource.promise;
+    }
+
+    resource.started = true;
+    resource.promise = Promise.resolve()
+      .then(resource.cleanup)
+      .catch(() => undefined);
+    return resource.promise;
+  }
+
+  function addCleanup(cleanup) {
+    const resource = {
+      cleanup,
+      promise: undefined,
+      started: false,
+    };
+    resources.add(resource);
+
+    if (cleanupStarted) {
+      void runResource(resource);
+    }
+
+    return () => runResource(resource);
+  }
+
+  async function drain() {
+    cleanupStarted = true;
+
+    while (true) {
+      const pending = [...resources].filter((resource) => !resource.started);
+      if (pending.length > 0) {
+        await Promise.all(pending.map((resource) => runResource(resource)));
+        continue;
       }
 
-      cleanupPromise = (async () => {
-        if (browser) {
-          await browser.close().catch(() => undefined);
-        }
-        await Promise.all([...children].map((child) => stopProcessTree(child)));
-        await markerCleanup?.();
-        children.clear();
-      })();
+      await new Promise((resolve) => setImmediate(resolve));
+      if ([...resources].some((resource) => !resource.started)) {
+        continue;
+      }
+      return;
+    }
+  }
+
+  return {
+    addCleanup,
+    addChild(child) {
+      addCleanup(() => stopProcessTree(child));
+    },
+    assertActive() {
+      if (cleanupStarted) {
+        throw new Error('Capture cleanup has already started');
+      }
+    },
+    trackBrowser(browserPromise) {
+      addCleanup(async () => {
+        const browser = await browserPromise.catch(() => undefined);
+        await browser?.close().catch(() => undefined);
+      });
+    },
+    cleanup() {
+      cleanupPromise ??= drain();
       return cleanupPromise;
     },
   };
@@ -289,12 +341,15 @@ function installSignalHandlers(tracker) {
 }
 
 function listen(server, port) {
+  serverListenStates.set(server, 'pending');
   return new Promise((resolve, reject) => {
     const onError = (error) => {
+      serverListenStates.set(server, 'failed');
       server.off('listening', onListening);
       reject(error);
     };
     const onListening = () => {
+      serverListenStates.set(server, 'listening');
       server.off('error', onError);
       resolve();
     };
@@ -304,44 +359,101 @@ function listen(server, port) {
   });
 }
 
+const serverListenStates = new WeakMap();
+const serverClosePromises = new WeakMap();
+
 function closeServer(server) {
-  if (!server.listening) {
+  const existingClose = serverClosePromises.get(server);
+  if (existingClose) {
+    return existingClose;
+  }
+
+  const state = serverListenStates.get(server);
+  if (state === 'failed' || state === 'closed' || state === undefined) {
     return Promise.resolve();
   }
 
-  return new Promise((resolve) => {
-    server.close(() => resolve());
+  const closePromise = new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      serverListenStates.set(server, 'closed');
+      server.off('listening', closeWhenListening);
+      server.off('error', finish);
+      resolve();
+    };
+    const closeWhenListening = () => {
+      try {
+        server.close(finish);
+      } catch {
+        finish();
+      }
+    };
+
+    if (server.listening) {
+      closeWhenListening();
+      return;
+    }
+
+    server.once('listening', closeWhenListening);
+    server.once('error', finish);
   });
+  serverClosePromises.set(server, closePromise);
+  return closePromise;
 }
 
-async function reserveAvailablePort(preferredPort) {
-  const candidates =
-    preferredPort === 0
-      ? [0]
-      : [
-          preferredPort,
-          ...Array.from({ length: 32 }, (_, index) => preferredPort + index + 1).filter(
-            (port) => port <= 65_535,
-          ),
-          0,
-        ];
+function previewPortCandidates(preferredPort) {
+  if (preferredPort === 0) {
+    return Array.from({ length: 8 }, () => 0);
+  }
 
-  for (const candidate of candidates) {
-    const server = createServer();
-    try {
-      await listen(server, candidate);
-      const address = server.address();
-      if (!address || typeof address === 'string') {
+  return [
+    preferredPort,
+    ...Array.from({ length: 32 }, (_, index) => preferredPort + index + 1).filter(
+      (port) => port <= 65_535,
+    ),
+    0,
+  ];
+}
+
+async function reservePort(candidate, tracker) {
+  const server = createServer();
+  tracker.addCleanup(() => closeServer(server));
+
+  try {
+    await listen(server, candidate);
+    const address = server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Could not determine the reserved preview port');
+    }
+
+    let released = false;
+    return {
+      port: address.port,
+      release: async () => {
+        if (released) {
+          return;
+        }
+        released = true;
         await closeServer(server);
-        throw new Error('Could not determine the reserved preview port');
-      }
+      },
+    };
+  } catch (error) {
+    await closeServer(server);
+    throw error;
+  }
+}
 
-      return {
-        port: address.port,
-        release: () => closeServer(server),
-      };
+async function reserveAvailablePort(preferredPort, tracker, startIndex = 0) {
+  const candidates = previewPortCandidates(preferredPort);
+
+  for (let index = startIndex; index < candidates.length; index += 1) {
+    try {
+      return await reservePort(candidates[index], tracker);
     } catch (error) {
-      await closeServer(server);
       if (error?.code !== 'EADDRINUSE') {
         throw error;
       }
@@ -351,16 +463,101 @@ async function reserveAvailablePort(preferredPort) {
   throw new Error(`No available preview port near ${preferredPort}`);
 }
 
-async function createPreviewMarker() {
+function isPathInside(parentPath, childPath) {
+  const parent = path.resolve(parentPath);
+  const child = path.resolve(childPath);
+  return child !== parent && child.startsWith(`${parent}${path.sep}`);
+}
+
+function assertIsolatedIdentity(identity) {
+  if (
+    !identity ||
+    typeof identity !== 'object' ||
+    typeof identity.previewRoot !== 'string' ||
+    typeof identity.markerFilePath !== 'string' ||
+    typeof identity.markerPath !== 'string' ||
+    typeof identity.marker !== 'string'
+  ) {
+    throw new PreviewIdentityError(
+      'Preview marker identity must reference an isolated preview root',
+    );
+  }
+
+  if (
+    path.resolve(identity.previewRoot) === path.resolve(sharedBuildRoot) ||
+    !isPathInside(identity.previewRoot, identity.markerFilePath)
+  ) {
+    throw new PreviewIdentityError(
+      'Preview marker identity must reference an isolated preview root',
+    );
+  }
+}
+
+function stagePreviewMarker(previewRoot, tracker) {
   const marker = `${markerPrefix}${randomUUID()}`;
-  const fileName = `${marker}.txt`;
-  const filePath = path.join(repoRoot, 'doc_build', fileName);
-  await writeFile(filePath, `${marker}\n`, 'utf8');
+  const fileName = `${markerPrefix}${randomUUID()}.txt`;
+  const markerFilePath = path.join(previewRoot, fileName);
+  let writePromise = Promise.resolve();
+
+  tracker.addCleanup(async () => {
+    await writePromise.catch(() => undefined);
+    await rm(markerFilePath, { force: true });
+  });
+
+  writePromise = writeFile(markerFilePath, `${marker}\n`, 'utf8');
+  emitTestEvent(`marker staged: ${markerFilePath}`);
 
   return {
     marker,
-    path: `/${fileName}`,
-    cleanup: () => rm(filePath, { force: true }),
+    markerPath: `/${fileName}`,
+    markerFilePath,
+    previewRoot,
+    ready: writePromise,
+  };
+}
+
+async function createIsolatedPreview(sourceRoot, tracker) {
+  const previewRoot = mkdtempSync(path.join(tmpdir(), previewRootPrefix));
+  let copyPromise = Promise.resolve();
+  let markerPromise = Promise.resolve();
+  tracker.addCleanup(async () => {
+    await copyPromise.catch(() => undefined);
+    await markerPromise.catch(() => undefined);
+    await rm(previewRoot, { force: true, recursive: true });
+  });
+
+  emitTestEvent(`preview root: ${previewRoot}`);
+  const identity = stagePreviewMarker(previewRoot, tracker);
+  markerPromise = identity.ready;
+  copyPromise = cp(sourceRoot, previewRoot, { recursive: true });
+  await Promise.all([copyPromise, markerPromise]);
+  tracker.assertActive();
+
+  const configRoot = mkdtempSync(path.join(tmpdir(), previewConfigPrefix));
+  let configWritePromise = Promise.resolve();
+  tracker.addCleanup(async () => {
+    await configWritePromise.catch(() => undefined);
+    await rm(configRoot, { force: true, recursive: true });
+  });
+
+  const configPath = path.join(configRoot, 'rspress.config.ts');
+  const sourceConfigUrl = pathToFileURL(sourceConfigPath).href;
+  configWritePromise = writeFile(
+    configPath,
+    [
+      `import baseConfig from ${JSON.stringify(sourceConfigUrl)};`,
+      `export default { ...baseConfig, outDir: ${JSON.stringify(previewRoot)} };`,
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+  await configWritePromise;
+  tracker.assertActive();
+
+  return {
+    configPath,
+    identity,
+    previewRoot,
   };
 }
 
@@ -368,7 +565,9 @@ async function fetchWithTimeout(url) {
   return fetch(url, { signal: AbortSignal.timeout(fetchTimeoutMs) });
 }
 
-async function validatePreviewReady(previewUrl, markerPath, marker) {
+async function validatePreviewReady(previewUrl, identity) {
+  assertIsolatedIdentity(identity);
+
   let rootResponse;
   try {
     rootResponse = await fetchWithTimeout(previewUrl);
@@ -382,33 +581,33 @@ async function validatePreviewReady(previewUrl, markerPath, marker) {
 
   const contentType = rootResponse.headers.get('content-type') ?? '';
   const rootBody = await rootResponse.text();
-  if (!contentType.includes('text/html') || !rootBody.includes('<title>THQLLM</title>')) {
+  if (!contentType.includes('text/html') || !/<title>\s*THQLLM\s*<\/title>/.test(rootBody)) {
     throw new PreviewIdentityError(`Preview root is not the THQLLM HTML page at ${previewUrl}`);
   }
 
   let markerResponse;
   try {
-    markerResponse = await fetchWithTimeout(new URL(markerPath, previewUrl));
+    markerResponse = await fetchWithTimeout(new URL(identity.markerPath, previewUrl));
   } catch {
-    throw new PreviewIdentityError(`Preview marker did not respond at ${markerPath}`);
+    throw new PreviewIdentityError(`Preview marker did not respond at ${identity.markerPath}`);
   }
 
   if (!markerResponse.ok) {
     throw new PreviewIdentityError(
-      `Preview marker returned HTTP ${markerResponse.status} at ${markerPath}`,
+      `Preview marker returned HTTP ${markerResponse.status} at ${identity.markerPath}`,
     );
   }
 
   const returnedMarker = (await markerResponse.text()).trim();
-  if (returnedMarker !== marker) {
-    throw new PreviewIdentityError(`Preview marker mismatch at ${markerPath}`);
+  if (returnedMarker !== identity.marker) {
+    throw new PreviewIdentityError(`Preview marker mismatch at ${identity.markerPath}`);
   }
 }
 
-async function waitForPreview(preview, previewUrl, markerPath, marker) {
+async function waitForPreview(preview, previewUrl, identity) {
   const output = { value: '' };
-  preview.stdout.on('data', (chunk) => appendOutput(output, chunk));
-  preview.stderr.on('data', (chunk) => appendOutput(output, chunk));
+  preview.stdout?.on('data', (chunk) => appendOutput(output, chunk));
+  preview.stderr?.on('data', (chunk) => appendOutput(output, chunk));
   const deadline = Date.now() + serverTimeoutMs;
 
   while (Date.now() < deadline) {
@@ -417,7 +616,7 @@ async function waitForPreview(preview, previewUrl, markerPath, marker) {
     }
 
     try {
-      await validatePreviewReady(previewUrl, markerPath, marker);
+      await validatePreviewReady(previewUrl, identity);
       return;
     } catch (error) {
       if (!(error instanceof PreviewNotReadyError)) {
@@ -429,6 +628,79 @@ async function waitForPreview(preview, previewUrl, markerPath, marker) {
   }
 
   throw new Error(`Preview did not become ready at ${previewUrl}\n${output.value}`);
+}
+
+async function startPreviewWithRetry({
+  afterPortRelease,
+  identity,
+  preferredPort,
+  previewRoot,
+  configPath,
+  tracker,
+}) {
+  const candidates = previewPortCandidates(preferredPort);
+  let lastError;
+
+  for (let attempt = 0; attempt < candidates.length; attempt += 1) {
+    let reservation;
+    try {
+      reservation = await reserveAvailablePort(preferredPort, tracker, attempt);
+      tracker.assertActive();
+    } catch (error) {
+      tracker.assertActive();
+      lastError = error;
+      continue;
+    }
+
+    const port = reservation.port;
+    await reservation.release();
+    tracker.assertActive();
+    await afterPortRelease?.({ attempt, identity, port });
+    tracker.assertActive();
+
+    const previewUrl = `http://${previewHost}:${port}/`;
+    const preview = spawnManaged(
+      commandName(),
+      [
+        'preview',
+        previewRoot,
+        '--config',
+        configPath,
+        '--host',
+        previewHost,
+        '--port',
+        String(port),
+      ],
+      {
+        cwd: repoRoot,
+        env: commandEnvironment(),
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+      tracker,
+    );
+
+    try {
+      await waitForPreview(preview, previewUrl, identity);
+      tracker.assertActive();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      tracker.assertActive();
+      if (preview.exitCode !== null || preview.signalCode !== null) {
+        throw new Error('Preview exited immediately after becoming ready');
+      }
+      await validatePreviewReady(previewUrl, identity);
+      return {
+        port,
+        preview,
+        url: previewUrl,
+      };
+    } catch (error) {
+      lastError = error;
+      await stopProcessTree(preview);
+      tracker.assertActive();
+    }
+  }
+
+  throw lastError ?? new Error(`Could not start a THQLLM preview near ${preferredPort}`);
 }
 
 async function waitForPageAssets(page) {
@@ -537,30 +809,25 @@ async function waitForStableLayout(page) {
   throw new Error('Capture layout did not stabilize');
 }
 
-async function capture(options, tracker) {
-  const marker = await createPreviewMarker();
-  tracker.setMarkerCleanup(marker.cleanup);
-
-  const reservation = await reserveAvailablePort(options.port);
-  await reservation.release();
-
-  const previewUrl = `http://${previewHost}:${reservation.port}/`;
-  const preview = spawnManaged(
-    commandName(),
-    ['preview', '--host', previewHost, '--port', String(reservation.port)],
-    {
-      cwd: repoRoot,
-      env: commandEnvironment(),
-      stdio: ['ignore', 'pipe', 'pipe'],
-    },
+async function capture(options, tracker, hooks = {}) {
+  const sourceRoot = options.previewRoot ?? sharedBuildRoot;
+  const session = await createIsolatedPreview(sourceRoot, tracker);
+  tracker.assertActive();
+  const preview = await startPreviewWithRetry({
+    afterPortRelease: hooks.afterPortRelease,
+    configPath: session.configPath,
+    identity: session.identity,
+    preferredPort: options.port,
+    previewRoot: session.previewRoot,
     tracker,
-  );
+  });
+  tracker.assertActive();
+  console.log(`Preview ready at ${preview.url} marker=${session.identity.markerPath}`);
 
-  await waitForPreview(preview, previewUrl, marker.path, marker.marker);
-  console.log(`Preview ready at ${previewUrl} marker=${marker.path}`);
-
-  const browser = await chromium.launch({ headless: true });
-  tracker.setBrowser(browser);
+  const browserPromise = chromium.launch({ headless: true });
+  tracker.trackBrowser(browserPromise);
+  const browser = await browserPromise;
+  tracker.assertActive();
   const context = await browser.newContext({
     colorScheme: 'light',
     deviceScaleFactor: 1,
@@ -569,8 +836,11 @@ async function capture(options, tracker) {
     timezoneId: 'UTC',
     viewport: { width: captureWidth, height: captureHeight },
   });
+  tracker.assertActive();
   const page = await context.newPage();
-  await page.goto(previewUrl, { waitUntil: 'networkidle' });
+  tracker.assertActive();
+  await page.goto(preview.url, { waitUntil: 'networkidle' });
+  await validatePreviewReady(preview.url, session.identity);
   await page.addStyleTag({
     content: `
       html { scroll-behavior: auto !important; }
@@ -584,14 +854,24 @@ async function capture(options, tracker) {
   await waitForPageAssets(page);
   await page.evaluate(() => window.scrollTo(0, 0));
   await waitForStableLayout(page);
+  await hooks.beforeScreenshotIdentityCheck?.({
+    identity: session.identity,
+    page,
+    preview,
+  });
+  await validatePreviewReady(preview.url, session.identity);
+
   await mkdir(path.dirname(options.outputPath), { recursive: true });
+  const temporaryOutputPath = `${options.outputPath}.capture-${randomUUID()}.png`;
+  tracker.addCleanup(() => rm(temporaryOutputPath, { force: true }));
   await page.screenshot({
     animations: 'disabled',
     clip: { x: 0, y: 0, width: captureWidth, height: captureHeight },
-    path: options.outputPath,
+    path: temporaryOutputPath,
     scale: 'css',
     type: 'png',
   });
+  await rename(temporaryOutputPath, options.outputPath);
 }
 
 async function main() {
@@ -602,6 +882,7 @@ async function main() {
   try {
     if (!options.skipBuild) {
       await runCommand(commandName(), ['build'], tracker);
+      tracker.assertActive();
     }
 
     await capture(options, tracker);
@@ -614,7 +895,14 @@ async function main() {
   }
 }
 
-export { validatePreviewReady, waitForPageAssets };
+export {
+  capture,
+  createIsolatedPreview,
+  createResourceTracker,
+  startPreviewWithRetry,
+  validatePreviewReady,
+  waitForPageAssets,
+};
 
 if (path.resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
   main().catch((error) => {

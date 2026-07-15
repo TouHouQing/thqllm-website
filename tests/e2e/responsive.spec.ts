@@ -96,27 +96,14 @@ async function enlargeDocumentText(page: Page, selector: string, normalFontSize:
   );
 }
 
-test('HUD expectations derive from registry counts with an added undocumented project', ({
-  isMobile,
-}) => {
+test('HUD expectations derive from the production registry', async ({ page, isMobile }) => {
   test.skip(Boolean(isMobile), 'Registry expectation check only needs one project');
 
-  const pendingProject = {
-    ...projects[0],
-    id: 'pending-undocumented-project',
-    order: projects.length + 1,
-    featured: false,
-    docs: undefined,
-  };
-  const registryWithPendingProject = [...projects, pendingProject];
-  const derived = getHudLabels(registryWithPendingProject);
-  const expectedProjectCount = registryWithPendingProject.length;
-  const expectedDocsCount = projects.filter((project) => project.docs).length;
-
-  expect(derived).toEqual({
-    nodes: `${String(expectedProjectCount).padStart(2, '0')} NODES`,
-    docs: `${String(expectedDocsCount).padStart(2, '0')} DOCS`,
-  });
+  await page.goto('/');
+  const hud = page.locator('dl[aria-label="站点信息"]');
+  await expect(hud).toContainText(expectedHud.nodes);
+  await expect(hud).toContainText(expectedHud.docs);
+  await expect(hud).not.toContainText('ONLINE');
 });
 
 interface TextStyleMetrics {
