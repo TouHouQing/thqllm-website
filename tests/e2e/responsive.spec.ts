@@ -19,9 +19,9 @@ const mobileDanmakuViewports = [
   { width: 640, height: 360 },
 ] as const;
 const enlargedTextViewports = [
-  { width: 390, height: 844, homeTitleFontSize: 72, notFoundTitleFontSize: 52 },
-  { width: 360, height: 800, homeTitleFontSize: 64, notFoundTitleFontSize: 46.4 },
-  { width: 320, height: 568, homeTitleFontSize: 64, notFoundTitleFontSize: 46.4 },
+  { width: 390, height: 844 },
+  { width: 360, height: 800 },
+  { width: 320, height: 568 },
 ] as const;
 const MOBILE_DANMAKU_BULLET_COUNT = 16;
 const MOBILE_DANMAKU_ORBIT_SAMPLES = 1440;
@@ -63,6 +63,27 @@ async function enlargeDocumentText(page: Page) {
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
       }),
   );
+}
+
+interface TextStyleMetrics {
+  fontSize: number;
+  letterSpacing: number;
+  transform: string;
+}
+
+function expectTextApproximatelyDoubles(
+  normal: TextStyleMetrics,
+  enlarged: TextStyleMetrics,
+  evidence: string,
+) {
+  const ratio = enlarged.fontSize / normal.fontSize;
+
+  expect.soft(ratio, evidence).toBeGreaterThanOrEqual(1.9);
+  expect.soft(ratio, evidence).toBeLessThanOrEqual(2.1);
+  expect.soft(normal.letterSpacing, evidence).toBe(0);
+  expect.soft(enlarged.letterSpacing, evidence).toBe(0);
+  expect.soft(normal.transform, evidence).toBe('none');
+  expect.soft(enlarged.transform, evidence).toBe('none');
 }
 
 interface DanmakuFramePosition {
@@ -350,6 +371,45 @@ test('home preserves enlarged text geometry and navigation at narrow mobile size
   for (const viewport of enlargedTextViewports) {
     await page.setViewportSize(viewport);
     await openDeterministicMobileHome(page);
+    const normalMetrics = await page.evaluate(() => {
+      const title = document.getElementById('thq-home-title');
+      const menuText = document.querySelector('nav[aria-label="首页主菜单"] a:last-child strong');
+      const coreCopy = title?.parentElement?.querySelector('p');
+      const scrollHint = document.querySelector('[data-danmaku-exclusion="scroll-hint"]');
+
+      if (
+        !(title instanceof HTMLHeadingElement) ||
+        !(menuText instanceof HTMLElement) ||
+        !(coreCopy instanceof HTMLParagraphElement) ||
+        !(scrollHint instanceof HTMLAnchorElement)
+      ) {
+        throw new Error('Missing normal home text-resize target');
+      }
+
+      const textStyle = (element: Element) => {
+        const style = getComputedStyle(element);
+        const letterSpacing = style.letterSpacing;
+        return {
+          fontSize: Number.parseFloat(style.fontSize),
+          letterSpacing: letterSpacing === 'normal' ? 0 : Number.parseFloat(letterSpacing),
+          transform: style.transform,
+        };
+      };
+      const range = document.createRange();
+      range.selectNodeContents(title);
+
+      return {
+        title: textStyle(title),
+        menu: textStyle(menuText),
+        coreCopy: textStyle(coreCopy),
+        scrollHint: textStyle(scrollHint),
+        titleLineCount: Array.from(range.getClientRects()).filter(
+          (rect) => rect.width > 0 && rect.height > 0,
+        ).length,
+        documentOverflow:
+          document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      };
+    });
     await enlargeDocumentText(page);
 
     const metrics = await page.evaluate(() => {
@@ -401,6 +461,10 @@ test('home preserves enlarged text geometry and navigation at narrow mobile size
       const viewportHeight = document.documentElement.clientHeight;
       const horizontalOverflow = (rect: DOMRect | ReturnType<typeof unionRect>) =>
         Math.max(0, -rect.left, rect.right - viewportWidth);
+      const horizontalContainmentOverflow = (
+        inner: DOMRect | ReturnType<typeof unionRect>,
+        outer: DOMRect | ReturnType<typeof unionRect>,
+      ) => Math.max(0, outer.left - inner.left, inner.right - outer.right);
       const containmentOverflow = (
         inner: DOMRect | ReturnType<typeof unionRect>,
         outer: DOMRect | ReturnType<typeof unionRect>,
@@ -423,6 +487,7 @@ test('home preserves enlarged text geometry and navigation at narrow mobile size
       const lockup = title.parentElement?.parentElement;
       const titleRangeRects = textRects(title);
       const titleTextRect = unionRect(titleRangeRects);
+      const titleRect = title.getBoundingClientRect();
       const menuLinks = Array.from(menu.querySelectorAll('a'));
       const controlElements = [...menuLinks, scrollHint];
       const controlRects = controlElements.map((element) => element.getBoundingClientRect());
@@ -437,7 +502,8 @@ test('home preserves enlarged text geometry and navigation at narrow mobile size
               ? scrollHint.getBoundingClientRect()
               : (element.parentElement?.getBoundingClientRect() ?? element.getBoundingClientRect());
           return textRects(element).reduce(
-            (textMaximum, rect) => Math.max(textMaximum, containmentOverflow(rect, container)),
+            (textMaximum, rect) =>
+              Math.max(textMaximum, horizontalContainmentOverflow(rect, container)),
             maximum,
           );
         },
@@ -451,20 +517,43 @@ test('home preserves enlarged text geometry and navigation at narrow mobile size
         element.focus({ preventScroll: true });
         return count + (document.activeElement === element ? 0 : 1);
       }, 0);
-      const titleLetterSpacing = getComputedStyle(title).letterSpacing;
+      const representativeMenuText = menuLinks.at(-1)?.querySelector('strong');
+      const representativeCoreCopy = coreCopyElements[0];
+      if (
+        !(representativeMenuText instanceof HTMLElement) ||
+        !(representativeCoreCopy instanceof HTMLElement)
+      ) {
+        throw new Error('Missing representative enlarged home text');
+      }
+      const textStyle = (element: Element) => {
+        const style = getComputedStyle(element);
+        const letterSpacing = style.letterSpacing;
+        return {
+          fontSize: Number.parseFloat(style.fontSize),
+          letterSpacing: letterSpacing === 'normal' ? 0 : Number.parseFloat(letterSpacing),
+          transform: style.transform,
+        };
+      };
 
       return {
         viewportWidth,
         viewportHeight,
         innerWidth: window.innerWidth,
         rootFontSize: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
-        titleFontSize: Number.parseFloat(getComputedStyle(title).fontSize),
-        titleLetterSpacing:
-          titleLetterSpacing === 'normal' ? 0 : Number.parseFloat(titleLetterSpacing),
+        textStyles: {
+          title: textStyle(title),
+          menu: textStyle(representativeMenuText),
+          coreCopy: textStyle(representativeCoreCopy),
+          scrollHint: textStyle(scrollHint),
+        },
         titleLineCount: titleRangeRects.length,
-        titleViewportOverflow: Math.max(
-          horizontalOverflow(titleTextRect),
-          Math.max(0, -titleTextRect.top, titleTextRect.bottom - viewportHeight),
+        titleViewportOverflow: titleRangeRects.reduce(
+          (maximum, rect) => Math.max(maximum, horizontalOverflow(rect)),
+          0,
+        ),
+        titleContainerOverflow: titleRangeRects.reduce(
+          (maximum, rect) => Math.max(maximum, horizontalContainmentOverflow(rect, titleRect)),
+          0,
         ),
         titleHeroOverflow: containmentOverflow(titleTextRect, heroRect),
         documentOverflow: document.documentElement.scrollWidth - viewportWidth,
@@ -500,13 +589,16 @@ test('home preserves enlarged text geometry and navigation at narrow mobile size
         projectsGap: Math.abs(projects.getBoundingClientRect().top - heroRect.bottom),
       };
     });
-    const evidence = `${viewport.width}x${viewport.height} home enlarged-text metrics: ${JSON.stringify(metrics)}`;
+    const evidence = `${viewport.width}x${viewport.height} home text-resize metrics: normal=${JSON.stringify(normalMetrics)} enlarged=${JSON.stringify(metrics)}`;
 
+    expect.soft(normalMetrics.titleLineCount, evidence).toBe(1);
+    expect.soft(normalMetrics.documentOverflow, evidence).toBeLessThanOrEqual(1);
     expect.soft(metrics.viewportWidth, evidence).toBe(viewport.width);
     expect.soft(metrics.viewportHeight, evidence).toBe(viewport.height);
     expect.soft(metrics.rootFontSize, evidence).toBe(32);
-    expect.soft(metrics.titleLineCount, evidence).toBe(1);
+    expect.soft(metrics.titleLineCount, evidence).toBeGreaterThanOrEqual(1);
     expect.soft(metrics.titleViewportOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.titleContainerOverflow, evidence).toBeLessThanOrEqual(1);
     expect.soft(metrics.titleHeroOverflow, evidence).toBeLessThanOrEqual(1);
     expect.soft(metrics.documentOverflow, evidence).toBeLessThanOrEqual(1);
     expect.soft(metrics.controlViewportOverflow, evidence).toBeLessThanOrEqual(1);
@@ -519,10 +611,36 @@ test('home preserves enlarged text geometry and navigation at narrow mobile size
     expect.soft(metrics.menuScrollHintOverlap, evidence).toBe(0);
     expect.soft(metrics.focusFailures, evidence).toBe(0);
     expect.soft(metrics.projectsGap, evidence).toBeLessThanOrEqual(1);
-    expect.soft(metrics.titleFontSize, evidence).toBe(viewport.homeTitleFontSize);
-    expect.soft(metrics.titleLetterSpacing, evidence).toBe(0);
+    expectTextApproximatelyDoubles(normalMetrics.title, metrics.textStyles.title, evidence);
+    expectTextApproximatelyDoubles(normalMetrics.menu, metrics.textStyles.menu, evidence);
+    expectTextApproximatelyDoubles(normalMetrics.coreCopy, metrics.textStyles.coreCopy, evidence);
+    expectTextApproximatelyDoubles(
+      normalMetrics.scrollHint,
+      metrics.textStyles.scrollHint,
+      evidence,
+    );
 
+    const homeNavigation = page.getByRole('navigation', { name: '首页主菜单' });
     const scrollHint = page.getByRole('link', { name: '进入项目选择' });
+    const homeControls = [...(await homeNavigation.getByRole('link').all()), scrollHint];
+    for (const control of homeControls) {
+      await control.scrollIntoViewIfNeeded();
+      await expect(control).toBeInViewport();
+      expect(
+        await control.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          const hitTarget = document.elementFromPoint(
+            rect.left + rect.width / 2,
+            rect.top + rect.height / 2,
+          );
+          return hitTarget === element || element.contains(hitTarget);
+        }),
+        evidence,
+      ).toBe(true);
+      await control.focus();
+      await expect(control).toBeFocused();
+    }
+
     await scrollHint.click();
     await expect(page).toHaveURL(/#projects$/);
     await expect(page.getByRole('heading', { level: 2, name: '项目选择' })).toBeInViewport();
@@ -710,7 +828,39 @@ test('custom 404 preserves enlarged title and recovery actions at narrow mobile 
   for (const viewport of enlargedTextViewports) {
     await page.setViewportSize(viewport);
     await page.goto('/route-that-does-not-exist/');
-    await page.evaluate(() => document.fonts.ready);
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+    });
+    const normalMetrics = await page.evaluate(() => {
+      const title = document.querySelector('main h1');
+      const action = document.querySelector('nav[aria-label="错误页恢复操作"] button');
+
+      if (!(title instanceof HTMLHeadingElement) || !(action instanceof HTMLButtonElement)) {
+        throw new Error('Missing normal 404 text-resize target');
+      }
+
+      const textStyle = (element: Element) => {
+        const style = getComputedStyle(element);
+        const letterSpacing = style.letterSpacing;
+        return {
+          fontSize: Number.parseFloat(style.fontSize),
+          letterSpacing: letterSpacing === 'normal' ? 0 : Number.parseFloat(letterSpacing),
+          transform: style.transform,
+        };
+      };
+      const range = document.createRange();
+      range.selectNodeContents(title);
+
+      return {
+        title: textStyle(title),
+        action: textStyle(action),
+        titleLineCount: Array.from(range.getClientRects()).filter(
+          (rect) => rect.width > 0 && rect.height > 0,
+        ).length,
+        documentOverflow:
+          document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      };
+    });
     await enlargeDocumentText(page);
 
     const metrics = await page.evaluate(() => {
@@ -762,6 +912,10 @@ test('custom 404 preserves enlarged title and recovery actions at narrow mobile 
       const viewportHeight = document.documentElement.clientHeight;
       const horizontalOverflow = (rect: DOMRect | ReturnType<typeof unionRect>) =>
         Math.max(0, -rect.left, rect.right - viewportWidth);
+      const horizontalContainmentOverflow = (
+        inner: DOMRect | ReturnType<typeof unionRect>,
+        outer: DOMRect | ReturnType<typeof unionRect>,
+      ) => Math.max(0, outer.left - inner.left, inner.right - outer.right);
       const containmentOverflow = (
         inner: DOMRect | ReturnType<typeof unionRect>,
         outer: DOMRect | ReturnType<typeof unionRect>,
@@ -783,6 +937,7 @@ test('custom 404 preserves enlarged title and recovery actions at narrow mobile 
       const pageRect = pageRoot.getBoundingClientRect();
       const titleTextRects = textRects(title);
       const titleTextRect = unionRect(titleTextRects);
+      const titleRect = title.getBoundingClientRect();
       const statusTextRect = unionRect(textRects(status));
       const descriptionTextRect = unionRect(textRects(description));
       const actionElements = Array.from(actions.querySelectorAll('a, button')).filter(
@@ -809,20 +964,37 @@ test('custom 404 preserves enlarged title and recovery actions at narrow mobile 
         element.focus({ preventScroll: true });
         return count + (document.activeElement === element ? 0 : 1);
       }, 0);
-      const titleLetterSpacing = getComputedStyle(title).letterSpacing;
+      const representativeAction = actionElements.at(-1);
+      if (!(representativeAction instanceof HTMLElement)) {
+        throw new Error('Missing representative enlarged 404 action');
+      }
+      const textStyle = (element: Element) => {
+        const style = getComputedStyle(element);
+        const letterSpacing = style.letterSpacing;
+        return {
+          fontSize: Number.parseFloat(style.fontSize),
+          letterSpacing: letterSpacing === 'normal' ? 0 : Number.parseFloat(letterSpacing),
+          transform: style.transform,
+        };
+      };
 
       return {
         viewportWidth,
         viewportHeight,
         innerWidth: window.innerWidth,
         rootFontSize: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
-        titleFontSize: Number.parseFloat(getComputedStyle(title).fontSize),
-        titleLetterSpacing:
-          titleLetterSpacing === 'normal' ? 0 : Number.parseFloat(titleLetterSpacing),
+        textStyles: {
+          title: textStyle(title),
+          action: textStyle(representativeAction),
+        },
         titleLineCount: titleTextRects.length,
-        titleViewportOverflow: Math.max(
-          horizontalOverflow(titleTextRect),
-          Math.max(0, -titleTextRect.top, titleTextRect.bottom - viewportHeight),
+        titleViewportOverflow: titleTextRects.reduce(
+          (maximum, rect) => Math.max(maximum, horizontalOverflow(rect)),
+          0,
+        ),
+        titleContainerOverflow: titleTextRects.reduce(
+          (maximum, rect) => Math.max(maximum, horizontalContainmentOverflow(rect, titleRect)),
+          0,
         ),
         titlePageOverflow: containmentOverflow(titleTextRect, pageRect),
         documentOverflow: document.documentElement.scrollWidth - viewportWidth,
@@ -845,13 +1017,16 @@ test('custom 404 preserves enlarged title and recovery actions at narrow mobile 
         documentBottom: document.documentElement.scrollHeight,
       };
     });
-    const evidence = `${viewport.width}x${viewport.height} 404 enlarged-text metrics: ${JSON.stringify(metrics)}`;
+    const evidence = `${viewport.width}x${viewport.height} 404 text-resize metrics: normal=${JSON.stringify(normalMetrics)} enlarged=${JSON.stringify(metrics)}`;
 
+    expect.soft(normalMetrics.titleLineCount, evidence).toBe(1);
+    expect.soft(normalMetrics.documentOverflow, evidence).toBeLessThanOrEqual(1);
     expect.soft(metrics.viewportWidth, evidence).toBe(viewport.width);
     expect.soft(metrics.viewportHeight, evidence).toBe(viewport.height);
     expect.soft(metrics.rootFontSize, evidence).toBe(32);
-    expect.soft(metrics.titleLineCount, evidence).toBe(1);
+    expect.soft(metrics.titleLineCount, evidence).toBeGreaterThanOrEqual(1);
     expect.soft(metrics.titleViewportOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.titleContainerOverflow, evidence).toBeLessThanOrEqual(1);
     expect.soft(metrics.titlePageOverflow, evidence).toBeLessThanOrEqual(1);
     expect.soft(metrics.documentOverflow, evidence).toBeLessThanOrEqual(1);
     expect.soft(metrics.actionViewportOverflow, evidence).toBeLessThanOrEqual(1);
@@ -865,8 +1040,8 @@ test('custom 404 preserves enlarged title and recovery actions at narrow mobile 
     expect
       .soft(Math.max(0, metrics.finalActionBottom - metrics.documentBottom), evidence)
       .toBeLessThanOrEqual(1);
-    expect.soft(metrics.titleFontSize, evidence).toBe(viewport.notFoundTitleFontSize);
-    expect.soft(metrics.titleLetterSpacing, evidence).toBe(0);
+    expectTextApproximatelyDoubles(normalMetrics.title, metrics.textStyles.title, evidence);
+    expectTextApproximatelyDoubles(normalMetrics.action, metrics.textStyles.action, evidence);
     expect.soft(metrics.pageScrollRange, evidence).toBeGreaterThanOrEqual(0);
 
     const recoveryNavigation = page.getByRole('navigation', { name: '错误页恢复操作' });

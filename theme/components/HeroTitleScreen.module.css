@@ -295,6 +295,7 @@
 @media (max-width: 640px) {
   .hero {
     min-height: min(720px, calc(88svh - var(--thq-nav-height)));
+    overflow: visible;
   }
 
   .danmaku {
@@ -328,30 +329,39 @@
   }
 
   .lockup {
-    gap: 10px;
+    width: 100%;
+    min-width: 0;
+    gap: 0.625rem;
     max-width: 100%;
   }
 
+  .lockup > div {
+    flex: 1 1 0;
+  }
+
   .seal {
-    width: 36px;
-    height: 36px;
-    flex-basis: 36px;
-    font-size: min(0.66rem, 14px);
+    width: 2.25rem;
+    height: 2.25rem;
+    flex-basis: 2.25rem;
+    font-size: 0.66rem;
   }
 
   .lockup h1 {
-    font-size: min(4.25rem, 68px);
+    max-width: 100%;
+    font-size: 4.25rem;
     line-height: 0.82;
+    overflow-wrap: anywhere;
+    white-space: normal;
   }
 
   .english,
   .chinese {
-    font-size: min(0.67rem, 14px);
+    font-size: 0.67rem;
     line-height: 1.4;
   }
 
   .english {
-    margin-top: 12px;
+    margin-top: max(12px, calc(1rem - 4px));
   }
 
   .chinese {
@@ -374,11 +384,19 @@
 
   .menuItem span,
   .menuItem small {
-    font-size: min(0.61rem, 12px);
+    font-size: 0.61rem;
   }
 
   .menuItem strong {
-    font-size: min(0.82rem, 16px);
+    font-size: 0.82rem;
+    overflow-wrap: anywhere;
+  }
+
+  .menuItem small {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    text-align: right;
+    white-space: normal;
   }
 
   .hud {
@@ -386,34 +404,34 @@
   }
 
   .scrollHint {
-    font-size: min(0.72rem, 14px);
+    font-size: 0.72rem;
   }
 }
 
 @media (min-width: 380px) and (max-width: 640px) {
   .lockup h1 {
-    font-size: min(4.5rem, 72px);
+    font-size: 4.5rem;
   }
 }
 
 @media (max-width: 374px) {
   .lockup {
-    gap: 9px;
+    gap: 0.5625rem;
   }
 
   .seal {
-    width: 34px;
-    height: 34px;
-    flex-basis: 34px;
+    width: 2.125rem;
+    height: 2.125rem;
+    flex-basis: 2.125rem;
   }
 
   .lockup h1 {
-    font-size: min(4rem, 64px);
+    font-size: 4rem;
   }
 
   .english,
   .chinese {
-    font-size: min(0.63rem, 14px);
+    font-size: 0.63rem;
   }
 
   .menu {
@@ -428,7 +446,11 @@
 }
 
 @media (max-width: 340px) {
+  .content {
+    width: min(calc(100% - 16px), 540px);
+  }
+
   .lockup {
-    gap: 6px;
+    gap: 0.375rem;
   }
 }
