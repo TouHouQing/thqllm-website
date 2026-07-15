@@ -23,6 +23,11 @@ const enlargedTextViewports = [
   { width: 360, height: 800 },
   { width: 320, height: 568 },
 ] as const;
+const wideEnlargedTextViewports = [
+  { width: 768, height: 900 },
+  { width: 1024, height: 768 },
+  { width: 1440, height: 900 },
+] as const;
 const MOBILE_DANMAKU_BULLET_COUNT = 16;
 const MOBILE_DANMAKU_ORBIT_SAMPLES = 1440;
 const responsivePaths = ['/', '/projects/', '/docs/fluctgraph/'] as const;
@@ -373,6 +378,466 @@ test('home remains navigable when hero images fail', async ({ page }) => {
   await expect(
     page.getByRole('navigation', { name: '首页主菜单' }).getByRole('link', { name: /项目选择/ }),
   ).toBeVisible();
+});
+
+test('home preserves wide enlarged text reflow, factual HUD, and usable controls', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(Boolean(isMobile), 'Wide text-resize geometry only');
+
+  for (const viewport of wideEnlargedTextViewports) {
+    await page.setViewportSize(viewport);
+    await openDeterministicMobileHome(page);
+    const normalMetrics = await page.evaluate(() => {
+      const hero = document.querySelector('[data-danmaku-root]');
+      const title = document.getElementById('thq-home-title');
+      const menuDetail = document.querySelector('nav[aria-label="首页主菜单"] a:first-child small');
+      const coreCopy = title?.parentElement?.querySelector('p');
+      const hud = document.querySelector('dl[aria-label="站点信息"]');
+      const hudValue = hud?.querySelector('dd');
+      const scrollHint = document.querySelector('[data-danmaku-exclusion="scroll-hint"]');
+
+      if (
+        !(hero instanceof HTMLElement) ||
+        !(title instanceof HTMLHeadingElement) ||
+        !(menuDetail instanceof HTMLElement) ||
+        !(coreCopy instanceof HTMLParagraphElement) ||
+        !(hud instanceof HTMLDListElement) ||
+        !(hudValue instanceof HTMLElement) ||
+        !(scrollHint instanceof HTMLAnchorElement)
+      ) {
+        throw new Error('Missing normal wide home text-resize target');
+      }
+
+      const textStyle = (element: Element) => {
+        const style = getComputedStyle(element);
+        const letterSpacing = style.letterSpacing;
+        return {
+          fontSize: Number.parseFloat(style.fontSize),
+          letterSpacing: letterSpacing === 'normal' ? 0 : Number.parseFloat(letterSpacing),
+          transform: style.transform,
+        };
+      };
+      const titleRange = document.createRange();
+      titleRange.selectNodeContents(title);
+
+      return {
+        rootFontSize: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
+        title: textStyle(title),
+        menuDetail: textStyle(menuDetail),
+        coreCopy: textStyle(coreCopy),
+        hudValue: textStyle(hudValue),
+        scrollHint: textStyle(scrollHint),
+        titleLineCount: Array.from(titleRange.getClientRects()).filter(
+          (rect) => rect.width > 0 && rect.height > 0,
+        ).length,
+        heroHeight: hero.getBoundingClientRect().height,
+        hudDisplay: getComputedStyle(hud).display,
+        hudText: hud.textContent,
+        documentOverflow:
+          document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      };
+    });
+    await enlargeDocumentText(page, '#thq-home-title', normalMetrics.title.fontSize);
+
+    const metrics = await page.evaluate(() => {
+      const hero = document.querySelector('[data-danmaku-root]');
+      const title = document.getElementById('thq-home-title');
+      const lockup = title?.parentElement?.parentElement;
+      const menu = document.querySelector('nav[aria-label="首页主菜单"]');
+      const scrollHint = document.querySelector('[data-danmaku-exclusion="scroll-hint"]');
+      const hud = document.querySelector('dl[aria-label="站点信息"]');
+      const projects = document.getElementById('projects');
+
+      if (
+        !(hero instanceof HTMLElement) ||
+        !(title instanceof HTMLHeadingElement) ||
+        !(lockup instanceof HTMLElement) ||
+        !(menu instanceof HTMLElement) ||
+        !(scrollHint instanceof HTMLAnchorElement) ||
+        !(hud instanceof HTMLDListElement) ||
+        !(projects instanceof HTMLElement)
+      ) {
+        throw new Error('Missing enlarged wide home geometry target');
+      }
+
+      const textRects = (element: Element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return Array.from(range.getClientRects()).filter(
+          (rect) => rect.width > 0 && rect.height > 0,
+        );
+      };
+      const unionRect = (rects: DOMRect[]) => {
+        const first = rects[0];
+        if (!first) {
+          throw new Error('Expected rendered text rect');
+        }
+
+        return rects.slice(1).reduce(
+          (union, rect) => ({
+            left: Math.min(union.left, rect.left),
+            top: Math.min(union.top, rect.top),
+            right: Math.max(union.right, rect.right),
+            bottom: Math.max(union.bottom, rect.bottom),
+          }),
+          {
+            left: first.left,
+            top: first.top,
+            right: first.right,
+            bottom: first.bottom,
+          },
+        );
+      };
+      const viewportWidth = document.documentElement.clientWidth;
+      const viewportHeight = document.documentElement.clientHeight;
+      const horizontalOverflow = (rect: DOMRect | ReturnType<typeof unionRect>) =>
+        Math.max(0, -rect.left, rect.right - viewportWidth);
+      const horizontalContainmentOverflow = (
+        inner: DOMRect | ReturnType<typeof unionRect>,
+        outer: DOMRect | ReturnType<typeof unionRect>,
+      ) => Math.max(0, outer.left - inner.left, inner.right - outer.right);
+      const containmentOverflow = (
+        inner: DOMRect | ReturnType<typeof unionRect>,
+        outer: DOMRect | ReturnType<typeof unionRect>,
+      ) =>
+        Math.max(
+          0,
+          outer.left - inner.left,
+          inner.right - outer.right,
+          outer.top - inner.top,
+          inner.bottom - outer.bottom,
+        );
+      const overlap = (
+        first: DOMRect | ReturnType<typeof unionRect>,
+        second: DOMRect | ReturnType<typeof unionRect>,
+      ) =>
+        Math.max(0, Math.min(first.right, second.right) - Math.max(first.left, second.left)) *
+        Math.max(0, Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top));
+      const textStyle = (element: Element) => {
+        const style = getComputedStyle(element);
+        const letterSpacing = style.letterSpacing;
+        return {
+          fontSize: Number.parseFloat(style.fontSize),
+          letterSpacing: letterSpacing === 'normal' ? 0 : Number.parseFloat(letterSpacing),
+          transform: style.transform,
+        };
+      };
+
+      const heroRect = hero.getBoundingClientRect();
+      const titleRects = textRects(title);
+      const titleTextRect = unionRect(titleRects);
+      const titleRect = title.getBoundingClientRect();
+      const hudRect = hud.getBoundingClientRect();
+      const menuRect = menu.getBoundingClientRect();
+      const scrollHintRect = scrollHint.getBoundingClientRect();
+      const menuLinks = Array.from(menu.querySelectorAll('a'));
+      const menuLinkRects = menuLinks.map((link) => link.getBoundingClientRect());
+      const menuTextElements = menuLinks.flatMap((link) =>
+        Array.from(link.querySelectorAll('span, strong, small')),
+      );
+      const coreCopyElements = Array.from(title.parentElement?.querySelectorAll('p') ?? []);
+      const representativeMenuDetail = menuLinks[0]?.querySelector('small');
+      const representativeCoreCopy = coreCopyElements[0];
+      const representativeHudValue = hud.querySelector('dd');
+      if (
+        !(representativeMenuDetail instanceof HTMLElement) ||
+        !(representativeCoreCopy instanceof HTMLElement) ||
+        !(representativeHudValue instanceof HTMLElement)
+      ) {
+        throw new Error('Missing representative enlarged wide home text');
+      }
+      const coreCopyTextRect = unionRect(coreCopyElements.flatMap(textRects));
+      const titleLineOverlap = titleRects.reduce((maximum, rect, index) => {
+        return titleRects
+          .slice(index + 1)
+          .reduce(
+            (pairMaximum, otherRect) => Math.max(pairMaximum, overlap(rect, otherRect)),
+            maximum,
+          );
+      }, 0);
+      const adjacentMenuOverlap = menuLinkRects.reduce((maximum, rect, index) => {
+        const nextRect = menuLinkRects[index + 1];
+        return nextRect ? Math.max(maximum, overlap(rect, nextRect)) : maximum;
+      }, 0);
+      const textContainerOverflow = [
+        ...menuTextElements,
+        ...coreCopyElements,
+        ...Array.from(hud.querySelectorAll('dt, dd')),
+        scrollHint,
+      ].reduce((maximum, element) => {
+        const container =
+          element === scrollHint
+            ? scrollHintRect
+            : (element.parentElement?.getBoundingClientRect() ?? element.getBoundingClientRect());
+        return textRects(element).reduce(
+          (textMaximum, rect) =>
+            Math.max(textMaximum, horizontalContainmentOverflow(rect, container)),
+          maximum,
+        );
+      }, 0);
+
+      return {
+        viewportWidth,
+        viewportHeight,
+        rootFontSize: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
+        textStyles: {
+          title: textStyle(title),
+          menuDetail: textStyle(representativeMenuDetail),
+          coreCopy: textStyle(representativeCoreCopy),
+          hudValue: textStyle(representativeHudValue),
+          scrollHint: textStyle(scrollHint),
+        },
+        titleLineCount: titleRects.length,
+        titleLineRects: titleRects.map((rect) => ({
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+        })),
+        titleLineOverlap,
+        titleViewportOverflow: titleRects.reduce(
+          (maximum, rect) => Math.max(maximum, horizontalOverflow(rect)),
+          0,
+        ),
+        titleContainerOverflow: titleRects.reduce(
+          (maximum, rect) => Math.max(maximum, horizontalContainmentOverflow(rect, titleRect)),
+          0,
+        ),
+        titleHeroOverflow: containmentOverflow(titleTextRect, heroRect),
+        documentOverflow: document.documentElement.scrollWidth - viewportWidth,
+        heroHeight: heroRect.height,
+        hudDisplay: getComputedStyle(hud).display,
+        hudText: hud.textContent,
+        hudViewportOverflow: horizontalOverflow(hudRect),
+        hudHeroOverflow: containmentOverflow(hudRect, heroRect),
+        titleHudOverlap: overlap(titleTextRect, hudRect),
+        copyMenuOverlap: overlap(coreCopyTextRect, menuRect),
+        menuScrollHintOverlap: overlap(menuRect, scrollHintRect),
+        adjacentMenuOverlap,
+        textContainerOverflow,
+        controlViewportOverflow: [...menuLinkRects, scrollHintRect].reduce(
+          (maximum, rect) => Math.max(maximum, horizontalOverflow(rect)),
+          0,
+        ),
+        controlHeroOverflow: [...menuLinkRects, scrollHintRect].reduce(
+          (maximum, rect) => Math.max(maximum, containmentOverflow(rect, heroRect)),
+          0,
+        ),
+        projectsGap: Math.abs(projects.getBoundingClientRect().top - heroRect.bottom),
+      };
+    });
+    const evidence = `${viewport.width}x${viewport.height} wide home text-resize metrics: normal=${JSON.stringify(normalMetrics)} enlarged=${JSON.stringify(metrics)}`;
+
+    expect.soft(normalMetrics.rootFontSize, evidence).toBe(16);
+    expect.soft(normalMetrics.titleLineCount, evidence).toBe(1);
+    expect.soft(normalMetrics.documentOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(normalMetrics.hudDisplay, evidence).not.toBe('none');
+    expect.soft(normalMetrics.hudText, evidence).toContain('03 NODES');
+    expect.soft(normalMetrics.hudText, evidence).toContain('03 DOCS');
+    expect.soft(normalMetrics.hudText, evidence).not.toContain('ONLINE');
+    expect.soft(metrics.viewportWidth, evidence).toBe(viewport.width);
+    expect.soft(metrics.viewportHeight, evidence).toBe(viewport.height);
+    expect.soft(metrics.rootFontSize, evidence).toBe(32);
+    expect.soft(metrics.titleLineCount, evidence).toBeGreaterThan(1);
+    expect.soft(metrics.titleLineOverlap, evidence).toBe(0);
+    expect.soft(metrics.titleViewportOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.titleContainerOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.titleHeroOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.documentOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.heroHeight, evidence).toBeGreaterThan(normalMetrics.heroHeight);
+    expect.soft(metrics.hudDisplay, evidence).not.toBe('none');
+    expect.soft(metrics.hudText, evidence).toContain('03 DOCS');
+    expect.soft(metrics.hudText, evidence).not.toContain('ONLINE');
+    expect.soft(metrics.hudViewportOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.hudHeroOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.titleHudOverlap, evidence).toBe(0);
+    expect.soft(metrics.copyMenuOverlap, evidence).toBe(0);
+    expect.soft(metrics.menuScrollHintOverlap, evidence).toBe(0);
+    expect.soft(metrics.adjacentMenuOverlap, evidence).toBe(0);
+    expect.soft(metrics.textContainerOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.controlViewportOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.controlHeroOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.projectsGap, evidence).toBeLessThanOrEqual(1);
+    expectTextApproximatelyDoubles(normalMetrics.title, metrics.textStyles.title, evidence);
+    expectTextApproximatelyDoubles(
+      normalMetrics.menuDetail,
+      metrics.textStyles.menuDetail,
+      evidence,
+    );
+    expectTextApproximatelyDoubles(normalMetrics.coreCopy, metrics.textStyles.coreCopy, evidence);
+    expectTextApproximatelyDoubles(normalMetrics.hudValue, metrics.textStyles.hudValue, evidence);
+    expectTextApproximatelyDoubles(
+      normalMetrics.scrollHint,
+      metrics.textStyles.scrollHint,
+      evidence,
+    );
+
+    const homeNavigation = page.getByRole('navigation', { name: '首页主菜单' });
+    const scrollHint = page.getByRole('link', { name: '进入项目选择' });
+    for (const control of [...(await homeNavigation.getByRole('link').all()), scrollHint]) {
+      await control.scrollIntoViewIfNeeded();
+      await expect(control).toBeInViewport();
+      expect(
+        await control.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          const hitTarget = document.elementFromPoint(
+            rect.left + rect.width / 2,
+            rect.top + rect.height / 2,
+          );
+          return hitTarget === element || element.contains(hitTarget);
+        }),
+        evidence,
+      ).toBe(true);
+      await control.focus();
+      await expect(control).toBeFocused();
+    }
+
+    await scrollHint.click();
+    await expect(page).toHaveURL(/#projects$/);
+    await expect(page.getByRole('heading', { level: 2, name: '项目选择' })).toBeInViewport();
+  }
+});
+
+test('home keeps intermediate tablet text clear of the HUD and menu bounds', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(Boolean(isMobile), 'Tablet text-resize geometry only');
+
+  await page.setViewportSize({ width: 768, height: 900 });
+  await openDeterministicMobileHome(page);
+  const normalMetrics = await page.evaluate(() => {
+    const title = document.getElementById('thq-home-title');
+    const menuDetail = document.querySelector('nav[aria-label="首页主菜单"] a:first-child small');
+
+    if (!(title instanceof HTMLHeadingElement) || !(menuDetail instanceof HTMLElement)) {
+      throw new Error('Missing normal tablet text-resize target');
+    }
+
+    return {
+      titleFontSize: Number.parseFloat(getComputedStyle(title).fontSize),
+      menuDetailFontSize: Number.parseFloat(getComputedStyle(menuDetail).fontSize),
+    };
+  });
+  await page.locator('html').evaluate((element) => {
+    element.style.fontSize = '150%';
+  });
+  await page.waitForFunction(
+    ({ expectedTitleSize }) => {
+      const title = document.getElementById('thq-home-title');
+      return (
+        title instanceof HTMLHeadingElement &&
+        Number.parseFloat(getComputedStyle(title).fontSize) >= expectedTitleSize
+      );
+    },
+    {
+      expectedTitleSize: normalMetrics.titleFontSize * 1.45,
+    },
+  );
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+  );
+
+  const metrics = await page.evaluate(() => {
+    const title = document.getElementById('thq-home-title');
+    const menu = document.querySelector('nav[aria-label="首页主菜单"]');
+    const hud = document.querySelector('dl[aria-label="站点信息"]');
+
+    if (
+      !(title instanceof HTMLHeadingElement) ||
+      !(menu instanceof HTMLElement) ||
+      !(hud instanceof HTMLDListElement)
+    ) {
+      throw new Error('Missing intermediate tablet geometry target');
+    }
+
+    const textRects = (element: Element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      return Array.from(range.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0);
+    };
+    const unionRect = (rects: DOMRect[]) => {
+      const first = rects[0];
+      if (!first) {
+        throw new Error('Expected rendered tablet text rect');
+      }
+
+      return rects.slice(1).reduce(
+        (union, rect) => ({
+          left: Math.min(union.left, rect.left),
+          top: Math.min(union.top, rect.top),
+          right: Math.max(union.right, rect.right),
+          bottom: Math.max(union.bottom, rect.bottom),
+        }),
+        {
+          left: first.left,
+          top: first.top,
+          right: first.right,
+          bottom: first.bottom,
+        },
+      );
+    };
+    const overlap = (
+      first: DOMRect | ReturnType<typeof unionRect>,
+      second: DOMRect | ReturnType<typeof unionRect>,
+    ) =>
+      Math.max(0, Math.min(first.right, second.right) - Math.max(first.left, second.left)) *
+      Math.max(0, Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top));
+    const titleRects = textRects(title);
+    const menuDetails = Array.from(menu.querySelectorAll('small'));
+    const representativeMenuDetail = menuDetails[0];
+    if (!(representativeMenuDetail instanceof HTMLElement)) {
+      throw new Error('Missing intermediate tablet menu detail');
+    }
+
+    return {
+      rootFontSize: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
+      titleFontSize: Number.parseFloat(getComputedStyle(title).fontSize),
+      menuDetailFontSize: Number.parseFloat(getComputedStyle(representativeMenuDetail).fontSize),
+      titleLineOverlap: titleRects.reduce((maximum, rect, index) => {
+        return titleRects
+          .slice(index + 1)
+          .reduce(
+            (pairMaximum, otherRect) => Math.max(pairMaximum, overlap(rect, otherRect)),
+            maximum,
+          );
+      }, 0),
+      titleHudOverlap: overlap(unionRect(titleRects), hud.getBoundingClientRect()),
+      menuDetailOverflow: menuDetails.reduce((maximum, detail) => {
+        const itemRect = detail.parentElement?.getBoundingClientRect();
+        if (!itemRect) {
+          return maximum;
+        }
+
+        return textRects(detail).reduce(
+          (detailMaximum, rect) =>
+            Math.max(detailMaximum, itemRect.left - rect.left, rect.right - itemRect.right, 0),
+          maximum,
+        );
+      }, 0),
+      documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      hudDisplay: getComputedStyle(hud).display,
+    };
+  });
+  const evidence = `768x900 150% tablet metrics: normal=${JSON.stringify(normalMetrics)} enlarged=${JSON.stringify(metrics)}`;
+
+  expect.soft(metrics.rootFontSize, evidence).toBe(24);
+  expect
+    .soft(metrics.titleFontSize / normalMetrics.titleFontSize, evidence)
+    .toBeGreaterThanOrEqual(1.45);
+  expect
+    .soft(metrics.menuDetailFontSize / normalMetrics.menuDetailFontSize, evidence)
+    .toBeGreaterThanOrEqual(1.45);
+  expect.soft(metrics.titleLineOverlap, evidence).toBe(0);
+  expect.soft(metrics.titleHudOverlap, evidence).toBe(0);
+  expect.soft(metrics.menuDetailOverflow, evidence).toBeLessThanOrEqual(1);
+  expect.soft(metrics.documentOverflow, evidence).toBeLessThanOrEqual(1);
+  expect.soft(metrics.hudDisplay, evidence).not.toBe('none');
 });
 
 test('home preserves enlarged text geometry and navigation at narrow mobile sizes', async ({
@@ -846,6 +1311,308 @@ test('custom 404 Enter key opens search without page errors and Escape restores 
   await expect(searchInput).not.toBeVisible();
   await expect(searchButton).toBeFocused();
   expect(pageErrors).toEqual([]);
+});
+
+test('custom 404 preserves wide enlarged text flow and hittable recovery actions', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(Boolean(isMobile), 'Wide text-resize geometry only');
+
+  for (const viewport of wideEnlargedTextViewports) {
+    await page.setViewportSize(viewport);
+    await page.goto('/route-that-does-not-exist/');
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+    });
+    const normalMetrics = await page.evaluate(() => {
+      const status = document.querySelector('main p');
+      const title = document.querySelector('main h1');
+      const description = title?.nextElementSibling;
+      const action = document.querySelector('nav[aria-label="错误页恢复操作"] button');
+
+      if (
+        !(status instanceof HTMLParagraphElement) ||
+        !(title instanceof HTMLHeadingElement) ||
+        !(description instanceof HTMLParagraphElement) ||
+        !(action instanceof HTMLButtonElement)
+      ) {
+        throw new Error('Missing normal wide 404 text-resize target');
+      }
+
+      const textStyle = (element: Element) => {
+        const style = getComputedStyle(element);
+        const letterSpacing = style.letterSpacing;
+        return {
+          fontSize: Number.parseFloat(style.fontSize),
+          letterSpacing: letterSpacing === 'normal' ? 0 : Number.parseFloat(letterSpacing),
+          transform: style.transform,
+        };
+      };
+      const titleRange = document.createRange();
+      titleRange.selectNodeContents(title);
+
+      return {
+        rootFontSize: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
+        status: textStyle(status),
+        title: textStyle(title),
+        description: textStyle(description),
+        action: textStyle(action),
+        titleLineCount: Array.from(titleRange.getClientRects()).filter(
+          (rect) => rect.width > 0 && rect.height > 0,
+        ).length,
+        documentHeight: document.documentElement.scrollHeight,
+        documentOverflow:
+          document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      };
+    });
+    await enlargeDocumentText(page, 'main h1', normalMetrics.title.fontSize);
+
+    const metrics = await page.evaluate(() => {
+      const pageRoot = document.querySelector('main');
+      const status = document.querySelector('main p');
+      const title = document.querySelector('main h1');
+      const description = title?.nextElementSibling;
+      const actions = document.querySelector('nav[aria-label="错误页恢复操作"]');
+
+      if (
+        !(pageRoot instanceof HTMLElement) ||
+        !(status instanceof HTMLParagraphElement) ||
+        !(title instanceof HTMLHeadingElement) ||
+        !(description instanceof HTMLParagraphElement) ||
+        !(actions instanceof HTMLElement)
+      ) {
+        throw new Error('Missing enlarged wide 404 geometry target');
+      }
+
+      const textRects = (element: Element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return Array.from(range.getClientRects()).filter(
+          (rect) => rect.width > 0 && rect.height > 0,
+        );
+      };
+      const unionRect = (rects: DOMRect[]) => {
+        const first = rects[0];
+        if (!first) {
+          throw new Error('Expected rendered text rect');
+        }
+
+        return rects.slice(1).reduce(
+          (union, rect) => ({
+            left: Math.min(union.left, rect.left),
+            top: Math.min(union.top, rect.top),
+            right: Math.max(union.right, rect.right),
+            bottom: Math.max(union.bottom, rect.bottom),
+          }),
+          {
+            left: first.left,
+            top: first.top,
+            right: first.right,
+            bottom: first.bottom,
+          },
+        );
+      };
+      const viewportWidth = document.documentElement.clientWidth;
+      const viewportHeight = document.documentElement.clientHeight;
+      const horizontalOverflow = (rect: DOMRect | ReturnType<typeof unionRect>) =>
+        Math.max(0, -rect.left, rect.right - viewportWidth);
+      const horizontalContainmentOverflow = (
+        inner: DOMRect | ReturnType<typeof unionRect>,
+        outer: DOMRect | ReturnType<typeof unionRect>,
+      ) => Math.max(0, outer.left - inner.left, inner.right - outer.right);
+      const containmentOverflow = (
+        inner: DOMRect | ReturnType<typeof unionRect>,
+        outer: DOMRect | ReturnType<typeof unionRect>,
+      ) =>
+        Math.max(
+          0,
+          outer.left - inner.left,
+          inner.right - outer.right,
+          outer.top - inner.top,
+          inner.bottom - outer.bottom,
+        );
+      const overlap = (
+        first: DOMRect | ReturnType<typeof unionRect>,
+        second: DOMRect | ReturnType<typeof unionRect>,
+      ) =>
+        Math.max(0, Math.min(first.right, second.right) - Math.max(first.left, second.left)) *
+        Math.max(0, Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top));
+      const textStyle = (element: Element) => {
+        const style = getComputedStyle(element);
+        const letterSpacing = style.letterSpacing;
+        return {
+          fontSize: Number.parseFloat(style.fontSize),
+          letterSpacing: letterSpacing === 'normal' ? 0 : Number.parseFloat(letterSpacing),
+          transform: style.transform,
+        };
+      };
+
+      const pageRect = pageRoot.getBoundingClientRect();
+      const statusTextRects = textRects(status);
+      const titleTextRects = textRects(title);
+      const descriptionTextRects = textRects(description);
+      const statusTextRect = unionRect(statusTextRects);
+      const titleTextRect = unionRect(titleTextRects);
+      const descriptionTextRect = unionRect(descriptionTextRects);
+      const titleRect = title.getBoundingClientRect();
+      const actionElements = Array.from(actions.querySelectorAll('a, button')).filter(
+        (element): element is HTMLAnchorElement | HTMLButtonElement =>
+          element instanceof HTMLAnchorElement || element instanceof HTMLButtonElement,
+      );
+      const actionRects = actionElements.map((element) => element.getBoundingClientRect());
+      const representativeAction = actionElements.at(-1);
+      if (!(representativeAction instanceof HTMLElement)) {
+        throw new Error('Missing representative enlarged wide 404 action');
+      }
+      const titleLineOverlap = titleTextRects.reduce((maximum, rect, index) => {
+        return titleTextRects
+          .slice(index + 1)
+          .reduce(
+            (pairMaximum, otherRect) => Math.max(pairMaximum, overlap(rect, otherRect)),
+            maximum,
+          );
+      }, 0);
+      const actionOverlap = actionRects.reduce((maximum, rect, index) => {
+        return actionRects
+          .slice(index + 1)
+          .reduce(
+            (pairMaximum, otherRect) => Math.max(pairMaximum, overlap(rect, otherRect)),
+            maximum,
+          );
+      }, 0);
+      const actionTextOverflow = actionElements.reduce((maximum, element) => {
+        const controlRect = element.getBoundingClientRect();
+        return textRects(element).reduce(
+          (textMaximum, rect) =>
+            Math.max(textMaximum, horizontalContainmentOverflow(rect, controlRect)),
+          maximum,
+        );
+      }, 0);
+
+      return {
+        viewportWidth,
+        viewportHeight,
+        rootFontSize: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
+        textStyles: {
+          status: textStyle(status),
+          title: textStyle(title),
+          description: textStyle(description),
+          action: textStyle(representativeAction),
+        },
+        titleLineCount: titleTextRects.length,
+        titleLineRects: titleTextRects.map((rect) => ({
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+        })),
+        titleLineOverlap,
+        titleViewportOverflow: titleTextRects.reduce(
+          (maximum, rect) => Math.max(maximum, horizontalOverflow(rect)),
+          0,
+        ),
+        titleContainerOverflow: titleTextRects.reduce(
+          (maximum, rect) => Math.max(maximum, horizontalContainmentOverflow(rect, titleRect)),
+          0,
+        ),
+        titlePageOverflow: containmentOverflow(titleTextRect, pageRect),
+        statusViewportOverflow: statusTextRects.reduce(
+          (maximum, rect) => Math.max(maximum, horizontalOverflow(rect)),
+          0,
+        ),
+        statusPageOverflow: containmentOverflow(statusTextRect, pageRect),
+        descriptionViewportOverflow: descriptionTextRects.reduce(
+          (maximum, rect) => Math.max(maximum, horizontalOverflow(rect)),
+          0,
+        ),
+        descriptionPageOverflow: containmentOverflow(descriptionTextRect, pageRect),
+        documentOverflow: document.documentElement.scrollWidth - viewportWidth,
+        actionCount: actionElements.length,
+        actionViewportOverflow: actionRects.reduce(
+          (maximum, rect) => Math.max(maximum, horizontalOverflow(rect)),
+          0,
+        ),
+        actionPageOverflow: actionRects.reduce(
+          (maximum, rect) => Math.max(maximum, containmentOverflow(rect, pageRect)),
+          0,
+        ),
+        actionTextOverflow,
+        actionOverlap,
+        statusTitleOverlap: overlap(statusTextRect, titleTextRect),
+        titleDescriptionOverlap: overlap(titleTextRect, descriptionTextRect),
+        descriptionActionsOverlap: overlap(descriptionTextRect, actions.getBoundingClientRect()),
+        pageScrollRange: document.documentElement.scrollHeight - viewportHeight,
+        documentHeight: document.documentElement.scrollHeight,
+        finalActionBottom: actionRects.at(-1)?.bottom ?? 0,
+        documentBottom: document.documentElement.scrollHeight,
+      };
+    });
+    const evidence = `${viewport.width}x${viewport.height} wide 404 text-resize metrics: normal=${JSON.stringify(normalMetrics)} enlarged=${JSON.stringify(metrics)}`;
+
+    expect.soft(normalMetrics.rootFontSize, evidence).toBe(16);
+    expect.soft(normalMetrics.titleLineCount, evidence).toBe(1);
+    expect.soft(normalMetrics.documentOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.viewportWidth, evidence).toBe(viewport.width);
+    expect.soft(metrics.viewportHeight, evidence).toBe(viewport.height);
+    expect.soft(metrics.rootFontSize, evidence).toBe(32);
+    expect.soft(metrics.titleLineCount, evidence).toBeGreaterThanOrEqual(1);
+    expect.soft(metrics.titleLineOverlap, evidence).toBe(0);
+    expect.soft(metrics.titleViewportOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.titleContainerOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.titlePageOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.statusViewportOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.statusPageOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.descriptionViewportOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.descriptionPageOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.documentOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.actionCount, evidence).toBe(3);
+    expect.soft(metrics.actionViewportOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.actionPageOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.actionTextOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.actionOverlap, evidence).toBe(0);
+    expect.soft(metrics.statusTitleOverlap, evidence).toBe(0);
+    expect.soft(metrics.titleDescriptionOverlap, evidence).toBe(0);
+    expect.soft(metrics.descriptionActionsOverlap, evidence).toBe(0);
+    expect
+      .soft(Math.max(0, metrics.finalActionBottom - metrics.documentBottom), evidence)
+      .toBeLessThanOrEqual(1);
+    expect
+      .soft(metrics.documentHeight, evidence)
+      .toBeGreaterThanOrEqual(normalMetrics.documentHeight);
+    expect.soft(metrics.pageScrollRange, evidence).toBeGreaterThanOrEqual(0);
+    expectTextApproximatelyDoubles(normalMetrics.status, metrics.textStyles.status, evidence);
+    expectTextApproximatelyDoubles(normalMetrics.title, metrics.textStyles.title, evidence);
+    expectTextApproximatelyDoubles(
+      normalMetrics.description,
+      metrics.textStyles.description,
+      evidence,
+    );
+    expectTextApproximatelyDoubles(normalMetrics.action, metrics.textStyles.action, evidence);
+
+    const recoveryNavigation = page.getByRole('navigation', { name: '错误页恢复操作' });
+    for (const action of [
+      recoveryNavigation.getByRole('link', { name: '返回首页' }),
+      recoveryNavigation.getByRole('link', { name: '查看项目' }),
+      recoveryNavigation.getByRole('button', { name: '搜索文档' }),
+    ]) {
+      await action.scrollIntoViewIfNeeded();
+      await expect(action).toBeInViewport();
+      expect(
+        await action.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          const hitTarget = document.elementFromPoint(
+            rect.left + rect.width / 2,
+            rect.top + rect.height / 2,
+          );
+          return hitTarget === element || element.contains(hitTarget);
+        }),
+        evidence,
+      ).toBe(true);
+      await action.focus();
+      await expect(action).toBeFocused();
+    }
+  }
 });
 
 test('custom 404 preserves enlarged title and recovery actions at narrow mobile sizes', async ({

@@ -17,7 +17,7 @@ describe('HeroTitleScreen', () => {
   it('uses THQLLM as the only hero title and keeps direct navigation copy', () => {
     const { container } = render(
       <MemoryRouter>
-        <HeroTitleScreen projectCount={3} />
+        <HeroTitleScreen projectCount={3} manualCount={2} />
       </MemoryRouter>,
     );
 
@@ -40,7 +40,7 @@ describe('HeroTitleScreen', () => {
   it('marks every mobile danmaku exclusion with stable data attributes', () => {
     const { container } = render(
       <MemoryRouter>
-        <HeroTitleScreen projectCount={3} />
+        <HeroTitleScreen projectCount={3} manualCount={2} />
       </MemoryRouter>,
     );
 
@@ -48,5 +48,19 @@ describe('HeroTitleScreen', () => {
     expect(root).not.toBeNull();
     expect(root?.querySelectorAll('[data-danmaku-exclusion="menu"]')).toHaveLength(4);
     expect(root?.querySelectorAll('[data-danmaku-exclusion="scroll-hint"]')).toHaveLength(1);
+  });
+
+  it('reports project and documentation counts without a synthetic online status', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <HeroTitleScreen projectCount={3} manualCount={2} />
+      </MemoryRouter>,
+    );
+
+    const hud = container.querySelector('dl[aria-label="站点信息"]');
+    expect(hud).not.toBeNull();
+    expect(within(hud as HTMLElement).getByText('03 NODES')).toBeInTheDocument();
+    expect(within(hud as HTMLElement).getByText('02 DOCS')).toBeInTheDocument();
+    expect(container).not.toHaveTextContent('ONLINE');
   });
 });

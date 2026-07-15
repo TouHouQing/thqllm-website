@@ -5,9 +5,11 @@ import { ProjectStageGrid } from '../components/ProjectStageGrid';
 import styles from './HomeLayout.module.css';
 
 export function HomeLayout() {
+  const manualCount = projects.filter((project) => project.docs).length;
+
   return (
     <main className={styles.page}>
-      <HeroTitleScreen projectCount={projects.length} />
+      <HeroTitleScreen manualCount={manualCount} projectCount={projects.length} />
       <ProjectStageGrid projects={projects} />
       <ManualBand projects={projects} />
       <NotesBand />

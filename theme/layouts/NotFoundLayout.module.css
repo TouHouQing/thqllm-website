@@ -23,12 +23,14 @@
 }
 
 .title {
-  margin: 12px 0 0;
+  margin: max(12px, calc(1rem - 4px)) 0 0;
   font-family: var(--thq-display-font);
   font-size: 8rem;
   font-weight: 700;
-  line-height: 0.8;
+  line-height: 1.22;
   letter-spacing: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .description {
@@ -101,9 +103,6 @@
   .title {
     margin: calc(max(12px, calc(1rem - 4px)) - 0.21em) 0 -0.21em;
     font-size: 3.5rem;
-    line-height: 1.22;
-    overflow-wrap: anywhere;
-    white-space: normal;
   }
 }
 

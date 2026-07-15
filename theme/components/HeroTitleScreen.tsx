@@ -4,6 +4,7 @@ import { DanmakuCanvas } from './DanmakuCanvas';
 import styles from './HeroTitleScreen.module.css';
 
 interface HeroTitleScreenProps {
+  manualCount: number;
   projectCount: number;
 }
 
@@ -14,7 +15,7 @@ const menuItems = [
   { index: '04', label: '关于 THQLLM', detail: 'OMAKE', href: '/about/' },
 ] as const;
 
-export function HeroTitleScreen({ projectCount }: HeroTitleScreenProps) {
+export function HeroTitleScreen({ manualCount, projectCount }: HeroTitleScreenProps) {
   return (
     <section className={styles.hero} aria-labelledby="thq-home-title" data-danmaku-root>
       <picture className={styles.picture}>
@@ -69,7 +70,7 @@ export function HeroTitleScreen({ projectCount }: HeroTitleScreenProps) {
         </div>
         <div>
           <dt>Manual</dt>
-          <dd>ONLINE</dd>
+          <dd>{String(manualCount).padStart(2, '0')} DOCS</dd>
         </div>
         <div>
           <dt>Version</dt>

@@ -67,7 +67,8 @@
   width: min(1180px, calc(100% - 48px));
   min-height: inherit;
   margin: 0 auto;
-  padding: 44px 0 72px;
+  /* Preserve the 100% layout while growing a HUD-safe top area with text scaling. */
+  padding: max(44px, min(216px, calc(17rem - 228px))) 0 72px;
 }
 
 .lockup {
@@ -81,6 +82,7 @@
 }
 
 .lockup > div {
+  flex: 1 1 0;
   min-width: 0;
 }
 
@@ -101,13 +103,15 @@
 }
 
 .lockup h1 {
-  margin: 0;
+  max-width: 100%;
+  margin: -0.23em 0;
   font-family: var(--thq-display-font);
   font-size: 8.5rem;
   font-weight: 700;
-  line-height: 0.76;
+  line-height: 1.22;
   letter-spacing: 0;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .english,
@@ -174,11 +178,11 @@
   font-family: var(--thq-mono-font);
   font-size: 0.66rem;
   line-height: 1;
-  white-space: nowrap;
 }
 
 .menuItem span {
   color: var(--thq-gold);
+  white-space: nowrap;
 }
 
 .menuItem strong {
@@ -189,7 +193,11 @@
 }
 
 .menuItem small {
+  min-width: 0;
   opacity: 0.88;
+  overflow-wrap: anywhere;
+  text-align: right;
+  white-space: normal;
 }
 
 .menuItem[data-active="true"] span,
@@ -205,6 +213,8 @@
   right: 28px;
   display: grid;
   gap: 8px;
+  width: max-content;
+  max-width: calc(100% - 40px);
   min-width: 190px;
   margin: 0;
   padding: 13px;
@@ -235,6 +245,7 @@
 .hud dd {
   color: var(--thq-gold);
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .scrollHint {
@@ -347,12 +358,8 @@
   }
 
   .lockup h1 {
-    max-width: 100%;
     margin: -0.2em 0;
     font-size: 4.25rem;
-    line-height: 1.22;
-    overflow-wrap: anywhere;
-    white-space: normal;
   }
 
   .english,
@@ -395,9 +402,6 @@
 
   .menuItem small {
     min-width: 0;
-    overflow-wrap: anywhere;
-    text-align: right;
-    white-space: normal;
   }
 
   .hud {
