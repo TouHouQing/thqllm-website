@@ -41,7 +41,10 @@ test('home exposes every featured project with its registry destination', async 
   await expect(page.getByTestId('project-stage')).toHaveCount(featuredProjects.length);
 
   for (const project of featuredProjects) {
-    const external = page.getByRole('link', { name: `进入 ${project.name}` });
+    const external = page.getByRole('link', {
+      exact: true,
+      name: `进入 ${project.name}`,
+    });
     await expect(external).toHaveAttribute('href', project.externalUrl);
     await expect(external).toHaveAttribute('target', '_blank');
     await expect(external).toHaveAttribute('rel', 'noreferrer noopener');
@@ -56,7 +59,7 @@ test('the first documented registry project opens its documentation root', async
   await page.goto('/');
 
   const manual = page.getByRole('region', { name: '使用文档' });
-  await manual.getByRole('link', { name: firstDocumentedProject.name }).click();
+  await manual.getByRole('link', { exact: true, name: firstDocumentedProject.name }).click();
   await expect(page).toHaveURL(new RegExp(`${firstDocumentedProject.docs.basePath}$`));
 });
 
