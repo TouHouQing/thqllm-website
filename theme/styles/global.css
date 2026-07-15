@@ -126,6 +126,17 @@ body {
     bottom: auto;
     height: max(0px, calc(100vh - var(--thq-doc-panel-top, var(--thq-doc-panel-top-fallback))));
     max-height: max(0px, calc(100vh - var(--thq-doc-panel-top, var(--thq-doc-panel-top-fallback))));
+    visibility: hidden;
+  }
+
+  .rp-doc-layout__sidebar--open {
+    visibility: visible;
+  }
+}
+
+@media (769px <= width <= 1279px) {
+  .rp-sidebar-menu__left {
+    display: none;
   }
 }
 

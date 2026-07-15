@@ -151,6 +151,7 @@ function RenderedDocLayout(props: DocLayoutProps) {
             className={`rp-doc-layout__sidebar${
               isSidebarOpen ? ' rp-doc-layout__sidebar--open' : ''
             } rp-scrollbar`}
+            id="thq-doc-sidebar"
             ref={sidebarLayoutRef}
           >
             {beforeSidebar}
@@ -191,6 +192,7 @@ function RenderedDocLayout(props: DocLayoutProps) {
             className={`rp-doc-layout__outline${
               isOutlineOpen ? ' rp-doc-layout__outline--open' : ''
             } rp-scrollbar`}
+            id="thq-doc-outline"
             ref={asideLayoutRef}
           >
             {beforeOutline}
