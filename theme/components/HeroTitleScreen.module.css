@@ -348,8 +348,9 @@
 
   .lockup h1 {
     max-width: 100%;
+    margin: -0.2em 0;
     font-size: 4.25rem;
-    line-height: 0.82;
+    line-height: 1.22;
     overflow-wrap: anywhere;
     white-space: normal;
   }

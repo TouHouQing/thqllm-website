@@ -53,10 +53,23 @@ async function openDeterministicMobileHome(page: Page) {
   });
 }
 
-async function enlargeDocumentText(page: Page) {
+async function enlargeDocumentText(page: Page, selector: string, normalFontSize: number) {
   await page.locator('html').evaluate((element) => {
     element.style.fontSize = '200%';
   });
+  await page.waitForFunction(
+    ({ targetSelector, expectedMinimum }) => {
+      const target = document.querySelector(targetSelector);
+      return (
+        target instanceof HTMLElement &&
+        Number.parseFloat(getComputedStyle(target).fontSize) >= expectedMinimum
+      );
+    },
+    {
+      targetSelector: selector,
+      expectedMinimum: normalFontSize * 1.9,
+    },
+  );
   await page.evaluate(
     () =>
       new Promise<void>((resolve) => {
@@ -410,7 +423,7 @@ test('home preserves enlarged text geometry and navigation at narrow mobile size
           document.documentElement.scrollWidth - document.documentElement.clientWidth,
       };
     });
-    await enlargeDocumentText(page);
+    await enlargeDocumentText(page, '#thq-home-title', normalMetrics.title.fontSize);
 
     const metrics = await page.evaluate(() => {
       const hero = document.querySelector('[data-danmaku-root]');
@@ -488,6 +501,14 @@ test('home preserves enlarged text geometry and navigation at narrow mobile size
       const titleRangeRects = textRects(title);
       const titleTextRect = unionRect(titleRangeRects);
       const titleRect = title.getBoundingClientRect();
+      const titleLineOverlap = titleRangeRects.reduce((maximum, rect, index) => {
+        return titleRangeRects
+          .slice(index + 1)
+          .reduce(
+            (pairMaximum, otherRect) => Math.max(pairMaximum, overlap(rect, otherRect)),
+            maximum,
+          );
+      }, 0);
       const menuLinks = Array.from(menu.querySelectorAll('a'));
       const controlElements = [...menuLinks, scrollHint];
       const controlRects = controlElements.map((element) => element.getBoundingClientRect());
@@ -547,6 +568,13 @@ test('home preserves enlarged text geometry and navigation at narrow mobile size
           scrollHint: textStyle(scrollHint),
         },
         titleLineCount: titleRangeRects.length,
+        titleLineRects: titleRangeRects.map((rect) => ({
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+        })),
+        titleLineOverlap,
         titleViewportOverflow: titleRangeRects.reduce(
           (maximum, rect) => Math.max(maximum, horizontalOverflow(rect)),
           0,
@@ -597,6 +625,7 @@ test('home preserves enlarged text geometry and navigation at narrow mobile size
     expect.soft(metrics.viewportHeight, evidence).toBe(viewport.height);
     expect.soft(metrics.rootFontSize, evidence).toBe(32);
     expect.soft(metrics.titleLineCount, evidence).toBeGreaterThanOrEqual(1);
+    expect.soft(metrics.titleLineOverlap, evidence).toBe(0);
     expect.soft(metrics.titleViewportOverflow, evidence).toBeLessThanOrEqual(1);
     expect.soft(metrics.titleContainerOverflow, evidence).toBeLessThanOrEqual(1);
     expect.soft(metrics.titleHeroOverflow, evidence).toBeLessThanOrEqual(1);
@@ -867,7 +896,7 @@ test('custom 404 preserves enlarged title and recovery actions at narrow mobile 
           document.documentElement.scrollWidth - document.documentElement.clientWidth,
       };
     });
-    await enlargeDocumentText(page);
+    await enlargeDocumentText(page, 'main h1', normalMetrics.title.fontSize);
 
     const metrics = await page.evaluate(() => {
       const title = document.querySelector('main h1');
@@ -944,6 +973,14 @@ test('custom 404 preserves enlarged title and recovery actions at narrow mobile 
       const titleTextRects = textRects(title);
       const titleTextRect = unionRect(titleTextRects);
       const titleRect = title.getBoundingClientRect();
+      const titleLineOverlap = titleTextRects.reduce((maximum, rect, index) => {
+        return titleTextRects
+          .slice(index + 1)
+          .reduce(
+            (pairMaximum, otherRect) => Math.max(pairMaximum, overlap(rect, otherRect)),
+            maximum,
+          );
+      }, 0);
       const statusTextRect = unionRect(textRects(status));
       const descriptionTextRect = unionRect(textRects(description));
       const actionElements = Array.from(actions.querySelectorAll('a, button')).filter(
@@ -995,6 +1032,13 @@ test('custom 404 preserves enlarged title and recovery actions at narrow mobile 
           action: textStyle(representativeAction),
         },
         titleLineCount: titleTextRects.length,
+        titleLineRects: titleTextRects.map((rect) => ({
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+        })),
+        titleLineOverlap,
         titleViewportOverflow: titleTextRects.reduce(
           (maximum, rect) => Math.max(maximum, horizontalOverflow(rect)),
           0,
@@ -1037,6 +1081,7 @@ test('custom 404 preserves enlarged title and recovery actions at narrow mobile 
     expect.soft(metrics.viewportHeight, evidence).toBe(viewport.height);
     expect.soft(metrics.rootFontSize, evidence).toBe(32);
     expect.soft(metrics.titleLineCount, evidence).toBeGreaterThanOrEqual(1);
+    expect.soft(metrics.titleLineOverlap, evidence).toBe(0);
     expect.soft(metrics.titleViewportOverflow, evidence).toBeLessThanOrEqual(1);
     expect.soft(metrics.titleContainerOverflow, evidence).toBeLessThanOrEqual(1);
     expect.soft(metrics.titlePageOverflow, evidence).toBeLessThanOrEqual(1);

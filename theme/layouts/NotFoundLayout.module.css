@@ -99,8 +99,9 @@
 
 @media (max-width: 640px) {
   .title {
-    margin-top: max(12px, calc(1rem - 4px));
+    margin: calc(max(12px, calc(1rem - 4px)) - 0.21em) 0 -0.21em;
     font-size: 3.5rem;
+    line-height: 1.22;
     overflow-wrap: anywhere;
     white-space: normal;
   }
