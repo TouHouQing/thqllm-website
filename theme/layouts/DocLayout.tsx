@@ -1,6 +1,6 @@
 // Fixed-version Rspress 2.0.17 adapter: preserve the original mobile sidebar and outline behavior.
 import { useSidebarMenu } from '@rspress/core/dist/theme/components/SidebarMenu/useSidebarMenu.js';
-import { useFrontmatter } from '@rspress/core/runtime';
+import { useFrontmatter, useLocation } from '@rspress/core/runtime';
 import {
   DocContent,
   DocFooter,
@@ -53,6 +53,7 @@ function RenderedDocLayout(props: DocLayoutProps) {
     components,
   } = props;
   const { frontmatter } = useFrontmatter();
+  const { pathname } = useLocation();
   const isOverviewPage = frontmatter?.overview ?? false;
   const sidebar = frontmatter?.sidebar ?? true;
   const showSidebar = sidebar === true;
@@ -67,6 +68,7 @@ function RenderedDocLayout(props: DocLayoutProps) {
   const menuLayoutRef = useRef<HTMLDivElement>(null);
   const containerLayoutRef = useRef<HTMLDivElement>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Client navigation replaces observed sibling nodes without changing menu visibility.
   useEffect(() => {
     const menu = menuLayoutRef.current;
     const container = containerLayoutRef.current;
@@ -127,7 +129,7 @@ function RenderedDocLayout(props: DocLayoutProps) {
       }
       container.style.removeProperty(DOC_PANEL_TOP_PROPERTY);
     };
-  }, [showSidebarMenu]);
+  }, [pathname, showSidebarMenu]);
 
   return (
     <>

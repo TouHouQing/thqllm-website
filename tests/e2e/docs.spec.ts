@@ -606,6 +606,73 @@ test('documentation panels follow live menu reflow without leaking into desktop 
   await expect(page.locator('.rp-doc-layout__outline')).toHaveCSS('position', 'sticky');
 });
 
+test('client navigation rebinds document panel measurement when the project switcher returns', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'Mobile client navigation only');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/docs/fluctgraph/');
+  await expectPanelTopVariableMatchesMenu(page);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+
+  const navigateFromMobileMenu = async (name: '关于' | '文档') => {
+    await page.getByRole('button', { name: 'mobile hamburger' }).click();
+    await page.locator('.rp-nav-screen').getByRole('link', { name, exact: true }).click();
+  };
+
+  await navigateFromMobileMenu('关于');
+  await expect(page).toHaveURL(/\/about\/(?:index\.html)?$/);
+  await expect(page.getByRole('heading', { level: 1, name: '关于 THQLLM' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: '切换项目文档' })).toHaveCount(0);
+  await expectPanelTopVariableMatchesMenu(page);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+
+  await navigateFromMobileMenu('文档');
+  await expect(page).toHaveURL(/\/docs\/fluctgraph\/(?:index\.html)?$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'FluctGraph' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: '切换项目文档' })).toBeVisible();
+  await expectPanelTopVariableMatchesMenu(page);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+
+  const menu = page.locator('.rp-doc-layout__menu');
+  const sidebarButton = page.locator('.rp-sidebar-menu__left');
+  const sidebar = page.locator('.rp-doc-layout__sidebar');
+  await sidebarButton.click();
+  await expect(sidebar).toHaveClass(/rp-doc-layout__sidebar--open/);
+
+  const [sidebarMenuBox, firstSidebarItemBox] = await Promise.all([
+    menu.boundingBox(),
+    sidebar.locator('.rp-sidebar-group').first().boundingBox(),
+  ]);
+  if (!sidebarMenuBox || !firstSidebarItemBox) {
+    throw new Error('Client-returned document menu and first sidebar item need layout boxes');
+  }
+  expect(firstSidebarItemBox.y).toBeGreaterThanOrEqual(sidebarMenuBox.y + sidebarMenuBox.height);
+
+  await sidebarButton.click();
+  await expect(sidebar).not.toHaveClass(/rp-doc-layout__sidebar--open/);
+
+  const outlineButton = page.locator('.rp-sidebar-menu__right');
+  const outline = page.locator('.rp-doc-layout__outline');
+  await outlineButton.click();
+  await expect(outline).toHaveClass(/rp-doc-layout__outline--open/);
+
+  const [outlineMenuBox, firstOutlineItemBox] = await Promise.all([
+    menu.boundingBox(),
+    outline.locator('.rp-toc-item').first().boundingBox(),
+  ]);
+  if (!outlineMenuBox || !firstOutlineItemBox) {
+    throw new Error('Client-returned document menu and first outline item need layout boxes');
+  }
+  expect(firstOutlineItemBox.y).toBeGreaterThanOrEqual(outlineMenuBox.y + outlineMenuBox.height);
+
+  await outlineButton.click();
+  await expect(outline).not.toHaveClass(/rp-doc-layout__outline--open/);
+  await expect(outline).toHaveCSS('visibility', 'hidden');
+});
+
 test('THQ API documentation has no detectable accessibility violations', async ({ page }) => {
   await page.goto('/docs/thq-api/');
   await expect(page.getByRole('heading', { level: 1, name: /THQ API/i })).toBeVisible();
