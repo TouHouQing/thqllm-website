@@ -833,9 +833,14 @@ test('custom 404 preserves enlarged title and recovery actions at narrow mobile 
     });
     const normalMetrics = await page.evaluate(() => {
       const title = document.querySelector('main h1');
+      const description = title?.nextElementSibling;
       const action = document.querySelector('nav[aria-label="错误页恢复操作"] button');
 
-      if (!(title instanceof HTMLHeadingElement) || !(action instanceof HTMLButtonElement)) {
+      if (
+        !(title instanceof HTMLHeadingElement) ||
+        !(description instanceof HTMLParagraphElement) ||
+        !(action instanceof HTMLButtonElement)
+      ) {
         throw new Error('Missing normal 404 text-resize target');
       }
 
@@ -853,6 +858,7 @@ test('custom 404 preserves enlarged title and recovery actions at narrow mobile 
 
       return {
         title: textStyle(title),
+        description: textStyle(description),
         action: textStyle(action),
         titleLineCount: Array.from(range.getClientRects()).filter(
           (rect) => rect.width > 0 && rect.height > 0,
@@ -985,6 +991,7 @@ test('custom 404 preserves enlarged title and recovery actions at narrow mobile 
         rootFontSize: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
         textStyles: {
           title: textStyle(title),
+          description: textStyle(description),
           action: textStyle(representativeAction),
         },
         titleLineCount: titleTextRects.length,
@@ -997,6 +1004,11 @@ test('custom 404 preserves enlarged title and recovery actions at narrow mobile 
           0,
         ),
         titlePageOverflow: containmentOverflow(titleTextRect, pageRect),
+        descriptionViewportOverflow: textRects(description).reduce(
+          (maximum, rect) => Math.max(maximum, horizontalOverflow(rect)),
+          0,
+        ),
+        descriptionPageOverflow: containmentOverflow(descriptionTextRect, pageRect),
         documentOverflow: document.documentElement.scrollWidth - viewportWidth,
         actionViewportOverflow: actionRects.reduce(
           (maximum, rect) => Math.max(maximum, horizontalOverflow(rect)),
@@ -1028,6 +1040,8 @@ test('custom 404 preserves enlarged title and recovery actions at narrow mobile 
     expect.soft(metrics.titleViewportOverflow, evidence).toBeLessThanOrEqual(1);
     expect.soft(metrics.titleContainerOverflow, evidence).toBeLessThanOrEqual(1);
     expect.soft(metrics.titlePageOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.descriptionViewportOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.descriptionPageOverflow, evidence).toBeLessThanOrEqual(1);
     expect.soft(metrics.documentOverflow, evidence).toBeLessThanOrEqual(1);
     expect.soft(metrics.actionViewportOverflow, evidence).toBeLessThanOrEqual(1);
     expect.soft(metrics.actionPageOverflow, evidence).toBeLessThanOrEqual(1);
@@ -1041,6 +1055,11 @@ test('custom 404 preserves enlarged title and recovery actions at narrow mobile 
       .soft(Math.max(0, metrics.finalActionBottom - metrics.documentBottom), evidence)
       .toBeLessThanOrEqual(1);
     expectTextApproximatelyDoubles(normalMetrics.title, metrics.textStyles.title, evidence);
+    expectTextApproximatelyDoubles(
+      normalMetrics.description,
+      metrics.textStyles.description,
+      evidence,
+    );
     expectTextApproximatelyDoubles(normalMetrics.action, metrics.textStyles.action, evidence);
     expect.soft(metrics.pageScrollRange, evidence).toBeGreaterThanOrEqual(0);
 
