@@ -120,7 +120,7 @@ body {
   }
 }
 
-@media (width <= 768px) {
+@media (width <= 767px) {
   .rp-doc-layout__sidebar {
     top: var(--thq-doc-panel-top, var(--thq-doc-panel-top-fallback));
     bottom: auto;
@@ -134,7 +134,7 @@ body {
   }
 }
 
-@media (769px <= width <= 1279px) {
+@media (768px <= width <= 1279px) {
   .rp-sidebar-menu__left {
     display: none;
   }

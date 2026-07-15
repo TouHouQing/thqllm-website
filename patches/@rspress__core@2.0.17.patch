@@ -147,14 +147,14 @@ index 07ae1c1fa0c1a0633c26672a547408addd4c66e9..edcb2aab5887b1103336bff72cf817a1
                          }
                        }}
 diff --git a/dist/eject-theme/components/SidebarMenu/index.tsx b/dist/eject-theme/components/SidebarMenu/index.tsx
-index 888dffc9d7b5e74c468a0883e9715eca49da3806..4ec3e94b8f601f0f73fb37ffb38d2cc77e16587b 100644
+index 888dffc9d7b5e74c468a0883e9715eca49da3806..eebcf37dbd4509ef5bfa66ee1e333ba092c737f9 100644
 --- a/dist/eject-theme/components/SidebarMenu/index.tsx
 +++ b/dist/eject-theme/components/SidebarMenu/index.tsx
 @@ -12,6 +12,8 @@ import { forwardRef, type ReactNode, useEffect, useRef } from 'react';
  import { createPortal } from 'react-dom';
  import './index.scss';
  
-+const SIDEBAR_DRAWER_QUERY = '(max-width: 768px)';
++const SIDEBAR_DRAWER_QUERY = '(max-width: 767px)';
 +
  /* Top Menu, only displayed on <1280px screen width */
  export const SidebarMenu = forwardRef(
@@ -500,14 +500,14 @@ index cdab103aa4a5088f872da628a6b7851da2b33fbc..a4840dfac572a7838fb0cf57c8b9a295
                                                  }
                                              }
 diff --git a/dist/theme/components/SidebarMenu/index.js b/dist/theme/components/SidebarMenu/index.js
-index b6d0da31e7892843b8aeeaf6f6b631394a5e3527..009fa840eb91d1ecbd37d871951b25e94562271c 100644
+index b6d0da31e7892843b8aeeaf6f6b631394a5e3527..403646c0770351817a1c2691baf5b51a2c3027cd 100644
 --- a/dist/theme/components/SidebarMenu/index.js
 +++ b/dist/theme/components/SidebarMenu/index.js
 @@ -4,6 +4,7 @@ import { IconArrowRight, IconMenu, ReadPercent, SvgWrapper, renderInlineMarkdown
  import { forwardRef, useEffect, useRef } from "react";
  import { createPortal } from "react-dom";
  import "./index.css";
-+const SIDEBAR_DRAWER_QUERY = '(max-width: 768px)';
++const SIDEBAR_DRAWER_QUERY = '(max-width: 767px)';
  const SidebarMenu = /*#__PURE__*/ forwardRef(({ isSidebarOpen, onIsSidebarOpenChange, isOutlineOpen, onIsOutlineOpenChange, beforeOutline, afterOutline }, forwardedRef)=>{
      const sidebarMenuRef = useRef(null);
      const t = useI18n();
@@ -670,3 +670,21 @@ index bcb5e74ef58571e5bc0c125fa58ae4f6f330a36f..bef417ccb531f392d8cd17542c0b2f3f
      useClickOutside([
          sidebarMenuRef,
          sidebarLayoutRef
+diff --git a/dist/theme/layout/DocLayout/index.css b/dist/theme/layout/DocLayout/index.css
+index 775062ebeddd9ddccb01aadef067bcf0ed24f1dc..abdcb93585467f12e864ae5e0f6c8b89750f3d74 100644
+--- a/dist/theme/layout/DocLayout/index.css
++++ b/dist/theme/layout/DocLayout/index.css
+@@ -168,7 +168,7 @@
+   }
+ }
+ 
+-@media (width <= 768px) {
++@media (width <= 767px) {
+   :root {
+     --rp-content-padding-x: 24px;
+   }
+@@ -194,4 +194,3 @@
+     transform: translate3d(0, 0, 0);
+   }
+ }
+-
