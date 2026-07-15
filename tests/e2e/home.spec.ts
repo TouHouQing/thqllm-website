@@ -35,20 +35,16 @@ test('home presents the THQLLM portal without forbidden copy', async ({ page }) 
   await expect(page.locator('body')).not.toContainText('结界');
 });
 
-test('home exposes every featured project and the canonical destinations', async ({ page }) => {
+test('home exposes every featured project with its registry destination', async ({ page }) => {
   await page.goto('/');
 
   await expect(page.getByTestId('project-stage')).toHaveCount(featuredProjects.length);
 
-  for (const [projectName, externalUrl] of [
-    ['FluctGraph', 'https://graph.tohoqing.com/'],
-    ['THQ API', 'https://sub.thqllm.com/'],
-    ['Toho Image Studio', 'https://img.tohoqing.com/'],
-  ]) {
-    await expect(page.getByRole('link', { name: `进入 ${projectName}` })).toHaveAttribute(
-      'href',
-      externalUrl,
-    );
+  for (const project of featuredProjects) {
+    const external = page.getByRole('link', { name: `进入 ${project.name}` });
+    await expect(external).toHaveAttribute('href', project.externalUrl);
+    await expect(external).toHaveAttribute('target', '_blank');
+    await expect(external).toHaveAttribute('rel', 'noreferrer noopener');
   }
 });
 

@@ -27,11 +27,12 @@ const fourthCard = {
 
 let fixtureRoot;
 
-function createProjectCard({ name, url }) {
+function createProjectCard({ extraLinks = [], name, url }) {
   return `
     <article data-testid="project-stage">
       <h3>${name}</h3>
       <a href="${url}" target="_blank" rel="noreferrer noopener">进入项目</a>
+      ${extraLinks.map((href) => `<a href="${href}">附加链接</a>`).join('')}
       <a href="/docs/example/">使用文档</a>
     </article>
   `;
@@ -114,6 +115,27 @@ describe('verify-build homepage project validation', () => {
     expect(result.stderr).toContain(
       'Project stage for Fourth Project must include exactly one HTTPS external link.',
     );
+  });
+
+  it('rejects an unsafe protocol-relative external link beside the project link', async () => {
+    const result = await runVerifier([
+      ...canonicalCards,
+      { ...fourthCard, extraLinks: ['//evil.example.com/'] },
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'Project stage for Fourth Project must include exactly one HTTPS external link.',
+    );
+  });
+
+  it('ignores a same-origin absolute docs link when classifying external links', async () => {
+    const result = await runVerifier([
+      ...canonicalCards,
+      { ...fourthCard, extraLinks: ['https://thqllm.com/docs/example/'] },
+    ]);
+
+    expect(result.status, result.stderr || result.stdout).toBe(0);
   });
 
   it('rejects duplicate project card names', async () => {

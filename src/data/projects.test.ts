@@ -75,6 +75,85 @@ describe('project registry', () => {
     ).toThrow('Project URLs must use HTTPS');
   });
 
+  it.each([
+    {
+      label: 'project',
+      path: [0],
+      unknownKey: 'documentation',
+      fixture: {
+        ...validProject,
+        documentation: validProject.docs,
+      },
+    },
+    {
+      label: 'docs',
+      path: [0, 'docs'],
+      unknownKey: 'extra',
+      fixture: {
+        ...validProject,
+        docs: {
+          ...validProject.docs,
+          extra: true,
+        },
+      },
+    },
+    {
+      label: 'docs section',
+      path: [0, 'docs', 'sections', 0],
+      unknownKey: 'extra',
+      fixture: {
+        ...validProject,
+        docs: {
+          ...validProject.docs,
+          sections: [
+            {
+              ...validProject.docs.sections[0],
+              extra: true,
+            },
+          ],
+        },
+      },
+    },
+    {
+      label: 'docs item',
+      path: [0, 'docs', 'sections', 0, 'items', 0],
+      unknownKey: 'extra',
+      fixture: {
+        ...validProject,
+        docs: {
+          ...validProject.docs,
+          sections: [
+            {
+              ...validProject.docs.sections[0],
+              items: [
+                {
+                  ...validProject.docs.sections[0].items[0],
+                  extra: true,
+                },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  ])('rejects unknown keys on a $label object', ({ fixture, path, unknownKey }) => {
+    const result = projectListSchema.safeParse([fixture]);
+
+    expect(result.success).toBe(false);
+
+    if (result.success) {
+      throw new Error(`Expected unknown ${unknownKey} key on ${path.join('.')} to fail`);
+    }
+
+    expect(result.error.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'unrecognized_keys',
+        keys: [unknownKey],
+        path,
+      }),
+    );
+  });
+
   it('rejects duplicate project ids', () => {
     expect(() =>
       projectListSchema.parse([validProject, { ...validProject, order: validProject.order + 1 }]),
@@ -204,6 +283,33 @@ describe('project registry', () => {
     }
 
     expect(result.error.issues).toContainEqual(expect.objectContaining({ path }));
+  });
+
+  it('does not suggest a docs base path until the project id is valid', () => {
+    const result = projectListSchema.safeParse([
+      {
+        ...validProject,
+        id: 'Invalid_ID',
+      },
+    ]);
+
+    expect(result.success).toBe(false);
+
+    if (result.success) {
+      throw new Error('Expected an invalid project id to fail');
+    }
+
+    expect(result.error.issues).toContainEqual(
+      expect.objectContaining({
+        path: [0, 'id'],
+      }),
+    );
+    expect(result.error.issues).not.toContainEqual(
+      expect.objectContaining({
+        message: expect.stringContaining('Project docs base path must match project id'),
+        path: [0, 'docs', 'basePath'],
+      }),
+    );
   });
 
   it.each([

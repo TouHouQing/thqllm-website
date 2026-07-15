@@ -1,5 +1,5 @@
 import { MemoryRouter } from '@rspress/core/runtime';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, within } from '@testing-library/react';
 import type { ComponentProps, PropsWithChildren } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { projects } from '../../src/data/projects';
@@ -39,30 +39,34 @@ const pendingProject = {
 afterEach(cleanup);
 
 describe('ProjectStageGrid', () => {
-  it('renders the registry-derived count and canonical safe links', () => {
-    const fixture = [...projects, pendingProject];
-    const featuredProjects = fixture.filter((project) => project.featured);
+  it('binds every featured project card to its registry entry', () => {
+    const registry = [...projects, pendingProject];
+    const featuredProjects = registry.filter((project) => project.featured);
     const { container } = render(
       <MemoryRouter>
-        <ProjectStageGrid projects={fixture} />
+        <ProjectStageGrid projects={registry} />
       </MemoryRouter>,
     );
+    const view = within(container);
 
     expect(container.querySelector('#projects')).toBeInTheDocument();
-    expect(screen.getAllByRole('article')).toHaveLength(featuredProjects.length);
+    expect(view.getAllByRole('article')).toHaveLength(featuredProjects.length);
 
-    for (const [projectName, externalUrl] of [
-      ['FluctGraph', 'https://graph.tohoqing.com/'],
-      ['THQ API', 'https://sub.thqllm.com/'],
-      ['Toho Image Studio', 'https://img.tohoqing.com/'],
-    ]) {
-      const external = screen.getByRole('link', { name: `进入 ${projectName}` });
-      expect(external).toHaveAttribute('href', externalUrl);
+    for (const project of featuredProjects) {
+      const heading = view.getByRole('heading', { level: 3, name: project.name });
+      const card = heading.closest('article');
+
+      if (!card) {
+        throw new Error(`Expected ${project.name} heading to belong to a project card`);
+      }
+
+      const external = within(card).getByRole('link', { name: `进入 ${project.name}` });
+      expect(external).toHaveAttribute('href', project.externalUrl);
       expect(external).toHaveAttribute('target', '_blank');
       expect(external).toHaveAttribute('rel', 'noreferrer noopener');
     }
 
-    expect(screen.getByRole('link', { name: '阅读 FluctGraph 文档' })).toHaveAttribute(
+    expect(view.getByRole('link', { name: '阅读 FluctGraph 文档' })).toHaveAttribute(
       'href',
       '/docs/fluctgraph/',
     );

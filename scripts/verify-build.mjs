@@ -6,6 +6,7 @@ import { JSDOM } from 'jsdom';
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
 const buildDir = path.join(repoRoot, 'doc_build');
+const siteUrl = new URL('https://thqllm.com/');
 const requiredOutputs = [
   'index.html',
   '404.html',
@@ -131,12 +132,12 @@ for (const [index, projectStage] of projectStages.entries()) {
     let url;
 
     try {
-      url = new URL(href);
+      url = new URL(href, siteUrl);
     } catch {
       return [];
     }
 
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.origin === siteUrl.origin) {
       return [];
     }
 

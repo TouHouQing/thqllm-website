@@ -34,6 +34,14 @@ async function openDeterministicDocs(page: Page, path: string) {
   });
 }
 
+function getProjectHeading(page: Page, projectName: string) {
+  return page.getByRole('heading', {
+    exact: true,
+    level: 1,
+    name: projectName,
+  });
+}
+
 async function readPanelMetrics(page: Page, panel: Locator) {
   const [menuBox, panelBox] = await Promise.all([
     page.locator('.rp-doc-layout__menu').boundingBox(),
@@ -158,12 +166,16 @@ for (const documentationRoot of documentationRoots) {
   }) => {
     await page.goto(documentationRoot.path);
 
-    await expect(
-      page.getByRole('heading', { level: 1, name: new RegExp(documentationRoot.projectName, 'i') }),
-    ).toBeVisible();
+    await expect(getProjectHeading(page, documentationRoot.projectName)).toBeVisible();
     await expect(page.getByRole('navigation', { name: '切换项目文档' })).toBeVisible();
   });
 }
+
+test('documentation project names treat regex punctuation as literal text', async ({ page }) => {
+  await page.setContent('<h1>C++ Tools</h1><h1>C++ Tools Extra</h1>');
+
+  await expect(getProjectHeading(page, 'C++ Tools')).toHaveCount(1);
+});
 
 test('FluctGraph full-text search finds the Toho Image Studio overview', async ({ page }) => {
   await page.goto('/docs/fluctgraph/');

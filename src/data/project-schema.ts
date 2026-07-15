@@ -13,15 +13,19 @@ export const slugSchema = z
   })
   .pipe(slugFormatSchema);
 
-export const projectDocItemSchema = z.object({
-  text: nonBlankStringSchema,
-  slug: slugSchema,
-});
+export const projectDocItemSchema = z
+  .object({
+    text: nonBlankStringSchema,
+    slug: slugSchema,
+  })
+  .strict();
 
-export const projectDocSectionSchema = z.object({
-  text: nonBlankStringSchema,
-  items: z.array(projectDocItemSchema).nonempty(),
-});
+export const projectDocSectionSchema = z
+  .object({
+    text: nonBlankStringSchema,
+    items: z.array(projectDocItemSchema).nonempty(),
+  })
+  .strict();
 
 export const projectSchema = z
   .object({
@@ -41,12 +45,14 @@ export const projectSchema = z
         basePath: z.string().regex(/^\/docs\/[a-z0-9-]+\/$/),
         sections: z.array(projectDocSectionSchema).nonempty(),
       })
+      .strict()
       .optional(),
     accent: z.enum(['vermilion', 'cyan', 'gold', 'sakura']),
     tags: z.array(nonBlankStringSchema).nonempty(),
     order: z.number().int().nonnegative(),
     featured: z.boolean(),
   })
+  .strict()
   .superRefine((project, context) => {
     const docs = project.docs;
 
@@ -54,13 +60,16 @@ export const projectSchema = z
       return;
     }
 
-    const expectedBasePath = `/docs/${project.id}/`;
-    if (docs.basePath !== expectedBasePath) {
-      context.addIssue({
-        code: 'custom',
-        message: `Project docs base path must match project id: ${expectedBasePath}`,
-        path: ['docs', 'basePath'],
-      });
+    const parsedProjectId = slugSchema.safeParse(project.id);
+    if (parsedProjectId.success) {
+      const expectedBasePath = `/docs/${parsedProjectId.data}/`;
+      if (docs.basePath !== expectedBasePath) {
+        context.addIssue({
+          code: 'custom',
+          message: `Project docs base path must match project id: ${expectedBasePath}`,
+          path: ['docs', 'basePath'],
+        });
+      }
     }
 
     const itemSlugs = new Set<string>();
