@@ -59,11 +59,12 @@ const expectedHomepageReferences = {
 };
 const svgNamespace = 'http://www.w3.org/2000/svg';
 const svgNumberSource = String.raw`[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?`;
-const svgNumberSeparator = String.raw`(?:\s+(?:,\s*)?|,\s*)`;
+const svgNumberSeparator = String.raw`(?:[ \t\r\n]+(?:,[ \t\r\n]*)?|,[ \t\r\n]*)`;
 const svgViewBoxPattern = new RegExp(
-  `^(${svgNumberSource})${svgNumberSeparator}(${svgNumberSource})${svgNumberSeparator}(${svgNumberSource})${svgNumberSeparator}(${svgNumberSource})$`,
+  `^[ \\t\\r\\n]*(${svgNumberSource})${svgNumberSeparator}(${svgNumberSource})${svgNumberSeparator}(${svgNumberSource})${svgNumberSeparator}(${svgNumberSource})[ \\t\\r\\n]*$`,
 );
-const srcsetDensityPattern = /^(\d+(?:\.\d*)?|\.\d+)x$/;
+const srcsetDensityPattern = /^((?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?)x$/;
+const pngSignature = Buffer.from('89504e470d0a1a0a', 'hex');
 const visibleAlphaThreshold = 16;
 const minimumVisiblePixelRatio = 0.01;
 const minimumColorDynamicRange = 16;
@@ -130,6 +131,44 @@ async function readCriticalAsset(relativePath) {
   }
 }
 
+function hasPngAnimationControlChunk(imageBytes) {
+  if (
+    imageBytes.length < pngSignature.length ||
+    !imageBytes.subarray(0, pngSignature.length).equals(pngSignature)
+  ) {
+    return false;
+  }
+
+  let offset = pngSignature.length;
+
+  while (offset < imageBytes.length) {
+    if (imageBytes.length - offset < 12) {
+      return false;
+    }
+
+    const dataLength = imageBytes.readUInt32BE(offset);
+    const chunkEnd = offset + dataLength + 12;
+
+    if (chunkEnd > imageBytes.length) {
+      return false;
+    }
+
+    const chunkType = imageBytes.toString('ascii', offset + 4, offset + 8);
+
+    if (chunkType === 'acTL') {
+      return true;
+    }
+
+    offset = chunkEnd;
+
+    if (chunkType === 'IEND') {
+      return false;
+    }
+  }
+
+  return false;
+}
+
 async function verifyCriticalImage(imageBytes, expectedImage) {
   let metadata;
 
@@ -144,6 +183,12 @@ async function verifyCriticalImage(imageBytes, expectedImage) {
   if (metadata.format !== expectedImage.format) {
     throw new Error(
       `Critical image ${expectedImage.relativePath} must be ${expectedImage.formatLabel}; found ${metadata.format ?? 'unknown'}.`,
+    );
+  }
+
+  if (expectedImage.format === 'png' && hasPngAnimationControlChunk(imageBytes)) {
+    throw new Error(
+      `Critical image ${expectedImage.relativePath} must be static; animated PNG contains an acTL chunk.`,
     );
   }
 
@@ -254,9 +299,7 @@ function verifyFavicon(svgBytes) {
       );
     }
 
-    const viewBoxMatch = (rootElement.getAttribute('viewBox') ?? '')
-      .trim()
-      .match(svgViewBoxPattern);
+    const viewBoxMatch = (rootElement.getAttribute('viewBox') ?? '').match(svgViewBoxPattern);
     const viewBoxValues = viewBoxMatch?.slice(1).map(Number) ?? [];
     const hasValidViewBox =
       viewBoxValues.length === 4 &&
@@ -285,9 +328,8 @@ function parseRobots(robotsBytes) {
     currentGroup = undefined;
   };
 
-  for (const rawLine of robotsBytes.toString('utf8').split(/\r?\n/)) {
+  for (const rawLine of robotsBytes.toString('utf8').split(/\r\n|\r|\n/)) {
     if (!rawLine.trim()) {
-      finishGroup();
       continue;
     }
 
@@ -351,13 +393,15 @@ function verifyRobots(robotsBytes) {
     const hasRootAllow = group.rules.some(
       ({ directive, value }) => directive === 'allow' && value === '/',
     );
-    const hasRootDisallow = group.rules.some(
-      ({ directive, value }) => directive === 'disallow' && value === '/',
+    const nonEmptyDisallow = group.rules.find(
+      ({ directive, value }) => directive === 'disallow' && value !== '',
     );
     const groupNumber = index + 1;
 
-    if (hasRootDisallow) {
-      throw new Error(`robots.txt wildcard group ${groupNumber} must not contain Disallow: /.`);
+    if (nonEmptyDisallow) {
+      throw new Error(
+        `robots.txt wildcard group ${groupNumber} must not contain non-empty Disallow: ${nonEmptyDisallow.value}.`,
+      );
     }
 
     if (!hasRootAllow) {
@@ -379,12 +423,15 @@ function directChildrenByTagName(element, tagName) {
 }
 
 function parseSrcsetCandidates(srcset) {
-  if (!srcset.trim()) {
+  const normalizedSrcset = srcset.replace(/^[ \t\n\f\r]+|[ \t\n\f\r]+$/g, '');
+
+  if (!normalizedSrcset) {
     return [];
   }
 
-  return srcset.split(',').map((rawCandidate) => {
-    const tokens = rawCandidate.trim().split(/\s+/);
+  return normalizedSrcset.split(',').map((rawCandidate) => {
+    const trimmedCandidate = rawCandidate.replace(/^[ \t\n\f\r]+|[ \t\n\f\r]+$/g, '');
+    const tokens = trimmedCandidate.split(/[ \t\n\f\r]+/);
     const [url, descriptor] = tokens;
 
     if (!url || tokens.length > 2) {
@@ -507,6 +554,14 @@ function verifyHomepageAssetReferences(document) {
   if (mobileMedia !== expectedHomepageReferences.mobileHeroMedia) {
     throw new Error(
       `doc_build/index.html mobile hero source must use media ${expectedHomepageReferences.mobileHeroMedia}; found ${mobileMedia ?? 'missing'}.`,
+    );
+  }
+
+  const mobileType = mobileSource.getAttribute('type');
+
+  if (mobileType !== null && mobileType !== 'image/webp') {
+    throw new Error(
+      `doc_build/index.html mobile hero source type must be absent or image/webp; found ${mobileType}.`,
     );
   }
 

@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
+import { deflateSync } from 'node:zlib';
 import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -41,6 +42,16 @@ const fourthCard = {
   name: 'Fourth Project',
   url: 'https://fourth.example.com/',
 };
+const pngSignature = Buffer.from('89504e470d0a1a0a', 'hex');
+const crc32Table = Array.from({ length: 256 }, (_, value) => {
+  let checksum = value;
+
+  for (let bit = 0; bit < 8; bit += 1) {
+    checksum = checksum & 1 ? 0xedb88320 ^ (checksum >>> 1) : checksum >>> 1;
+  }
+
+  return checksum >>> 0;
+});
 
 let fixtureRoot;
 
@@ -67,6 +78,7 @@ function createHomepage(cards, referenceOverrides = {}) {
     heroPictureCount: 1,
     heroSectionCount: 1,
     heroSectionExtras: '',
+    mobileHeroType: null,
     sourceAfterImage: false,
     ...expectedHomepageReferences,
     ...referenceOverrides,
@@ -86,11 +98,15 @@ function createHomepage(cards, referenceOverrides = {}) {
           {
             media: structure.mobileHeroMedia,
             srcset: structure.mobileHero,
+            type: structure.mobileHeroType,
           },
         ]),
     ...structure.extraHeroSources,
   ]
-    .map(({ media, srcset }) => `<source media="${media}" srcset="${srcset}">`)
+    .map(
+      ({ media, srcset, type }) =>
+        `<source media="${media}" srcset="${srcset}"${type === null || type === undefined ? '' : ` type="${type}"`}>`,
+    )
     .join('');
   const desktopHeroAttributes = [
     structure.desktopHeroSrcset === null ? '' : ` srcset="${structure.desktopHeroSrcset}"`,
@@ -186,6 +202,109 @@ async function writeAnimatedWebp(relativePath) {
   await sharp([firstFrame, secondFrame], { join: { animated: true } })
     .webp({ delay: [100, 100], loop: 0 })
     .toFile(outputPath);
+}
+
+function calculateCrc32(bytes) {
+  let checksum = 0xffffffff;
+
+  for (const byte of bytes) {
+    checksum = crc32Table[(checksum ^ byte) & 0xff] ^ (checksum >>> 8);
+  }
+
+  return (checksum ^ 0xffffffff) >>> 0;
+}
+
+function createPngChunk(type, data = Buffer.alloc(0)) {
+  const typeBytes = Buffer.from(type, 'ascii');
+  const chunk = Buffer.alloc(data.length + 12);
+
+  chunk.writeUInt32BE(data.length, 0);
+  typeBytes.copy(chunk, 4);
+  data.copy(chunk, 8);
+  chunk.writeUInt32BE(calculateCrc32(Buffer.concat([typeBytes, data])), data.length + 8);
+
+  return chunk;
+}
+
+function createApngFrameControl(sequenceNumber, { height, width }) {
+  const frameControl = Buffer.alloc(26);
+
+  frameControl.writeUInt32BE(sequenceNumber, 0);
+  frameControl.writeUInt32BE(width, 4);
+  frameControl.writeUInt32BE(height, 8);
+  frameControl.writeUInt16BE(1, 20);
+  frameControl.writeUInt16BE(10, 22);
+
+  return frameControl;
+}
+
+function createApngFramePixels({ height, inverted, width }) {
+  const row = Buffer.alloc(width * 3 + 1);
+
+  for (let x = 0; x < width; x += 1) {
+    const value = x < width / 2 !== inverted ? 0 : 255;
+    const offset = x * 3 + 1;
+
+    row[offset] = value;
+    row[offset + 1] = value;
+    row[offset + 2] = value;
+  }
+
+  const pixels = Buffer.alloc(row.length * height);
+
+  for (let y = 0; y < height; y += 1) {
+    row.copy(pixels, y * row.length);
+  }
+
+  return deflateSync(pixels);
+}
+
+async function writeAnimatedPng(relativePath, { height, width }) {
+  const outputPath = path.join(fixtureRoot, 'doc_build', relativePath);
+  const header = Buffer.alloc(13);
+  const animationControl = Buffer.alloc(8);
+  const secondFrameSequence = Buffer.alloc(4);
+
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8;
+  header[9] = 2;
+  animationControl.writeUInt32BE(2, 0);
+  secondFrameSequence.writeUInt32BE(2, 0);
+
+  const imageBytes = Buffer.concat([
+    pngSignature,
+    createPngChunk('IHDR', header),
+    createPngChunk('acTL', animationControl),
+    createPngChunk('fcTL', createApngFrameControl(0, { height, width })),
+    createPngChunk('IDAT', createApngFramePixels({ height, inverted: false, width })),
+    createPngChunk('fcTL', createApngFrameControl(1, { height, width })),
+    createPngChunk(
+      'fdAT',
+      Buffer.concat([
+        secondFrameSequence,
+        createApngFramePixels({ height, inverted: true, width }),
+      ]),
+    ),
+    createPngChunk('IEND'),
+  ]);
+
+  await writeFile(outputPath, imageBytes);
+}
+
+async function insertPngChunkAfterHeader(relativePath, type, data) {
+  const outputPath = path.join(fixtureRoot, 'doc_build', relativePath);
+  const imageBytes = await readFile(outputPath);
+  const headerChunkEnd = pngSignature.length + 12 + imageBytes.readUInt32BE(pngSignature.length);
+
+  await writeFile(
+    outputPath,
+    Buffer.concat([
+      imageBytes.subarray(0, headerChunkEnd),
+      createPngChunk(type, data),
+      imageBytes.subarray(headerChunkEnd),
+    ]),
+  );
 }
 
 async function writeRawPng(relativePath, { channels, data, height, width }) {
@@ -367,6 +486,43 @@ describe('verify-build critical static asset validation', () => {
     expect(result.stderr).toContain(`Critical image ${relativePath} cannot be fully decoded.`);
   });
 
+  it('rejects a valid animated PNG that Sharp otherwise treats as a static image', async () => {
+    await writeAnimatedPng('og-cover.png', {
+      height: 630,
+      width: 1200,
+    });
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'Critical image og-cover.png must be static; animated PNG contains an acTL chunk.',
+    );
+  });
+
+  it('reports PNG animation before validating dimensions', async () => {
+    await writeAnimatedPng('og-cover.png', {
+      height: 2,
+      width: 2,
+    });
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'Critical image og-cover.png must be static; animated PNG contains an acTL chunk.',
+    );
+    expect(result.stderr).not.toContain('Critical image og-cover.png must be 1200x630');
+  });
+
+  it('does not mistake acTL bytes inside another PNG chunk for animation', async () => {
+    await insertPngChunkAfterHeader('og-cover.png', 'tEXt', Buffer.from('Comment\0acTL marker'));
+
+    const result = await runVerifier();
+
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+  });
+
   it('rejects a multi-frame WebP used as a static hero asset', async () => {
     const relativePath = 'assets/hero/thqllm-title-desktop.webp';
     await writeAnimatedWebp(relativePath);
@@ -509,15 +665,39 @@ describe('verify-build critical static asset validation', () => {
     expect(result.stderr).toContain('Critical asset favicon.svg must have a valid viewBox.');
   });
 
-  it('accepts decimal and scientific-notation viewBox tokens', async () => {
+  it('accepts decimal and scientific-notation viewBox tokens with mixed ASCII separators', async () => {
     await writeFixtureFile(
       'doc_build/favicon.svg',
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1e1 -.5 6.4e1 6.4E+1"></svg>',
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="\t-1e1,\r\n-.5 6.4e1,\t6.4E+1\n"></svg>',
     );
 
     const result = await runVerifier();
 
     expect(result.status, result.stderr || result.stdout).toBe(0);
+  });
+
+  it('rejects a non-breaking space as a viewBox separator', async () => {
+    await writeFixtureFile(
+      'doc_build/favicon.svg',
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0\u00a00 64 64"></svg>',
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('Critical asset favicon.svg must have a valid viewBox.');
+  });
+
+  it('rejects a double comma in viewBox', async () => {
+    await writeFixtureFile(
+      'doc_build/favicon.svg',
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0,,0 64 64"></svg>',
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('Critical asset favicon.svg must have a valid viewBox.');
   });
 
   it('rejects an SVG without a valid viewBox', async () => {
@@ -559,14 +739,16 @@ Sitemap: https://thqllm.com/sitemap.xml
     const result = await runVerifier();
 
     expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain('robots.txt wildcard group 1 must not contain Disallow: /.');
+    expect(result.stderr).toContain(
+      'robots.txt wildcard group 1 must not contain non-empty Disallow: /.',
+    );
   });
 
   it('rejects a wildcard group without Allow even when another bot allows root', async () => {
     await writeFixtureFile(
       'doc_build/robots.txt',
       `User-agent: *
-Disallow: /private
+Disallow:
 
 User-agent: ReviewerBot
 Allow: /
@@ -598,7 +780,61 @@ Sitemap: https://thqllm.com/sitemap.xml
     const result = await runVerifier();
 
     expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain('robots.txt wildcard group 2 must not contain Disallow: /.');
+    expect(result.stderr).toContain(
+      'robots.txt wildcard group 2 must not contain non-empty Disallow: /.',
+    );
+  });
+
+  it.each([
+    '/*',
+    '/private',
+  ])('rejects a wildcard group with non-empty Disallow: %s', async (disallowPath) => {
+    await writeFixtureFile(
+      'doc_build/robots.txt',
+      `User-agent: *
+Allow: /
+Disallow: ${disallowPath}
+
+Sitemap: https://thqllm.com/sitemap.xml
+`,
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `robots.txt wildcard group 1 must not contain non-empty Disallow: ${disallowPath}.`,
+    );
+  });
+
+  it('keeps a robots group together across blank lines', async () => {
+    await writeFixtureFile(
+      'doc_build/robots.txt',
+      `User-agent: *
+
+User-agent: ReviewerBot
+
+Allow: /
+Disallow:
+
+Sitemap: https://thqllm.com/sitemap.xml
+`,
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+  });
+
+  it('parses CR-only robots.txt line endings', async () => {
+    await writeFixtureFile(
+      'doc_build/robots.txt',
+      'User-agent: *\rAllow: /\rDisallow:\rSitemap: https://thqllm.com/sitemap.xml\r',
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status, result.stderr || result.stdout).toBe(0);
   });
 
   it('accepts comments and consecutive user agents in one safe wildcard group', async () => {
@@ -608,7 +844,7 @@ Sitemap: https://thqllm.com/sitemap.xml
 User-agent: * # wildcard
 User-agent: ReviewerBot
 Allow: / # public root
-Disallow: /private
+Disallow: # an empty rule permits the whole site
 
 Sitemap: https://thqllm.com/sitemap.xml # canonical
 `,
@@ -627,7 +863,7 @@ Sitemap: https://thqllm.com/sitemap.xml # canonical
 User-agent: ReviewerBot
 # keep rules attached to both agents
 Allow: /
-Disallow: /private
+Disallow:
 
 Sitemap: https://thqllm.com/sitemap.xml
 `,
@@ -815,6 +1051,25 @@ describe('verify-build homepage critical asset references', () => {
     );
   });
 
+  it('accepts image/webp on the mobile hero source', async () => {
+    const result = await runVerifier(canonicalCards, {
+      mobileHeroType: 'image/webp',
+    });
+
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+  });
+
+  it('rejects an unsupported mobile hero source type', async () => {
+    const result = await runVerifier(canonicalCards, {
+      mobileHeroType: 'image/png',
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html mobile hero source type must be absent or image/webp; found image/png.',
+    );
+  });
+
   it('rejects a mobile source placed after the desktop fallback image', async () => {
     const result = await runVerifier(canonicalCards, {
       sourceAfterImage: true,
@@ -848,12 +1103,41 @@ describe('verify-build homepage critical asset references', () => {
     );
   });
 
-  it('accepts the canonical mobile srcset with a 1x density descriptor', async () => {
+  it.each([
+    '1x',
+    '1.0x',
+    '1e0x',
+  ])('accepts the canonical mobile srcset with a %s density descriptor', async (descriptor) => {
     const result = await runVerifier(canonicalCards, {
-      mobileHero: `${expectedHomepageReferences.mobileHero} 1x`,
+      mobileHero: `${expectedHomepageReferences.mobileHero} ${descriptor}`,
     });
 
     expect(result.status, result.stderr || result.stdout).toBe(0);
+  });
+
+  it.each([
+    '1.x',
+    '1w',
+  ])('rejects invalid mobile srcset descriptor syntax: %s', async (descriptor) => {
+    const result = await runVerifier(canonicalCards, {
+      mobileHero: `${expectedHomepageReferences.mobileHero} ${descriptor}`,
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `doc_build/index.html mobile hero source srcset has invalid candidate syntax: ${expectedHomepageReferences.mobileHero} ${descriptor}.`,
+    );
+  });
+
+  it('rejects a valid mobile density descriptor other than 1x', async () => {
+    const result = await runVerifier(canonicalCards, {
+      mobileHero: `${expectedHomepageReferences.mobileHero} 2x`,
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html mobile hero source descriptor must be absent or 1x; found 2x.',
+    );
   });
 
   it('rejects a mobile srcset with multiple candidates', async () => {
