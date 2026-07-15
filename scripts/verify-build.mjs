@@ -65,6 +65,15 @@ const svgViewBoxPattern = new RegExp(
 );
 const srcsetDensityPattern = /^((?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?)x$/;
 const pngSignature = Buffer.from('89504e470d0a1a0a', 'hex');
+const pngCrc32Table = Array.from({ length: 256 }, (_, value) => {
+  let checksum = value;
+
+  for (let bit = 0; bit < 8; bit += 1) {
+    checksum = checksum & 1 ? 0xedb88320 ^ (checksum >>> 1) : checksum >>> 1;
+  }
+
+  return checksum >>> 0;
+});
 const visibleAlphaThreshold = 16;
 const minimumVisiblePixelRatio = 0.01;
 const minimumColorDynamicRange = 16;
@@ -131,50 +140,172 @@ async function readCriticalAsset(relativePath) {
   }
 }
 
-function hasPngAnimationControlChunk(imageBytes) {
+function createMalformedPngError(relativePath, reason) {
+  return new Error(`Critical image ${relativePath} is malformed PNG: ${reason}`);
+}
+
+function calculatePngCrc32(bytes) {
+  let checksum = 0xffffffff;
+
+  for (const byte of bytes) {
+    checksum = pngCrc32Table[(checksum ^ byte) & 0xff] ^ (checksum >>> 8);
+  }
+
+  return (checksum ^ 0xffffffff) >>> 0;
+}
+
+function parsePngStructure(imageBytes, relativePath) {
   if (
     imageBytes.length < pngSignature.length ||
     !imageBytes.subarray(0, pngSignature.length).equals(pngSignature)
   ) {
-    return false;
+    throw createMalformedPngError(relativePath, 'invalid PNG signature.');
   }
 
   let offset = pngSignature.length;
+  let chunkIndex = 0;
+  let hasAnimationControl = false;
+  let hasHeader = false;
+  let hasImageData = false;
+  let hasEnd = false;
 
   while (offset < imageBytes.length) {
+    const chunkOffset = offset;
+
     if (imageBytes.length - offset < 12) {
-      return false;
+      throw createMalformedPngError(
+        relativePath,
+        `incomplete chunk header or CRC at byte ${chunkOffset}.`,
+      );
     }
 
     const dataLength = imageBytes.readUInt32BE(offset);
-    const chunkEnd = offset + dataLength + 12;
+    const typeStart = offset + 4;
+    const dataStart = offset + 8;
+    const dataEnd = dataStart + dataLength;
+    const chunkEnd = dataEnd + 4;
+    const typeBytes = imageBytes.subarray(typeStart, typeStart + 4);
+    const chunkType = typeBytes.toString('latin1');
 
     if (chunkEnd > imageBytes.length) {
-      return false;
+      throw createMalformedPngError(
+        relativePath,
+        `chunk ${chunkType} at byte ${chunkOffset} exceeds file bounds.`,
+      );
     }
 
-    const chunkType = imageBytes.toString('ascii', offset + 4, offset + 8);
+    const hasValidChunkType = [...typeBytes].every(
+      (byte) => (byte >= 0x41 && byte <= 0x5a) || (byte >= 0x61 && byte <= 0x7a),
+    );
+
+    if (!hasValidChunkType) {
+      throw createMalformedPngError(
+        relativePath,
+        `chunk type at byte ${chunkOffset} must contain four ASCII letters; found ${chunkType}.`,
+      );
+    }
+
+    if (typeBytes[2] >= 0x61 && typeBytes[2] <= 0x7a) {
+      throw createMalformedPngError(
+        relativePath,
+        `chunk ${chunkType} at byte ${chunkOffset} must use an uppercase reserved type byte.`,
+      );
+    }
+
+    const storedCrc = imageBytes.readUInt32BE(dataEnd);
+    const calculatedCrc = calculatePngCrc32(imageBytes.subarray(typeStart, dataEnd));
+
+    if (storedCrc !== calculatedCrc) {
+      throw createMalformedPngError(
+        relativePath,
+        `chunk ${chunkType} at byte ${chunkOffset} has an invalid CRC.`,
+      );
+    }
+
+    if (chunkIndex === 0 && chunkType !== 'IHDR') {
+      throw createMalformedPngError(relativePath, `first chunk must be IHDR; found ${chunkType}.`);
+    }
+
+    if (chunkType === 'IHDR') {
+      if (hasHeader) {
+        throw createMalformedPngError(relativePath, 'must contain exactly one IHDR chunk.');
+      }
+
+      if (dataLength !== 13) {
+        throw createMalformedPngError(
+          relativePath,
+          `IHDR chunk must have length 13; found ${dataLength}.`,
+        );
+      }
+
+      hasHeader = true;
+    }
+
+    if (chunkType === 'IDAT') {
+      hasImageData = true;
+    }
 
     if (chunkType === 'acTL') {
-      return true;
+      hasAnimationControl = true;
+    }
+
+    if (chunkType === 'IEND') {
+      if (dataLength !== 0) {
+        throw createMalformedPngError(
+          relativePath,
+          `IEND chunk must have length 0; found ${dataLength}.`,
+        );
+      }
+
+      hasEnd = true;
+
+      if (chunkEnd !== imageBytes.length) {
+        throw createMalformedPngError(
+          relativePath,
+          'IEND chunk must be the final bytes in the file.',
+        );
+      }
+
+      offset = chunkEnd;
+      break;
     }
 
     offset = chunkEnd;
-
-    if (chunkType === 'IEND') {
-      return false;
-    }
+    chunkIndex += 1;
   }
 
-  return false;
+  if (!hasHeader) {
+    throw createMalformedPngError(relativePath, 'missing IHDR chunk.');
+  }
+
+  if (!hasImageData) {
+    throw createMalformedPngError(relativePath, 'missing IDAT chunk.');
+  }
+
+  if (!hasEnd) {
+    throw createMalformedPngError(relativePath, 'missing IEND chunk.');
+  }
+
+  return { hasAnimationControl };
 }
 
 async function verifyCriticalImage(imageBytes, expectedImage) {
+  const hasPngSignature =
+    imageBytes.length >= pngSignature.length &&
+    imageBytes.subarray(0, pngSignature.length).equals(pngSignature);
+  const pngStructure =
+    expectedImage.format === 'png' && hasPngSignature
+      ? parsePngStructure(imageBytes, expectedImage.relativePath)
+      : undefined;
   let metadata;
 
   try {
     metadata = await sharp(imageBytes, { failOn: 'warning' }).metadata();
   } catch (error) {
+    if (expectedImage.format === 'png' && !hasPngSignature) {
+      throw createMalformedPngError(expectedImage.relativePath, 'invalid PNG signature.');
+    }
+
     throw new Error(
       `Critical image ${expectedImage.relativePath} has invalid image metadata: ${describeError(error)}`,
     );
@@ -186,10 +317,15 @@ async function verifyCriticalImage(imageBytes, expectedImage) {
     );
   }
 
-  if (expectedImage.format === 'png' && hasPngAnimationControlChunk(imageBytes)) {
-    throw new Error(
-      `Critical image ${expectedImage.relativePath} must be static; animated PNG contains an acTL chunk.`,
-    );
+  if (expectedImage.format === 'png') {
+    const verifiedPngStructure =
+      pngStructure ?? parsePngStructure(imageBytes, expectedImage.relativePath);
+
+    if (verifiedPngStructure.hasAnimationControl) {
+      throw new Error(
+        `Critical image ${expectedImage.relativePath} must be static; animated PNG contains an acTL chunk.`,
+      );
+    }
   }
 
   const pageCount = metadata.pages ?? 1;

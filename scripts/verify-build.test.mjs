@@ -226,6 +226,74 @@ function createPngChunk(type, data = Buffer.alloc(0)) {
   return chunk;
 }
 
+function createPngChunkHeader(type, declaredLength) {
+  const chunkHeader = Buffer.alloc(8);
+
+  chunkHeader.writeUInt32BE(declaredLength, 0);
+  Buffer.from(type, 'ascii').copy(chunkHeader, 4);
+
+  return chunkHeader;
+}
+
+function parseFixturePngChunks(imageBytes) {
+  if (!imageBytes.subarray(0, pngSignature.length).equals(pngSignature)) {
+    throw new Error('Expected fixture source to have a PNG signature.');
+  }
+
+  const chunks = [];
+  let offset = pngSignature.length;
+
+  while (offset < imageBytes.length) {
+    if (imageBytes.length - offset < 12) {
+      throw new Error('Expected fixture source to contain complete PNG chunks.');
+    }
+
+    const length = imageBytes.readUInt32BE(offset);
+    const end = offset + length + 12;
+
+    if (end > imageBytes.length) {
+      throw new Error('Expected fixture source PNG chunk to fit within the file.');
+    }
+
+    const type = imageBytes.toString('ascii', offset + 4, offset + 8);
+
+    chunks.push({
+      bytes: Buffer.from(imageBytes.subarray(offset, end)),
+      data: Buffer.from(imageBytes.subarray(offset + 8, offset + 8 + length)),
+      length,
+      offset,
+      type,
+    });
+    offset = end;
+
+    if (type === 'IEND') {
+      break;
+    }
+  }
+
+  if (offset !== imageBytes.length) {
+    throw new Error('Expected fixture source PNG to end with IEND.');
+  }
+
+  return chunks;
+}
+
+function encodePngChunks(chunks, trailingBytes = Buffer.alloc(0)) {
+  return Buffer.concat([
+    pngSignature,
+    ...chunks.map((chunk) => chunk.bytes ?? chunk),
+    trailingBytes,
+  ]);
+}
+
+async function mutateFixturePng(relativePath, mutate) {
+  const outputPath = path.join(fixtureRoot, 'doc_build', relativePath);
+  const imageBytes = await readFile(outputPath);
+  const chunks = parseFixturePngChunks(imageBytes);
+
+  await writeFile(outputPath, mutate({ chunks, imageBytes }));
+}
+
 function createApngFrameControl(sequenceNumber, { height, width }) {
   const frameControl = Buffer.alloc(26);
 
@@ -390,6 +458,11 @@ async function runVerifier(cards = canonicalCards, referenceOverrides = {}) {
   return result;
 }
 
+function expectMalformedPng(result, reason) {
+  expect(result.status).not.toBe(0);
+  expect(result.stderr).toContain(`Critical image og-cover.png is malformed PNG: ${reason}`);
+}
+
 beforeEach(async () => {
   fixtureRoot = await mkdtemp(path.join(tmpdir(), 'thqllm-verify-build-'));
   await mkdir(path.join(fixtureRoot, 'scripts'), { recursive: true });
@@ -483,7 +556,12 @@ describe('verify-build critical static asset validation', () => {
     const result = await runVerifier();
 
     expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain(`Critical image ${relativePath} cannot be fully decoded.`);
+
+    if (relativePath.endsWith('.png')) {
+      expect(result.stderr).toContain(`Critical image ${relativePath} is malformed PNG:`);
+    } else {
+      expect(result.stderr).toContain(`Critical image ${relativePath} cannot be fully decoded.`);
+    }
   });
 
   it('rejects a valid animated PNG that Sharp otherwise treats as a static image', async () => {
@@ -521,6 +599,170 @@ describe('verify-build critical static asset validation', () => {
     const result = await runVerifier();
 
     expect(result.status, result.stderr || result.stdout).toBe(0);
+  });
+
+  it('rejects an invalid PNG signature', async () => {
+    await mutateFixturePng('og-cover.png', ({ imageBytes }) => {
+      const invalidSignature = Buffer.from(imageBytes);
+      invalidSignature[0] ^= 0xff;
+      return invalidSignature;
+    });
+
+    const result = await runVerifier();
+
+    expectMalformedPng(result, 'invalid PNG signature.');
+  });
+
+  it('rejects a PNG without an IEND chunk', async () => {
+    await mutateFixturePng('og-cover.png', ({ chunks }) =>
+      encodePngChunks(chunks.filter(({ type }) => type !== 'IEND')),
+    );
+
+    const result = await runVerifier();
+
+    expectMalformedPng(result, 'missing IEND chunk.');
+  });
+
+  it('rejects a PNG chunk whose declared data length exceeds the file bounds', async () => {
+    await mutateFixturePng('og-cover.png', ({ chunks, imageBytes }) =>
+      encodePngChunks([
+        chunks[0],
+        createPngChunkHeader('tEXt', imageBytes.length),
+        ...chunks.slice(1),
+      ]),
+    );
+
+    const result = await runVerifier();
+
+    expectMalformedPng(result, 'chunk tEXt at byte 33 exceeds file bounds.');
+  });
+
+  it('reports an out-of-bounds fake acTL chunk as malformed instead of animated', async () => {
+    let malformedChunkOffset;
+
+    await mutateFixturePng('og-cover.png', ({ chunks }) => {
+      const iendIndex = chunks.findIndex(({ type }) => type === 'IEND');
+      malformedChunkOffset = chunks[iendIndex].offset;
+
+      return encodePngChunks([
+        ...chunks.slice(0, iendIndex),
+        createPngChunkHeader('acTL', 0xffffffff),
+        ...chunks.slice(iendIndex),
+      ]);
+    });
+
+    const result = await runVerifier();
+
+    expectMalformedPng(result, `chunk acTL at byte ${malformedChunkOffset} exceeds file bounds.`);
+    expect(result.stderr).not.toContain('animated PNG');
+  });
+
+  it('rejects an IEND chunk with non-zero length', async () => {
+    await mutateFixturePng('og-cover.png', ({ chunks }) =>
+      encodePngChunks(
+        chunks.map((chunk) =>
+          chunk.type === 'IEND' ? createPngChunk('IEND', Buffer.from([0])) : chunk,
+        ),
+      ),
+    );
+
+    const result = await runVerifier();
+
+    expectMalformedPng(result, 'IEND chunk must have length 0; found 1.');
+  });
+
+  it('rejects a PNG chunk with a damaged CRC', async () => {
+    const corruptedTextChunk = createPngChunk('tEXt', Buffer.from('Comment\0CRC'));
+    corruptedTextChunk[corruptedTextChunk.length - 1] ^= 0x01;
+
+    await mutateFixturePng('og-cover.png', ({ chunks }) =>
+      encodePngChunks([chunks[0], corruptedTextChunk, ...chunks.slice(1)]),
+    );
+
+    const result = await runVerifier();
+
+    expectMalformedPng(result, 'chunk tEXt at byte 33 has an invalid CRC.');
+  });
+
+  it('rejects trailing bytes after IEND', async () => {
+    await mutateFixturePng('og-cover.png', ({ chunks }) =>
+      encodePngChunks(chunks, Buffer.from('trailing')),
+    );
+
+    const result = await runVerifier();
+
+    expectMalformedPng(result, 'IEND chunk must be the final bytes in the file.');
+  });
+
+  it('rejects a PNG whose first chunk is not IHDR', async () => {
+    await mutateFixturePng('og-cover.png', ({ chunks }) =>
+      encodePngChunks([createPngChunk('tEXt', Buffer.from('before IHDR')), ...chunks]),
+    );
+
+    const result = await runVerifier();
+
+    expectMalformedPng(result, 'first chunk must be IHDR; found tEXt.');
+  });
+
+  it('rejects a PNG with duplicate IHDR chunks', async () => {
+    await mutateFixturePng('og-cover.png', ({ chunks }) =>
+      encodePngChunks([chunks[0], chunks[0], ...chunks.slice(1)]),
+    );
+
+    const result = await runVerifier();
+
+    expectMalformedPng(result, 'must contain exactly one IHDR chunk.');
+  });
+
+  it('rejects an IHDR chunk whose length is not 13', async () => {
+    await mutateFixturePng('og-cover.png', ({ chunks }) =>
+      encodePngChunks([createPngChunk('IHDR', chunks[0].data.subarray(0, 12)), ...chunks.slice(1)]),
+    );
+
+    const result = await runVerifier();
+
+    expectMalformedPng(result, 'IHDR chunk must have length 13; found 12.');
+  });
+
+  it('rejects a PNG without an IDAT chunk', async () => {
+    await mutateFixturePng('og-cover.png', ({ chunks }) =>
+      encodePngChunks(chunks.filter(({ type }) => type !== 'IDAT')),
+    );
+
+    const result = await runVerifier();
+
+    expectMalformedPng(result, 'missing IDAT chunk.');
+  });
+
+  it('rejects a PNG chunk type containing non-letter bytes', async () => {
+    await mutateFixturePng('og-cover.png', ({ chunks }) =>
+      encodePngChunks([
+        chunks[0],
+        createPngChunk('tE1t', Buffer.from('invalid type')),
+        ...chunks.slice(1),
+      ]),
+    );
+
+    const result = await runVerifier();
+
+    expectMalformedPng(
+      result,
+      'chunk type at byte 33 must contain four ASCII letters; found tE1t.',
+    );
+  });
+
+  it('rejects a PNG chunk type with a lowercase reserved byte', async () => {
+    await mutateFixturePng('og-cover.png', ({ chunks }) =>
+      encodePngChunks([
+        chunks[0],
+        createPngChunk('texT', Buffer.from('invalid reserved bit')),
+        ...chunks.slice(1),
+      ]),
+    );
+
+    const result = await runVerifier();
+
+    expectMalformedPng(result, 'chunk texT at byte 33 must use an uppercase reserved type byte.');
   });
 
   it('rejects a multi-frame WebP used as a static hero asset', async () => {
