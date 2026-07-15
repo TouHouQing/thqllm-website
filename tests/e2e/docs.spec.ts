@@ -417,6 +417,106 @@ test('mobile documentation panels close from the same trigger and restore conten
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
+test('mobile documentation panel triggers keep the sidebar and outline mutually exclusive', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'Mobile documentation controls only');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/docs/fluctgraph/');
+
+  const menuButton = page.getByRole('button', { name: '菜单', exact: true });
+  const outlineButton = page.getByRole('button', { name: '目录', exact: true });
+  const sidebar = page.getByRole('complementary', {
+    name: '文档导航',
+    includeHidden: true,
+  });
+  const outline = page.getByRole('complementary', {
+    name: '页内目录',
+    includeHidden: true,
+  });
+  const visiblePanelCount = () =>
+    page.evaluate(() => {
+      return Array.from(
+        document.querySelectorAll<HTMLElement>('.rp-doc-layout__sidebar, .rp-doc-layout__outline'),
+      ).filter((element) => {
+        const bounds = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return (
+          style.visibility !== 'hidden' &&
+          Number.parseFloat(style.opacity) > 0 &&
+          bounds.right > 0 &&
+          bounds.bottom > 0 &&
+          bounds.left < window.innerWidth &&
+          bounds.top < window.innerHeight
+        );
+      }).length;
+    });
+  const bodyOverflow = () => page.locator('body').evaluate((element) => element.style.overflow);
+  const horizontalOverflow = () =>
+    page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  const expectSidebarClosed = async () => {
+    await expect(sidebar).not.toHaveClass(/rp-doc-layout__sidebar--open/);
+    await expect
+      .poll(() =>
+        sidebar.evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+          return getComputedStyle(element).opacity === '0' && bounds.right <= 0;
+        }),
+      )
+      .toBe(true);
+  };
+  const expectOutlineClosed = async () => {
+    await expect(outline).not.toHaveClass(/rp-doc-layout__outline--open/);
+    await expect(outline).toHaveCSS('visibility', 'hidden');
+  };
+
+  await test.step('opening the outline closes an open sidebar', async () => {
+    await menuButton.click();
+    await expect(sidebar).toHaveClass(/rp-doc-layout__sidebar--open/);
+    await expect.poll(bodyOverflow).toBe('hidden');
+
+    await outlineButton.click();
+    await expectSidebarClosed();
+    await expect(outline).toHaveClass(/rp-doc-layout__outline--open/);
+    await expect(outline).toBeVisible();
+    await expect.poll(visiblePanelCount).toBe(1);
+    await expect.poll(bodyOverflow).toBe('');
+    await expect.poll(horizontalOverflow).toBeLessThanOrEqual(1);
+
+    await outlineButton.click();
+    await expectOutlineClosed();
+    await expect.poll(visiblePanelCount).toBe(0);
+    await expect.poll(bodyOverflow).toBe('');
+
+    await page.getByRole('link', { name: /^下一页(?:\s|$)/ }).click();
+    await expect(page).toHaveURL(/\/docs\/fluctgraph\/quick-start(?:\.html|\/)?$/);
+  });
+
+  await test.step('opening the sidebar closes an open outline', async () => {
+    await outlineButton.click();
+    await expect(outline).toHaveClass(/rp-doc-layout__outline--open/);
+    await expect.poll(bodyOverflow).toBe('');
+
+    await menuButton.click();
+    await expectOutlineClosed();
+    await expect(sidebar).toHaveClass(/rp-doc-layout__sidebar--open/);
+    await expect(sidebar).toBeVisible();
+    await expect.poll(visiblePanelCount).toBe(1);
+    await expect.poll(bodyOverflow).toBe('hidden');
+    await expect.poll(horizontalOverflow).toBeLessThanOrEqual(1);
+
+    await menuButton.click();
+    await expectSidebarClosed();
+    await expect.poll(visiblePanelCount).toBe(0);
+    await expect.poll(bodyOverflow).toBe('');
+
+    await page.getByRole('link', { name: /^上一页(?:\s|$)/ }).click();
+    await expect(page).toHaveURL(/\/docs\/fluctgraph\/(?:index\.html)?$/);
+  });
+});
+
 test('tablet documentation outline stays below its toggle and restores content interaction', async ({
   page,
   isMobile,
