@@ -336,17 +336,17 @@
     width: 36px;
     height: 36px;
     flex-basis: 36px;
-    font-size: 0.66rem;
+    font-size: min(0.66rem, 14px);
   }
 
   .lockup h1 {
-    font-size: 4.25rem;
+    font-size: min(4.25rem, 68px);
     line-height: 0.82;
   }
 
   .english,
   .chinese {
-    font-size: 0.67rem;
+    font-size: min(0.67rem, 14px);
     line-height: 1.4;
   }
 
@@ -360,11 +360,13 @@
 
   .menu {
     gap: 4px;
+    min-width: 0;
     margin-top: 30px;
   }
 
   .menuItem {
     grid-template-columns: 24px minmax(0, 1fr) auto;
+    min-width: 0;
     min-height: 42px;
     padding: 0 10px;
     column-gap: 8px;
@@ -372,11 +374,11 @@
 
   .menuItem span,
   .menuItem small {
-    font-size: 0.61rem;
+    font-size: min(0.61rem, 12px);
   }
 
   .menuItem strong {
-    font-size: 0.82rem;
+    font-size: min(0.82rem, 16px);
   }
 
   .hud {
@@ -384,13 +386,13 @@
   }
 
   .scrollHint {
-    font-size: 0.72rem;
+    font-size: min(0.72rem, 14px);
   }
 }
 
 @media (min-width: 380px) and (max-width: 640px) {
   .lockup h1 {
-    font-size: 4.5rem;
+    font-size: min(4.5rem, 72px);
   }
 }
 
@@ -406,12 +408,12 @@
   }
 
   .lockup h1 {
-    font-size: 4rem;
+    font-size: min(4rem, 64px);
   }
 
   .english,
   .chinese {
-    font-size: 0.63rem;
+    font-size: min(0.63rem, 14px);
   }
 
   .menu {
@@ -422,5 +424,11 @@
     grid-template-columns: 22px minmax(0, 1fr) auto;
     padding: 0 8px;
     column-gap: 7px;
+  }
+}
+
+@media (max-width: 340px) {
+  .lockup {
+    gap: 6px;
   }
 }

@@ -18,6 +18,11 @@ const mobileDanmakuViewports = [
   { width: 640, height: 480 },
   { width: 640, height: 360 },
 ] as const;
+const enlargedTextViewports = [
+  { width: 390, height: 844, homeTitleFontSize: 72, notFoundTitleFontSize: 52 },
+  { width: 360, height: 800, homeTitleFontSize: 64, notFoundTitleFontSize: 46.4 },
+  { width: 320, height: 568, homeTitleFontSize: 64, notFoundTitleFontSize: 46.4 },
+] as const;
 const MOBILE_DANMAKU_BULLET_COUNT = 16;
 const MOBILE_DANMAKU_ORBIT_SAMPLES = 1440;
 const responsivePaths = ['/', '/projects/', '/docs/fluctgraph/'] as const;
@@ -46,6 +51,18 @@ async function openDeterministicMobileHome(page: Page) {
       }),
     );
   });
+}
+
+async function enlargeDocumentText(page: Page) {
+  await page.locator('html').evaluate((element) => {
+    element.style.fontSize = '200%';
+  });
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+  );
 }
 
 interface DanmakuFramePosition {
@@ -324,6 +341,194 @@ test('home remains navigable when hero images fail', async ({ page }) => {
   ).toBeVisible();
 });
 
+test('home preserves enlarged text geometry and navigation at narrow mobile sizes', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'Mobile text-resize geometry only');
+
+  for (const viewport of enlargedTextViewports) {
+    await page.setViewportSize(viewport);
+    await openDeterministicMobileHome(page);
+    await enlargeDocumentText(page);
+
+    const metrics = await page.evaluate(() => {
+      const hero = document.querySelector('[data-danmaku-root]');
+      const title = document.getElementById('thq-home-title');
+      const menu = document.querySelector('nav[aria-label="首页主菜单"]');
+      const scrollHint = document.querySelector('[data-danmaku-exclusion="scroll-hint"]');
+      const projects = document.getElementById('projects');
+
+      if (
+        !(hero instanceof HTMLElement) ||
+        !(title instanceof HTMLHeadingElement) ||
+        !(menu instanceof HTMLElement) ||
+        !(scrollHint instanceof HTMLAnchorElement) ||
+        !(projects instanceof HTMLElement)
+      ) {
+        throw new Error('Missing enlarged-text home geometry target');
+      }
+
+      const textRects = (element: Element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return Array.from(range.getClientRects()).filter(
+          (rect) => rect.width > 0 && rect.height > 0,
+        );
+      };
+      const unionRect = (rects: DOMRect[]) => {
+        const first = rects[0];
+        if (!first) {
+          throw new Error('Expected rendered text rect');
+        }
+
+        return rects.slice(1).reduce(
+          (union, rect) => ({
+            left: Math.min(union.left, rect.left),
+            top: Math.min(union.top, rect.top),
+            right: Math.max(union.right, rect.right),
+            bottom: Math.max(union.bottom, rect.bottom),
+          }),
+          {
+            left: first.left,
+            top: first.top,
+            right: first.right,
+            bottom: first.bottom,
+          },
+        );
+      };
+      const viewportWidth = document.documentElement.clientWidth;
+      const viewportHeight = document.documentElement.clientHeight;
+      const horizontalOverflow = (rect: DOMRect | ReturnType<typeof unionRect>) =>
+        Math.max(0, -rect.left, rect.right - viewportWidth);
+      const containmentOverflow = (
+        inner: DOMRect | ReturnType<typeof unionRect>,
+        outer: DOMRect | ReturnType<typeof unionRect>,
+      ) =>
+        Math.max(
+          0,
+          outer.left - inner.left,
+          inner.right - outer.right,
+          outer.top - inner.top,
+          inner.bottom - outer.bottom,
+        );
+      const overlap = (
+        first: DOMRect | ReturnType<typeof unionRect>,
+        second: DOMRect | ReturnType<typeof unionRect>,
+      ) =>
+        Math.max(0, Math.min(first.right, second.right) - Math.max(first.left, second.left)) *
+        Math.max(0, Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top));
+
+      const heroRect = hero.getBoundingClientRect();
+      const lockup = title.parentElement?.parentElement;
+      const titleRangeRects = textRects(title);
+      const titleTextRect = unionRect(titleRangeRects);
+      const menuLinks = Array.from(menu.querySelectorAll('a'));
+      const controlElements = [...menuLinks, scrollHint];
+      const controlRects = controlElements.map((element) => element.getBoundingClientRect());
+      const menuTextElements = menuLinks.flatMap((link) =>
+        Array.from(link.querySelectorAll('span, strong, small')),
+      );
+      const coreCopyElements = Array.from(title.parentElement?.querySelectorAll('p') ?? []);
+      const textContainerOverflow = [...menuTextElements, ...coreCopyElements, scrollHint].reduce(
+        (maximum, element) => {
+          const container =
+            element === scrollHint
+              ? scrollHint.getBoundingClientRect()
+              : (element.parentElement?.getBoundingClientRect() ?? element.getBoundingClientRect());
+          return textRects(element).reduce(
+            (textMaximum, rect) => Math.max(textMaximum, containmentOverflow(rect, container)),
+            maximum,
+          );
+        },
+        0,
+      );
+      const adjacentControlOverlap = controlRects.reduce((maximum, rect, index) => {
+        const nextRect = controlRects[index + 1];
+        return nextRect ? Math.max(maximum, overlap(rect, nextRect)) : maximum;
+      }, 0);
+      const focusFailures = controlElements.reduce((count, element) => {
+        element.focus({ preventScroll: true });
+        return count + (document.activeElement === element ? 0 : 1);
+      }, 0);
+      const titleLetterSpacing = getComputedStyle(title).letterSpacing;
+
+      return {
+        viewportWidth,
+        viewportHeight,
+        innerWidth: window.innerWidth,
+        rootFontSize: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
+        titleFontSize: Number.parseFloat(getComputedStyle(title).fontSize),
+        titleLetterSpacing:
+          titleLetterSpacing === 'normal' ? 0 : Number.parseFloat(titleLetterSpacing),
+        titleLineCount: titleRangeRects.length,
+        titleViewportOverflow: Math.max(
+          horizontalOverflow(titleTextRect),
+          Math.max(0, -titleTextRect.top, titleTextRect.bottom - viewportHeight),
+        ),
+        titleHeroOverflow: containmentOverflow(titleTextRect, heroRect),
+        documentOverflow: document.documentElement.scrollWidth - viewportWidth,
+        controlViewportOverflow: controlRects.reduce(
+          (maximum, rect) => Math.max(maximum, horizontalOverflow(rect)),
+          0,
+        ),
+        controlHeroOverflow: controlRects.reduce(
+          (maximum, rect) => Math.max(maximum, containmentOverflow(rect, heroRect)),
+          0,
+        ),
+        coreCopyHeroOverflow: coreCopyElements.reduce((maximum, element) => {
+          return textRects(element).reduce(
+            (textMaximum, rect) => Math.max(textMaximum, containmentOverflow(rect, heroRect)),
+            maximum,
+          );
+        }, 0),
+        coreCopyRectCount: coreCopyElements.reduce(
+          (count, element) => count + textRects(element).length,
+          0,
+        ),
+        textContainerOverflow,
+        adjacentControlOverlap,
+        lockupMenuOverlap:
+          lockup instanceof HTMLElement
+            ? overlap(lockup.getBoundingClientRect(), menu.getBoundingClientRect())
+            : 0,
+        menuScrollHintOverlap: overlap(
+          menu.getBoundingClientRect(),
+          scrollHint.getBoundingClientRect(),
+        ),
+        focusFailures,
+        projectsGap: Math.abs(projects.getBoundingClientRect().top - heroRect.bottom),
+      };
+    });
+    const evidence = `${viewport.width}x${viewport.height} home enlarged-text metrics: ${JSON.stringify(metrics)}`;
+
+    expect.soft(metrics.viewportWidth, evidence).toBe(viewport.width);
+    expect.soft(metrics.viewportHeight, evidence).toBe(viewport.height);
+    expect.soft(metrics.rootFontSize, evidence).toBe(32);
+    expect.soft(metrics.titleLineCount, evidence).toBe(1);
+    expect.soft(metrics.titleViewportOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.titleHeroOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.documentOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.controlViewportOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.controlHeroOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.coreCopyHeroOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.coreCopyRectCount, evidence).toBeGreaterThanOrEqual(2);
+    expect.soft(metrics.textContainerOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.adjacentControlOverlap, evidence).toBe(0);
+    expect.soft(metrics.lockupMenuOverlap, evidence).toBe(0);
+    expect.soft(metrics.menuScrollHintOverlap, evidence).toBe(0);
+    expect.soft(metrics.focusFailures, evidence).toBe(0);
+    expect.soft(metrics.projectsGap, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.titleFontSize, evidence).toBe(viewport.homeTitleFontSize);
+    expect.soft(metrics.titleLetterSpacing, evidence).toBe(0);
+
+    const scrollHint = page.getByRole('link', { name: '进入项目选择' });
+    await scrollHint.click();
+    await expect(page).toHaveURL(/#projects$/);
+    await expect(page.getByRole('heading', { level: 2, name: '项目选择' })).toBeInViewport();
+  }
+});
+
 test('home remains useful without JavaScript', async ({ browser }) => {
   const context = await browser.newContext({
     baseURL: baseUrl,
@@ -494,6 +699,199 @@ test('custom 404 Enter key opens search without page errors and Escape restores 
   await expect(searchInput).not.toBeVisible();
   await expect(searchButton).toBeFocused();
   expect(pageErrors).toEqual([]);
+});
+
+test('custom 404 preserves enlarged title and recovery actions at narrow mobile sizes', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'Mobile text-resize geometry only');
+
+  for (const viewport of enlargedTextViewports) {
+    await page.setViewportSize(viewport);
+    await page.goto('/route-that-does-not-exist/');
+    await page.evaluate(() => document.fonts.ready);
+    await enlargeDocumentText(page);
+
+    const metrics = await page.evaluate(() => {
+      const title = document.querySelector('main h1');
+      const pageRoot = title?.closest('main');
+      const status = document.querySelector('main p');
+      const description = title?.nextElementSibling;
+      const actions = document.querySelector('nav[aria-label="错误页恢复操作"]');
+
+      if (
+        !(pageRoot instanceof HTMLElement) ||
+        !(title instanceof HTMLHeadingElement) ||
+        !(status instanceof HTMLParagraphElement) ||
+        !(description instanceof HTMLParagraphElement) ||
+        !(actions instanceof HTMLElement)
+      ) {
+        throw new Error('Missing enlarged-text 404 geometry target');
+      }
+
+      const textRects = (element: Element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return Array.from(range.getClientRects()).filter(
+          (rect) => rect.width > 0 && rect.height > 0,
+        );
+      };
+      const unionRect = (rects: DOMRect[]) => {
+        const first = rects[0];
+        if (!first) {
+          throw new Error('Expected rendered text rect');
+        }
+
+        return rects.slice(1).reduce(
+          (union, rect) => ({
+            left: Math.min(union.left, rect.left),
+            top: Math.min(union.top, rect.top),
+            right: Math.max(union.right, rect.right),
+            bottom: Math.max(union.bottom, rect.bottom),
+          }),
+          {
+            left: first.left,
+            top: first.top,
+            right: first.right,
+            bottom: first.bottom,
+          },
+        );
+      };
+      const viewportWidth = document.documentElement.clientWidth;
+      const viewportHeight = document.documentElement.clientHeight;
+      const horizontalOverflow = (rect: DOMRect | ReturnType<typeof unionRect>) =>
+        Math.max(0, -rect.left, rect.right - viewportWidth);
+      const containmentOverflow = (
+        inner: DOMRect | ReturnType<typeof unionRect>,
+        outer: DOMRect | ReturnType<typeof unionRect>,
+      ) =>
+        Math.max(
+          0,
+          outer.left - inner.left,
+          inner.right - outer.right,
+          outer.top - inner.top,
+          inner.bottom - outer.bottom,
+        );
+      const overlap = (
+        first: DOMRect | ReturnType<typeof unionRect>,
+        second: DOMRect | ReturnType<typeof unionRect>,
+      ) =>
+        Math.max(0, Math.min(first.right, second.right) - Math.max(first.left, second.left)) *
+        Math.max(0, Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top));
+
+      const pageRect = pageRoot.getBoundingClientRect();
+      const titleTextRects = textRects(title);
+      const titleTextRect = unionRect(titleTextRects);
+      const statusTextRect = unionRect(textRects(status));
+      const descriptionTextRect = unionRect(textRects(description));
+      const actionElements = Array.from(actions.querySelectorAll('a, button')).filter(
+        (element): element is HTMLAnchorElement | HTMLButtonElement =>
+          element instanceof HTMLAnchorElement || element instanceof HTMLButtonElement,
+      );
+      const actionRects = actionElements.map((element) => element.getBoundingClientRect());
+      const actionTextOverflow = actionElements.reduce((maximum, element) => {
+        const controlRect = element.getBoundingClientRect();
+        return textRects(element).reduce(
+          (textMaximum, rect) => Math.max(textMaximum, containmentOverflow(rect, controlRect)),
+          maximum,
+        );
+      }, 0);
+      const actionOverlap = actionRects.reduce((maximum, rect, index) => {
+        return actionRects
+          .slice(index + 1)
+          .reduce(
+            (pairMaximum, otherRect) => Math.max(pairMaximum, overlap(rect, otherRect)),
+            maximum,
+          );
+      }, 0);
+      const focusFailures = actionElements.reduce((count, element) => {
+        element.focus({ preventScroll: true });
+        return count + (document.activeElement === element ? 0 : 1);
+      }, 0);
+      const titleLetterSpacing = getComputedStyle(title).letterSpacing;
+
+      return {
+        viewportWidth,
+        viewportHeight,
+        innerWidth: window.innerWidth,
+        rootFontSize: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
+        titleFontSize: Number.parseFloat(getComputedStyle(title).fontSize),
+        titleLetterSpacing:
+          titleLetterSpacing === 'normal' ? 0 : Number.parseFloat(titleLetterSpacing),
+        titleLineCount: titleTextRects.length,
+        titleViewportOverflow: Math.max(
+          horizontalOverflow(titleTextRect),
+          Math.max(0, -titleTextRect.top, titleTextRect.bottom - viewportHeight),
+        ),
+        titlePageOverflow: containmentOverflow(titleTextRect, pageRect),
+        documentOverflow: document.documentElement.scrollWidth - viewportWidth,
+        actionViewportOverflow: actionRects.reduce(
+          (maximum, rect) => Math.max(maximum, horizontalOverflow(rect)),
+          0,
+        ),
+        actionPageOverflow: actionRects.reduce(
+          (maximum, rect) => Math.max(maximum, containmentOverflow(rect, pageRect)),
+          0,
+        ),
+        actionTextOverflow,
+        actionOverlap,
+        statusTitleOverlap: overlap(statusTextRect, titleTextRect),
+        titleDescriptionOverlap: overlap(titleTextRect, descriptionTextRect),
+        descriptionActionsOverlap: overlap(descriptionTextRect, actions.getBoundingClientRect()),
+        focusFailures,
+        pageScrollRange: document.documentElement.scrollHeight - viewportHeight,
+        finalActionBottom: actionRects.at(-1)?.bottom ?? 0,
+        documentBottom: document.documentElement.scrollHeight,
+      };
+    });
+    const evidence = `${viewport.width}x${viewport.height} 404 enlarged-text metrics: ${JSON.stringify(metrics)}`;
+
+    expect.soft(metrics.viewportWidth, evidence).toBe(viewport.width);
+    expect.soft(metrics.viewportHeight, evidence).toBe(viewport.height);
+    expect.soft(metrics.rootFontSize, evidence).toBe(32);
+    expect.soft(metrics.titleLineCount, evidence).toBe(1);
+    expect.soft(metrics.titleViewportOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.titlePageOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.documentOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.actionViewportOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.actionPageOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.actionTextOverflow, evidence).toBeLessThanOrEqual(1);
+    expect.soft(metrics.actionOverlap, evidence).toBe(0);
+    expect.soft(metrics.statusTitleOverlap, evidence).toBe(0);
+    expect.soft(metrics.titleDescriptionOverlap, evidence).toBe(0);
+    expect.soft(metrics.descriptionActionsOverlap, evidence).toBe(0);
+    expect.soft(metrics.focusFailures, evidence).toBe(0);
+    expect
+      .soft(Math.max(0, metrics.finalActionBottom - metrics.documentBottom), evidence)
+      .toBeLessThanOrEqual(1);
+    expect.soft(metrics.titleFontSize, evidence).toBe(viewport.notFoundTitleFontSize);
+    expect.soft(metrics.titleLetterSpacing, evidence).toBe(0);
+    expect.soft(metrics.pageScrollRange, evidence).toBeGreaterThanOrEqual(0);
+
+    const recoveryNavigation = page.getByRole('navigation', { name: '错误页恢复操作' });
+    for (const action of [
+      recoveryNavigation.getByRole('link', { name: '返回首页' }),
+      recoveryNavigation.getByRole('link', { name: '查看项目' }),
+      recoveryNavigation.getByRole('button', { name: '搜索文档' }),
+    ]) {
+      await action.scrollIntoViewIfNeeded();
+      await expect(action).toBeInViewport();
+      expect(
+        await action.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          const hitTarget = document.elementFromPoint(
+            rect.left + rect.width / 2,
+            rect.top + rect.height / 2,
+          );
+          return hitTarget === element || element.contains(hitTarget);
+        }),
+        evidence,
+      ).toBe(true);
+      await action.focus();
+      await expect(action).toBeFocused();
+    }
+  }
 });
 
 test('custom 404 keeps the title on a single line on narrow screens without overflow', async ({
