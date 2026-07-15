@@ -12,6 +12,7 @@ const expectedHomepageReferences = {
   desktopHero: '/assets/hero/thqllm-title-desktop.webp',
   favicon: '/favicon.svg',
   mobileHero: '/assets/hero/thqllm-title-mobile.webp',
+  mobileHeroMedia: '(max-width: 640px)',
   ogImage: 'https://thqllm.com/og-cover.png',
 };
 const criticalFiles = [
@@ -54,37 +55,80 @@ function createProjectCard({ extraLinks = [], name, url }) {
 }
 
 function createHomepage(cards, referenceOverrides = {}) {
-  const references = {
+  const structure = {
+    bodyDecoys: '',
+    extraHeadFavicons: [],
+    extraHeadOgImages: [],
+    extraHeroImages: [],
+    extraHeroSources: [],
+    heroPictureCount: 1,
+    heroSectionCount: 1,
+    heroSectionExtras: '',
     ...expectedHomepageReferences,
     ...referenceOverrides,
   };
-  const ogImage =
-    references.ogImage === null ? '' : `<meta property="og:image" content="${references.ogImage}">`;
-  const favicon =
-    references.favicon === null
-      ? ''
-      : `<link rel="icon" href="${references.favicon}" type="image/svg+xml">`;
-  const mobileHero =
-    references.mobileHero === null
-      ? ''
-      : `<source media="(max-width: 640px)" srcset="${references.mobileHero}">`;
-  const desktopHero =
-    references.desktopHero === null ? '' : `<img src="${references.desktopHero}" alt="">`;
+  const ogImages = [structure.ogImage, ...structure.extraHeadOgImages]
+    .filter((reference) => reference !== null)
+    .map((reference) => `<meta property="og:image" content="${reference}">`)
+    .join('');
+  const favicons = [structure.favicon, ...structure.extraHeadFavicons]
+    .filter((reference) => reference !== null)
+    .map((reference) => `<link rel="icon" href="${reference}" type="image/svg+xml">`)
+    .join('');
+  const mobileSources = [
+    ...(structure.mobileHero === null
+      ? []
+      : [
+          {
+            media: structure.mobileHeroMedia,
+            srcset: structure.mobileHero,
+          },
+        ]),
+    ...structure.extraHeroSources,
+  ]
+    .map(({ media, srcset }) => `<source media="${media}" srcset="${srcset}">`)
+    .join('');
+  const desktopImages = [
+    ...(structure.desktopHero === null ? [] : [structure.desktopHero]),
+    ...structure.extraHeroImages,
+  ]
+    .map((reference) => `<img src="${reference}" alt="">`)
+    .join('');
+  const heroPicture = `<picture>${mobileSources}${desktopImages}</picture>`;
+  const heroPictures = Array.from({ length: structure.heroPictureCount }, () => heroPicture).join(
+    '',
+  );
+  const heroSection = `<section data-danmaku-root>${heroPictures}${structure.heroSectionExtras}</section>`;
+  const heroSections = Array.from({ length: structure.heroSectionCount }, () => heroSection).join(
+    '',
+  );
 
   return `
     <html>
       <head>
-        ${ogImage}
-        ${favicon}
+        ${ogImages}
+        ${favicons}
       </head>
       <body>
-        <picture>
-          ${mobileHero}
-          ${desktopHero}
-        </picture>
+        ${heroSections}
+        ${structure.bodyDecoys}
         <section id="projects">${cards.map(createProjectCard).join('')}</section>
       </body>
     </html>
+  `;
+}
+
+function createCanonicalBodyDecoys() {
+  return `
+    <div hidden>
+      <meta property="og:image" content="${expectedHomepageReferences.ogImage}">
+      <link rel="icon" href="${expectedHomepageReferences.favicon}" type="image/svg+xml">
+      <img src="${expectedHomepageReferences.desktopHero}" alt="">
+      <source
+        media="${expectedHomepageReferences.mobileHeroMedia}"
+        srcset="${expectedHomepageReferences.mobileHero}"
+      >
+    </div>
   `;
 }
 
@@ -329,6 +373,33 @@ describe('verify-build critical static asset validation', () => {
 });
 
 describe('verify-build homepage critical asset references', () => {
+  it('rejects canonical body decoys when the real head and hero references are wrong', async () => {
+    const result = await runVerifier(canonicalCards, {
+      bodyDecoys: createCanonicalBodyDecoys(),
+      desktopHero: '/assets/hero/wrong-desktop.webp',
+      favicon: '/wrong-favicon.svg',
+      mobileHero: '/assets/hero/wrong-mobile.webp',
+      ogImage: 'https://thqllm.com/wrong-cover.png',
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html is missing exact OG image reference: https://thqllm.com/og-cover.png',
+    );
+  });
+
+  it('rejects duplicate head OG image metas when the real value is wrong and the extra is canonical', async () => {
+    const result = await runVerifier(canonicalCards, {
+      extraHeadOgImages: [expectedHomepageReferences.ogImage],
+      ogImage: 'https://thqllm.com/wrong-cover.png',
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html must contain exactly one head OG image meta; found 2.',
+    );
+  });
+
   it.each([
     ['missing', null],
     ['wrong', 'https://thqllm.com/wrong-cover.png'],
@@ -365,12 +436,115 @@ describe('verify-build homepage critical asset references', () => {
     );
   });
 
+  it('rejects a missing head favicon link', async () => {
+    const result = await runVerifier(canonicalCards, { favicon: null });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html is missing exact favicon reference: /favicon.svg',
+    );
+  });
+
   it('rejects a wrong favicon reference', async () => {
     const result = await runVerifier(canonicalCards, { favicon: '/wrong-favicon.svg' });
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain(
       'doc_build/index.html is missing exact favicon reference: /favicon.svg',
+    );
+  });
+
+  it('rejects duplicate head icon links when the real value is wrong and the extra is canonical', async () => {
+    const result = await runVerifier(canonicalCards, {
+      extraHeadFavicons: [expectedHomepageReferences.favicon],
+      favicon: '/wrong-favicon.svg',
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html must contain exactly one head icon link; found 2.',
+    );
+  });
+
+  it('rejects a missing hero section even when canonical hero decoys exist in the body', async () => {
+    const result = await runVerifier(canonicalCards, {
+      bodyDecoys: createCanonicalBodyDecoys(),
+      heroSectionCount: 0,
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html must contain exactly one section[data-danmaku-root]; found 0.',
+    );
+  });
+
+  it('rejects duplicate hero sections', async () => {
+    const result = await runVerifier(canonicalCards, { heroSectionCount: 2 });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html must contain exactly one section[data-danmaku-root]; found 2.',
+    );
+  });
+
+  it('rejects a missing direct hero picture even when canonical references are nested elsewhere', async () => {
+    const result = await runVerifier(canonicalCards, {
+      heroPictureCount: 0,
+      heroSectionExtras: createCanonicalBodyDecoys(),
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html hero section must contain exactly one direct picture; found 0.',
+    );
+  });
+
+  it('rejects duplicate direct hero pictures', async () => {
+    const result = await runVerifier(canonicalCards, { heroPictureCount: 2 });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html hero section must contain exactly one direct picture; found 2.',
+    );
+  });
+
+  it('rejects a wrong desktop image plus a canonical extra image in the hero picture', async () => {
+    const result = await runVerifier(canonicalCards, {
+      desktopHero: '/assets/hero/wrong-desktop.webp',
+      extraHeroImages: [expectedHomepageReferences.desktopHero],
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html hero picture must contain exactly one direct desktop img; found 2.',
+    );
+  });
+
+  it('rejects a wrong mobile source plus a canonical extra source in the hero picture', async () => {
+    const result = await runVerifier(canonicalCards, {
+      extraHeroSources: [
+        {
+          media: expectedHomepageReferences.mobileHeroMedia,
+          srcset: expectedHomepageReferences.mobileHero,
+        },
+      ],
+      mobileHero: '/assets/hero/wrong-mobile.webp',
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html hero picture must contain exactly one direct mobile source; found 2.',
+    );
+  });
+
+  it('rejects a canonical mobile source with the wrong media query', async () => {
+    const result = await runVerifier(canonicalCards, {
+      mobileHeroMedia: '(min-width: 1px)',
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html mobile hero source must use media (max-width: 640px); found (min-width: 1px).',
     );
   });
 });

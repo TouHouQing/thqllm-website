@@ -54,32 +54,13 @@ const requiredRobotsDirectives = [
   'Allow: /',
   'Sitemap: https://thqllm.com/sitemap.xml',
 ];
-const homepageAssetReferences = [
-  {
-    attribute: 'content',
-    description: 'OG image',
-    expected: 'https://thqllm.com/og-cover.png',
-    selector: 'meta[property="og:image"]',
-  },
-  {
-    attribute: 'src',
-    description: 'desktop hero image',
-    expected: '/assets/hero/thqllm-title-desktop.webp',
-    selector: 'img[src]',
-  },
-  {
-    attribute: 'srcset',
-    description: 'mobile hero source',
-    expected: '/assets/hero/thqllm-title-mobile.webp',
-    selector: 'source[srcset]',
-  },
-  {
-    attribute: 'href',
-    description: 'favicon',
-    expected: '/favicon.svg',
-    selector: 'link[rel~="icon"]',
-  },
-];
+const expectedHomepageReferences = {
+  desktopHero: '/assets/hero/thqllm-title-desktop.webp',
+  favicon: '/favicon.svg',
+  mobileHero: '/assets/hero/thqllm-title-mobile.webp',
+  mobileHeroMedia: '(max-width: 640px)',
+  ogImage: 'https://thqllm.com/og-cover.png',
+};
 const forbiddenTerms = ['智能结界', '结界'].map((text) => ({
   bytes: Buffer.from(text),
   text,
@@ -256,17 +237,105 @@ function verifyRobots(robotsBytes) {
   }
 }
 
-function verifyHomepageAssetReferences(document) {
-  for (const reference of homepageAssetReferences) {
-    const hasExactReference = [...document.querySelectorAll(reference.selector)].some(
-      (element) => element.getAttribute(reference.attribute) === reference.expected,
-    );
+function requireExactlyOne(elements, description) {
+  if (elements.length !== 1) {
+    throw new Error(`doc_build/index.html ${description}; found ${elements.length}.`);
+  }
 
-    if (!hasExactReference) {
-      throw new Error(
-        `doc_build/index.html is missing exact ${reference.description} reference: ${reference.expected}`,
-      );
-    }
+  return elements[0];
+}
+
+function directChildrenByTagName(element, tagName) {
+  return [...element.children].filter((child) => child.localName === tagName);
+}
+
+function verifyHomepageAssetReferences(document) {
+  const headOgImages = [...document.head.querySelectorAll('meta[property="og:image"]')];
+
+  if (headOgImages.length === 0) {
+    throw new Error(
+      `doc_build/index.html is missing exact OG image reference: ${expectedHomepageReferences.ogImage}`,
+    );
+  }
+
+  const headOgImage = requireExactlyOne(
+    headOgImages,
+    'must contain exactly one head OG image meta',
+  );
+
+  if (headOgImage.getAttribute('content') !== expectedHomepageReferences.ogImage) {
+    throw new Error(
+      `doc_build/index.html is missing exact OG image reference: ${expectedHomepageReferences.ogImage}; found ${headOgImage.getAttribute('content') ?? 'missing'}.`,
+    );
+  }
+
+  const headIcons = [...document.head.querySelectorAll('link[rel~="icon"]')];
+
+  if (headIcons.length === 0) {
+    throw new Error(
+      `doc_build/index.html is missing exact favicon reference: ${expectedHomepageReferences.favicon}`,
+    );
+  }
+
+  const headIcon = requireExactlyOne(headIcons, 'must contain exactly one head icon link');
+
+  if (headIcon.getAttribute('href') !== expectedHomepageReferences.favicon) {
+    throw new Error(
+      `doc_build/index.html is missing exact favicon reference: ${expectedHomepageReferences.favicon}; found ${headIcon.getAttribute('href') ?? 'missing'}.`,
+    );
+  }
+
+  const heroSection = requireExactlyOne(
+    [...document.querySelectorAll('section[data-danmaku-root]')],
+    'must contain exactly one section[data-danmaku-root]',
+  );
+  const heroPicture = requireExactlyOne(
+    directChildrenByTagName(heroSection, 'picture'),
+    'hero section must contain exactly one direct picture',
+  );
+  const desktopImages = directChildrenByTagName(heroPicture, 'img');
+
+  if (desktopImages.length === 0) {
+    throw new Error(
+      `doc_build/index.html is missing exact desktop hero image reference: ${expectedHomepageReferences.desktopHero}`,
+    );
+  }
+
+  const desktopImage = requireExactlyOne(
+    desktopImages,
+    'hero picture must contain exactly one direct desktop img',
+  );
+
+  if (desktopImage.getAttribute('src') !== expectedHomepageReferences.desktopHero) {
+    throw new Error(
+      `doc_build/index.html is missing exact desktop hero image reference: ${expectedHomepageReferences.desktopHero}; found ${desktopImage.getAttribute('src') ?? 'missing'}.`,
+    );
+  }
+
+  const mobileSources = directChildrenByTagName(heroPicture, 'source');
+
+  if (mobileSources.length === 0) {
+    throw new Error(
+      `doc_build/index.html is missing exact mobile hero source reference: ${expectedHomepageReferences.mobileHero}`,
+    );
+  }
+
+  const mobileSource = requireExactlyOne(
+    mobileSources,
+    'hero picture must contain exactly one direct mobile source',
+  );
+  const mobileMedia = mobileSource.getAttribute('media');
+
+  if (mobileMedia !== expectedHomepageReferences.mobileHeroMedia) {
+    throw new Error(
+      `doc_build/index.html mobile hero source must use media ${expectedHomepageReferences.mobileHeroMedia}; found ${mobileMedia ?? 'missing'}.`,
+    );
+  }
+
+  if (mobileSource.getAttribute('srcset') !== expectedHomepageReferences.mobileHero) {
+    throw new Error(
+      `doc_build/index.html is missing exact mobile hero source reference: ${expectedHomepageReferences.mobileHero}; found ${mobileSource.getAttribute('srcset') ?? 'missing'}.`,
+    );
   }
 }
 
