@@ -2,6 +2,7 @@ import { access, lstat, readdir, readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
+import sharp from 'sharp';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
@@ -19,6 +20,65 @@ const requiredOutputs = [
   'sitemap.xml',
   'llms.txt',
   'llms-full.txt',
+];
+const criticalImages = [
+  {
+    format: 'png',
+    formatLabel: 'PNG',
+    height: 630,
+    relativePath: 'og-cover.png',
+    width: 1200,
+  },
+  {
+    format: 'webp',
+    formatLabel: 'WebP',
+    height: 1080,
+    relativePath: 'assets/hero/thqllm-title-desktop.webp',
+    width: 1920,
+  },
+  {
+    format: 'webp',
+    formatLabel: 'WebP',
+    height: 1440,
+    relativePath: 'assets/hero/thqllm-title-mobile.webp',
+    width: 1080,
+  },
+];
+const criticalAssetPaths = [
+  ...criticalImages.map(({ relativePath }) => relativePath),
+  'favicon.svg',
+  'robots.txt',
+];
+const requiredRobotsDirectives = [
+  'User-agent: *',
+  'Allow: /',
+  'Sitemap: https://thqllm.com/sitemap.xml',
+];
+const homepageAssetReferences = [
+  {
+    attribute: 'content',
+    description: 'OG image',
+    expected: 'https://thqllm.com/og-cover.png',
+    selector: 'meta[property="og:image"]',
+  },
+  {
+    attribute: 'src',
+    description: 'desktop hero image',
+    expected: '/assets/hero/thqllm-title-desktop.webp',
+    selector: 'img[src]',
+  },
+  {
+    attribute: 'srcset',
+    description: 'mobile hero source',
+    expected: '/assets/hero/thqllm-title-mobile.webp',
+    selector: 'source[srcset]',
+  },
+  {
+    attribute: 'href',
+    description: 'favicon',
+    expected: '/favicon.svg',
+    selector: 'link[rel~="icon"]',
+  },
 ];
 const forbiddenTerms = ['智能结界', '结界'].map((text) => ({
   bytes: Buffer.from(text),
@@ -48,6 +108,168 @@ function assertIncludes(content, expected, source) {
   }
 }
 
+function describeError(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function readCriticalAsset(relativePath) {
+  const assetPath = path.join(buildDir, relativePath);
+  let assetStats;
+
+  try {
+    assetStats = await lstat(assetPath);
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      throw new Error(`Missing critical asset: ${relativePath}`);
+    }
+
+    throw new Error(`Could not inspect critical asset ${relativePath}: ${describeError(error)}`);
+  }
+
+  if (!assetStats.isFile()) {
+    throw new Error(`Critical asset ${relativePath} is not a regular file.`);
+  }
+
+  if (assetStats.size === 0) {
+    throw new Error(`Critical asset ${relativePath} is empty.`);
+  }
+
+  try {
+    return await readFile(assetPath);
+  } catch (error) {
+    throw new Error(`Could not read critical asset ${relativePath}: ${describeError(error)}`);
+  }
+}
+
+async function verifyCriticalImage(imageBytes, expectedImage) {
+  let metadata;
+
+  try {
+    metadata = await sharp(imageBytes, { failOn: 'warning' }).metadata();
+  } catch (error) {
+    throw new Error(
+      `Critical image ${expectedImage.relativePath} has invalid image metadata: ${describeError(error)}`,
+    );
+  }
+
+  if (metadata.format !== expectedImage.format) {
+    throw new Error(
+      `Critical image ${expectedImage.relativePath} must be ${expectedImage.formatLabel}; found ${metadata.format ?? 'unknown'}.`,
+    );
+  }
+
+  if (metadata.width !== expectedImage.width || metadata.height !== expectedImage.height) {
+    throw new Error(
+      `Critical image ${expectedImage.relativePath} must be ${expectedImage.width}x${expectedImage.height}; found ${metadata.width ?? 'unknown'}x${metadata.height ?? 'unknown'}.`,
+    );
+  }
+
+  let decodedImage;
+
+  try {
+    decodedImage = await sharp(imageBytes, { failOn: 'warning' })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+  } catch (error) {
+    throw new Error(
+      `Critical image ${expectedImage.relativePath} cannot be fully decoded. ${describeError(error)}`,
+    );
+  }
+
+  const { data, info } = decodedImage;
+  const channels = info.channels;
+  let hasPixelVariation = false;
+
+  for (let index = channels; index < data.length; index += 1) {
+    if (data[index] !== data[index % channels]) {
+      hasPixelVariation = true;
+      break;
+    }
+  }
+
+  let hasVisiblePixel = !metadata.hasAlpha;
+
+  if (metadata.hasAlpha) {
+    for (let index = channels - 1; index < data.length; index += channels) {
+      if (data[index] !== 0) {
+        hasVisiblePixel = true;
+        break;
+      }
+    }
+  }
+
+  if (!hasPixelVariation || !hasVisiblePixel) {
+    throw new Error(
+      `Critical image ${expectedImage.relativePath} must not be a solid-color or blank image.`,
+    );
+  }
+}
+
+function verifyFavicon(svgBytes) {
+  let svgDom;
+
+  try {
+    svgDom = new JSDOM(svgBytes.toString('utf8'), {
+      contentType: 'image/svg+xml',
+    });
+  } catch (error) {
+    throw new Error(`Critical asset favicon.svg is not valid SVG XML. ${describeError(error)}`);
+  }
+
+  const rootElement = svgDom.window.document.documentElement;
+
+  if (rootElement.localName !== 'svg') {
+    svgDom.window.close();
+    throw new Error('Critical asset favicon.svg must have an svg root element.');
+  }
+
+  const viewBoxValues = (rootElement.getAttribute('viewBox') ?? '')
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number);
+  const hasValidViewBox =
+    viewBoxValues.length === 4 &&
+    viewBoxValues.every(Number.isFinite) &&
+    viewBoxValues[2] > 0 &&
+    viewBoxValues[3] > 0;
+
+  svgDom.window.close();
+
+  if (!hasValidViewBox) {
+    throw new Error('Critical asset favicon.svg must have a valid viewBox.');
+  }
+}
+
+function verifyRobots(robotsBytes) {
+  const directives = new Set(
+    robotsBytes
+      .toString('utf8')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean),
+  );
+
+  for (const directive of requiredRobotsDirectives) {
+    if (!directives.has(directive)) {
+      throw new Error(`robots.txt is missing required directive: ${directive}`);
+    }
+  }
+}
+
+function verifyHomepageAssetReferences(document) {
+  for (const reference of homepageAssetReferences) {
+    const hasExactReference = [...document.querySelectorAll(reference.selector)].some(
+      (element) => element.getAttribute(reference.attribute) === reference.expected,
+    );
+
+    if (!hasExactReference) {
+      throw new Error(
+        `doc_build/index.html is missing exact ${reference.description} reference: ${reference.expected}`,
+      );
+    }
+  }
+}
+
 for (const output of requiredOutputs) {
   const outputPath = path.join(buildDir, output);
   let outputStats;
@@ -64,6 +286,19 @@ for (const output of requiredOutputs) {
 
   await access(outputPath);
 }
+
+const criticalAssets = new Map();
+
+for (const relativePath of criticalAssetPaths) {
+  criticalAssets.set(relativePath, await readCriticalAsset(relativePath));
+}
+
+for (const expectedImage of criticalImages) {
+  await verifyCriticalImage(criticalAssets.get(expectedImage.relativePath), expectedImage);
+}
+
+verifyFavicon(criticalAssets.get('favicon.svg'));
+verifyRobots(criticalAssets.get('robots.txt'));
 
 const homepagePath = path.join(buildDir, 'index.html');
 let homepageDom;
@@ -97,7 +332,15 @@ for (const htmlFile of await collectHtmlFiles(buildDir)) {
   }
 }
 
-const projectsSection = homepageDom?.window.document.querySelector('section#projects');
+const homepageDocument = homepageDom?.window.document;
+
+if (!homepageDocument) {
+  throw new Error('doc_build/index.html could not be parsed.');
+}
+
+verifyHomepageAssetReferences(homepageDocument);
+
+const projectsSection = homepageDocument.querySelector('section#projects');
 if (!projectsSection) {
   throw new Error('doc_build/index.html is missing section#projects.');
 }
