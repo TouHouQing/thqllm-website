@@ -28,9 +28,45 @@ const validProject = {
   featured: false,
 };
 
+const validFourthProject = {
+  ...validProject,
+  id: 'sample-four',
+  name: 'Sample Four',
+  externalUrl: 'https://four.example.com/',
+  docs: {
+    ...validProject.docs,
+    basePath: '/docs/sample-four/',
+  },
+  order: 10,
+};
+
 describe('project registry', () => {
-  it('contains three checked-in projects', () => {
-    expect(projects).toHaveLength(3);
+  it('keeps the canonical projects and external URLs in the registry', () => {
+    expect(projects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'fluctgraph',
+          name: 'FluctGraph',
+          externalUrl: 'https://graph.tohoqing.com/',
+        }),
+        expect.objectContaining({
+          id: 'thq-api',
+          name: 'THQ API',
+          externalUrl: 'https://sub.thqllm.com/',
+        }),
+        expect.objectContaining({
+          id: 'toho-image-studio',
+          name: 'Toho Image Studio',
+          externalUrl: 'https://img.tohoqing.com/',
+        }),
+      ]),
+    );
+  });
+
+  it('accepts an additional valid project without a registered-project count change', () => {
+    expect(projectListSchema.parse([...projects, validFourthProject])).toContainEqual(
+      validFourthProject,
+    );
   });
 
   it('rejects project URLs that do not use HTTPS', () => {
@@ -71,6 +107,172 @@ describe('project registry', () => {
       expect.objectContaining({
         message: 'Duplicate project docs base path: /docs/sample/',
         path: [1, 'docs', 'basePath'],
+      }),
+    );
+  });
+
+  it.each([
+    {
+      label: 'name',
+      path: [0, 'name'],
+      mutate: (project: typeof validProject) => {
+        project.name = '   ';
+      },
+    },
+    {
+      label: 'stage label',
+      path: [0, 'stageLabel'],
+      mutate: (project: typeof validProject) => {
+        project.stageLabel = '   ';
+      },
+    },
+    {
+      label: 'category label',
+      path: [0, 'categoryLabel'],
+      mutate: (project: typeof validProject) => {
+        project.categoryLabel = '   ';
+      },
+    },
+    {
+      label: 'description',
+      path: [0, 'description'],
+      mutate: (project: typeof validProject) => {
+        project.description = '            ';
+      },
+    },
+    {
+      label: 'docs section text',
+      path: [0, 'docs', 'sections', 0, 'text'],
+      mutate: (project: typeof validProject) => {
+        project.docs.sections[0].text = '   ';
+      },
+    },
+    {
+      label: 'docs item text',
+      path: [0, 'docs', 'sections', 0, 'items', 0, 'text'],
+      mutate: (project: typeof validProject) => {
+        project.docs.sections[0].items[0].text = '   ';
+      },
+    },
+    {
+      label: 'tag',
+      path: [0, 'tags', 0],
+      mutate: (project: typeof validProject) => {
+        project.tags[0] = '   ';
+      },
+    },
+  ])('rejects a whitespace-only $label', ({ mutate, path }) => {
+    const fixture = structuredClone(validProject);
+    mutate(fixture);
+
+    const result = projectListSchema.safeParse([fixture]);
+
+    expect(result.success).toBe(false);
+
+    if (result.success) {
+      throw new Error(`Expected whitespace validation to fail at ${path.join('.')}`);
+    }
+
+    expect(result.error.issues).toContainEqual(expect.objectContaining({ path }));
+  });
+
+  it.each([
+    {
+      label: 'project id',
+      path: [0, 'id'],
+      mutate: (project: typeof validProject) => {
+        project.id = ' sample';
+      },
+    },
+    {
+      label: 'docs item slug',
+      path: [0, 'docs', 'sections', 0, 'items', 0, 'slug'],
+      mutate: (project: typeof validProject) => {
+        project.docs.sections[0].items[0].slug = 'index ';
+      },
+    },
+  ])('rejects surrounding whitespace in a $label', ({ mutate, path }) => {
+    const fixture = structuredClone(validProject);
+    mutate(fixture);
+
+    const result = projectListSchema.safeParse([fixture]);
+
+    expect(result.success).toBe(false);
+
+    if (result.success) {
+      throw new Error(`Expected strict slug validation to fail at ${path.join('.')}`);
+    }
+
+    expect(result.error.issues).toContainEqual(expect.objectContaining({ path }));
+  });
+
+  it.each([
+    'index',
+    'quick-start',
+  ])('rejects duplicate docs item slug "%s" across sections', (duplicateSlug) => {
+    const fixture = structuredClone(validProject);
+    fixture.docs.sections.push({
+      text: '更多',
+      items: [{ text: '重复入口', slug: duplicateSlug }],
+    });
+
+    const result = projectListSchema.safeParse([fixture]);
+
+    expect(result.success).toBe(false);
+
+    if (result.success) {
+      throw new Error(`Expected duplicate docs item slug ${duplicateSlug} to fail`);
+    }
+
+    expect(result.error.issues).toContainEqual(
+      expect.objectContaining({
+        message: `Duplicate project docs item slug: ${duplicateSlug}`,
+        path: [0, 'docs', 'sections', 1, 'items', 0, 'slug'],
+      }),
+    );
+  });
+
+  it('requires docs.basePath to match the project id', () => {
+    const result = projectListSchema.safeParse([
+      {
+        ...validProject,
+        docs: {
+          ...validProject.docs,
+          basePath: '/docs/different-project/',
+        },
+      },
+    ]);
+
+    expect(result.success).toBe(false);
+
+    if (result.success) {
+      throw new Error('Expected a mismatched docs base path to fail');
+    }
+
+    expect(result.error.issues).toContainEqual(
+      expect.objectContaining({
+        message: 'Project docs base path must match project id: /docs/sample/',
+        path: [0, 'docs', 'basePath'],
+      }),
+    );
+  });
+
+  it('requires documented projects to expose an index entry', () => {
+    const fixture = structuredClone(validProject);
+    fixture.docs.sections[0].items = [{ text: '快速开始', slug: 'quick-start' }];
+
+    const result = projectListSchema.safeParse([fixture]);
+
+    expect(result.success).toBe(false);
+
+    if (result.success) {
+      throw new Error('Expected docs without an index entry to fail');
+    }
+
+    expect(result.error.issues).toContainEqual(
+      expect.objectContaining({
+        message: 'Project docs must include an index item',
+        path: [0, 'docs', 'sections'],
       }),
     );
   });

@@ -29,13 +29,11 @@ pnpm verify
 
 ## Add a project
 
-1. Add a validated entry to `src/data/projects.ts` with a unique `id` and `order` and an HTTPS `externalUrl`.
-2. For every new project, update the registered-project count in `src/data/projects.test.ts` and the visible project-name summary in `theme/components/HomeBands.tsx`.
-3. Regenerate and manually review the homepage desktop and mobile visual baselines on macOS because both the Hero node count and Manual list change. Adding a project or otherwise changing the homepage visuals also requires regenerating and checking `site/public/og-cover.png`.
-4. If the project has `docs`, configure `docs.basePath` and `docs.sections`, add matching Markdown/MDX under `site/docs/<project-id>/`, and keep them aligned.
-5. For a documented project, update the sidebar enumeration in `src/lib/projects.test.ts`, the documentation-root enumeration in `tests/e2e/docs.spec.ts`, and the relevant `requiredOutputs` and URL expectations in `scripts/verify-build.mjs`; regenerate and manually review both the documentation desktop and mobile visual baselines because the project switcher changes.
-6. If `featured: true`, update `theme/tests/ProjectStageGrid.test.tsx` and the homepage featured count and project enumeration in `tests/e2e/home.spec.ts` and `scripts/verify-build.mjs`.
-7. Run `pnpm verify`.
+1. Add one validated entry to `src/data/projects.ts` with a unique `id` and `order` and an HTTPS `externalUrl`.
+2. If the project has documentation, configure matching `docs.sections` with an `index` entry and add the corresponding Markdown/MDX under `site/docs/<project-id>/`.
+3. Run `pnpm verify`.
+
+Project counts, homepage summaries, sidebars, and verification expectations are derived from the registry. When a registry or content change intentionally changes rendered pages, regenerate the relevant macOS visual snapshots and manually review the generated PNGs before committing.
 
 ## Content boundaries
 

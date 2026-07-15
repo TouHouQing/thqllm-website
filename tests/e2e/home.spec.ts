@@ -1,5 +1,11 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
+import { projects } from '../../src/data/projects';
+
+const featuredProjects = projects.filter((project) => project.featured);
+const firstDocumentedProject = projects
+  .filter((project) => project.docs)
+  .toSorted((left, right) => left.order - right.order)[0];
 
 async function openDeterministicHome(page: Page) {
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -29,26 +35,33 @@ test('home presents the THQLLM portal without forbidden copy', async ({ page }) 
   await expect(page.locator('body')).not.toContainText('结界');
 });
 
-test('home exposes exactly three project stages and the FluctGraph destination', async ({
-  page,
-}) => {
+test('home exposes every featured project and the canonical destinations', async ({ page }) => {
   await page.goto('/');
 
-  await expect(page.getByTestId('project-stage')).toHaveCount(3);
-  await expect(page.getByRole('link', { name: '进入 FluctGraph' })).toHaveAttribute(
-    'href',
-    'https://graph.tohoqing.com/',
-  );
+  await expect(page.getByTestId('project-stage')).toHaveCount(featuredProjects.length);
+
+  for (const [projectName, externalUrl] of [
+    ['FluctGraph', 'https://graph.tohoqing.com/'],
+    ['THQ API', 'https://sub.thqllm.com/'],
+    ['Toho Image Studio', 'https://img.tohoqing.com/'],
+  ]) {
+    await expect(page.getByRole('link', { name: `进入 ${projectName}` })).toHaveAttribute(
+      'href',
+      externalUrl,
+    );
+  }
 });
 
-test('the first 使用文档 link opens the FluctGraph documentation root', async ({ page }) => {
+test('the first documented registry project opens its documentation root', async ({ page }) => {
+  if (!firstDocumentedProject?.docs) {
+    throw new Error('Expected the project registry to include a documented project');
+  }
+
   await page.goto('/');
 
-  await page
-    .getByRole('link', { name: /使用文档/ })
-    .first()
-    .click();
-  await expect(page).toHaveURL(/\/docs\/fluctgraph\/$/);
+  const manual = page.getByRole('region', { name: '使用文档' });
+  await manual.getByRole('link', { name: firstDocumentedProject.name }).click();
+  await expect(page).toHaveURL(new RegExp(`${firstDocumentedProject.docs.basePath}$`));
 });
 
 test('keyboard navigation reaches the project selection item in the home menu', async ({

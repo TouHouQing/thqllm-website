@@ -5,15 +5,17 @@ import type { ProjectDefinition } from '../../src/data/project-schema';
 import styles from './HomeBands.module.css';
 
 export function ManualBand({ projects }: { projects: readonly ProjectDefinition[] }) {
+  const orderedProjects = projects.toSorted((left, right) => left.order - right.order);
+
   return (
     <section className={styles.manual} aria-labelledby="manual-title">
       <div>
         <p>MANUAL / 使用文档</p>
         <h2 id="manual-title">使用文档</h2>
-        <span>FluctGraph · THQ API · Toho Image Studio</span>
+        <span>{orderedProjects.map((project) => project.name).join(' · ')}</span>
       </div>
       <ul>
-        {projects.map((project) => (
+        {orderedProjects.map((project) => (
           <li key={project.id}>
             {project.docs ? (
               <Link href={project.docs.basePath}>

@@ -3,12 +3,26 @@ import { describe, expect, it } from 'vitest';
 import { projects } from '../data/projects';
 import { createSidebarConfig, getFeaturedProjects, getProjectByPathname } from './projects';
 
+function getProject(projectId: string) {
+  const project = projects.find(({ id }) => id === projectId);
+
+  if (!project) {
+    throw new Error(`Missing canonical project fixture: ${projectId}`);
+  }
+
+  return project;
+}
+
+const fluctgraph = getProject('fluctgraph');
+const thqApi = getProject('thq-api');
+const tohoImageStudio = getProject('toho-image-studio');
+
 describe('project navigation helpers', () => {
   it('filters and sorts featured projects without mutating the input', () => {
     const fixture = [
-      { ...projects[0], order: 30, featured: true },
-      { ...projects[1], order: 20, featured: false },
-      { ...projects[2], order: 10, featured: true },
+      { ...fluctgraph, order: 30, featured: true },
+      { ...thqApi, order: 20, featured: false },
+      { ...tohoImageStudio, order: 10, featured: true },
     ];
     const originalFixture = structuredClone(fixture);
 
@@ -33,19 +47,19 @@ describe('project navigation helpers', () => {
 
   it('creates sidebars only for documented projects', () => {
     const projectWithoutDocs = {
-      ...projects[0],
+      ...fluctgraph,
       id: 'undocumented',
       docs: undefined,
       order: 4,
       featured: false,
     };
-    const sidebars = createSidebarConfig([...projects, projectWithoutDocs]);
+    const fixture = [...projects, projectWithoutDocs];
+    const sidebars = createSidebarConfig(fixture);
+    const expectedBasePaths = fixture.flatMap((project) =>
+      project.docs ? [project.docs.basePath] : [],
+    );
 
-    expect(Object.keys(sidebars)).toEqual([
-      '/docs/fluctgraph/',
-      '/docs/thq-api/',
-      '/docs/toho-image-studio/',
-    ]);
+    expect(Object.keys(sidebars)).toEqual(expectedBasePaths);
     expect(sidebars['/docs/fluctgraph/'][0].items[0]).toEqual({
       text: '概览',
       link: '/docs/fluctgraph/',

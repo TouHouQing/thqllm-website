@@ -1,40 +1,94 @@
 import { z } from 'zod';
 
-export const slugSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+const nonBlankStringSchema = z.string().trim().min(1);
+const slugFormatSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+
+export const slugSchema = z
+  .string()
+  .refine((value) => value === value.trim(), {
+    message: 'Slugs must not include surrounding whitespace',
+  })
+  .pipe(slugFormatSchema);
 
 export const projectDocItemSchema = z.object({
-  text: z.string().min(1),
+  text: nonBlankStringSchema,
   slug: slugSchema,
 });
 
 export const projectDocSectionSchema = z.object({
-  text: z.string().min(1),
+  text: nonBlankStringSchema,
   items: z.array(projectDocItemSchema).nonempty(),
 });
 
-export const projectSchema = z.object({
-  id: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-  name: z.string().min(1),
-  stageLabel: z.string().min(1),
-  categoryLabel: z.string().min(1),
-  description: z.string().min(10),
-  externalUrl: z
-    .string()
-    .url()
-    .refine((url) => url.startsWith('https://'), {
-      message: 'Project URLs must use HTTPS',
-    }),
-  docs: z
-    .object({
-      basePath: z.string().regex(/^\/docs\/[a-z0-9-]+\/$/),
-      sections: z.array(projectDocSectionSchema).nonempty(),
-    })
-    .optional(),
-  accent: z.enum(['vermilion', 'cyan', 'gold', 'sakura']),
-  tags: z.array(z.string().min(1)).nonempty(),
-  order: z.number().int().nonnegative(),
-  featured: z.boolean(),
-});
+export const projectSchema = z
+  .object({
+    id: slugSchema,
+    name: nonBlankStringSchema,
+    stageLabel: nonBlankStringSchema,
+    categoryLabel: nonBlankStringSchema,
+    description: z.string().trim().min(10),
+    externalUrl: z
+      .string()
+      .url()
+      .refine((url) => url.startsWith('https://'), {
+        message: 'Project URLs must use HTTPS',
+      }),
+    docs: z
+      .object({
+        basePath: z.string().regex(/^\/docs\/[a-z0-9-]+\/$/),
+        sections: z.array(projectDocSectionSchema).nonempty(),
+      })
+      .optional(),
+    accent: z.enum(['vermilion', 'cyan', 'gold', 'sakura']),
+    tags: z.array(nonBlankStringSchema).nonempty(),
+    order: z.number().int().nonnegative(),
+    featured: z.boolean(),
+  })
+  .superRefine((project, context) => {
+    const docs = project.docs;
+
+    if (!docs) {
+      return;
+    }
+
+    const expectedBasePath = `/docs/${project.id}/`;
+    if (docs.basePath !== expectedBasePath) {
+      context.addIssue({
+        code: 'custom',
+        message: `Project docs base path must match project id: ${expectedBasePath}`,
+        path: ['docs', 'basePath'],
+      });
+    }
+
+    const itemSlugs = new Set<string>();
+    let hasIndexItem = false;
+
+    docs.sections.forEach((section, sectionIndex) => {
+      section.items.forEach((item, itemIndex) => {
+        if (itemSlugs.has(item.slug)) {
+          context.addIssue({
+            code: 'custom',
+            message: `Duplicate project docs item slug: ${item.slug}`,
+            path: ['docs', 'sections', sectionIndex, 'items', itemIndex, 'slug'],
+          });
+        }
+
+        itemSlugs.add(item.slug);
+        hasIndexItem ||= item.slug === 'index';
+      });
+    });
+
+    if (!hasIndexItem) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Project docs must include an index item',
+        path: ['docs', 'sections'],
+      });
+    }
+  });
 
 export const projectListSchema = z
   .array(projectSchema)

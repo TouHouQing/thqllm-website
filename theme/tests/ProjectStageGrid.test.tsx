@@ -14,8 +14,22 @@ vi.mock('@rspress/core/theme-original', () => ({
   Link: (props: ComponentProps<'a'>) => <a {...props} />,
 }));
 
+function getProject(projectId: string) {
+  const project = projects.find(({ id }) => id === projectId);
+
+  if (!project) {
+    throw new Error(`Missing canonical project fixture: ${projectId}`);
+  }
+
+  return project;
+}
+
+const fluctgraph = getProject('fluctgraph');
+const thqApi = getProject('thq-api');
+
 describe('ProjectStageGrid', () => {
-  it('renders one safe external link and one docs link per project', () => {
+  it('renders the registry-derived count and canonical safe links', () => {
+    const featuredProjects = projects.filter((project) => project.featured);
     const { container } = render(
       <MemoryRouter>
         <ProjectStageGrid projects={projects} />
@@ -23,11 +37,19 @@ describe('ProjectStageGrid', () => {
     );
 
     expect(container.querySelector('#projects')).toBeInTheDocument();
-    expect(screen.getAllByRole('article')).toHaveLength(3);
-    const external = screen.getByRole('link', { name: '进入 FluctGraph' });
-    expect(external).toHaveAttribute('href', 'https://graph.tohoqing.com/');
-    expect(external).toHaveAttribute('target', '_blank');
-    expect(external).toHaveAttribute('rel', 'noreferrer noopener');
+    expect(screen.getAllByRole('article')).toHaveLength(featuredProjects.length);
+
+    for (const [projectName, externalUrl] of [
+      ['FluctGraph', 'https://graph.tohoqing.com/'],
+      ['THQ API', 'https://sub.thqllm.com/'],
+      ['Toho Image Studio', 'https://img.tohoqing.com/'],
+    ]) {
+      const external = screen.getByRole('link', { name: `进入 ${projectName}` });
+      expect(external).toHaveAttribute('href', externalUrl);
+      expect(external).toHaveAttribute('target', '_blank');
+      expect(external).toHaveAttribute('rel', 'noreferrer noopener');
+    }
+
     expect(screen.getByRole('link', { name: '阅读 FluctGraph 文档' })).toHaveAttribute(
       'href',
       '/docs/fluctgraph/',
@@ -40,7 +62,7 @@ describe('ProjectStageGrid', () => {
         <ProjectStageGrid
           projects={[
             {
-              ...projects[0],
+              ...fluctgraph,
               id: 'future-project',
               name: 'Future Project',
               externalUrl: 'https://future.example.com/',
@@ -59,9 +81,9 @@ describe('ProjectStageGrid', () => {
       <MemoryRouter>
         <ProjectStageGrid
           projects={[
-            projects[0],
+            fluctgraph,
             {
-              ...projects[1],
+              ...thqApi,
               id: 'hidden-project',
               name: 'Hidden Project',
               featured: false,
@@ -79,9 +101,9 @@ describe('ProjectStageGrid', () => {
 
   it('renders every supplied project when featured-only filtering is disabled', () => {
     const fixture = [
-      projects[0],
+      fluctgraph,
       {
-        ...projects[1],
+        ...thqApi,
         id: 'non-featured-project',
         name: 'Non-featured Project',
         featured: false,
@@ -103,10 +125,10 @@ describe('ProjectStageGrid', () => {
   it('sorts all projects by order without mutating the supplied fixture', () => {
     const fixture = [
       {
-        ...projects[1],
+        ...thqApi,
         featured: false,
       },
-      projects[0],
+      fluctgraph,
     ];
     const inputOrder = fixture.map((project) => project.id);
     const { container } = render(

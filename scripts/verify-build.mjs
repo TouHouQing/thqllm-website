@@ -102,30 +102,80 @@ if (!projectsSection) {
 }
 
 const projectStages = [...projectsSection.querySelectorAll('[data-testid="project-stage"]')];
-if (projectStages.length !== 3) {
-  throw new Error(
-    `section#projects must contain exactly 3 project-stage cards; found ${projectStages.length}.`,
-  );
-}
-
 const expectedProjects = [
   ['FluctGraph', 'https://graph.tohoqing.com/'],
   ['THQ API', 'https://sub.thqllm.com/'],
   ['Toho Image Studio', 'https://img.tohoqing.com/'],
 ];
+const projectStagesByName = new Map();
+const projectExternalUrls = new Set();
 
-for (const [index, [projectName, projectUrl]] of expectedProjects.entries()) {
-  const projectStage = projectStages[index];
-  const projectText = projectStage.textContent ?? '';
+for (const [index, projectStage] of projectStages.entries()) {
+  const projectName = projectStage.querySelector('h3')?.textContent?.trim() ?? '';
 
-  if (!projectText.includes(projectName)) {
-    throw new Error(`Project stage ${index + 1} is missing expected project: ${projectName}`);
+  if (!projectName) {
+    throw new Error(`Project stage ${index + 1} must have a non-empty project name.`);
   }
 
-  const links = [...projectStage.querySelectorAll('a[href]')].map((link) =>
-    link.getAttribute('href'),
+  if (projectStagesByName.has(projectName)) {
+    throw new Error(`Duplicate project stage name: ${projectName}`);
+  }
+
+  const externalLinks = [...projectStage.querySelectorAll('a[href]')].flatMap((link) => {
+    const href = link.getAttribute('href');
+
+    if (!href) {
+      return [];
+    }
+
+    let url;
+
+    try {
+      url = new URL(href);
+    } catch {
+      return [];
+    }
+
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return [];
+    }
+
+    return [{ link, url }];
+  });
+  const externalLink = externalLinks[0];
+  const relTokens = new Set(
+    (externalLink?.link.getAttribute('rel') ?? '').split(/\s+/).filter(Boolean),
   );
-  if (!links.includes(projectUrl)) {
+  const hasSafeExternalLink =
+    externalLinks.length === 1 &&
+    externalLink.url.protocol === 'https:' &&
+    externalLink.link.getAttribute('target') === '_blank' &&
+    relTokens.has('noreferrer') &&
+    relTokens.has('noopener');
+
+  if (!hasSafeExternalLink) {
+    throw new Error(
+      `Project stage for ${projectName} must include exactly one HTTPS external link.`,
+    );
+  }
+
+  const projectUrl = externalLink.url.href;
+  if (projectExternalUrls.has(projectUrl)) {
+    throw new Error(`Duplicate project stage external link: ${projectUrl}`);
+  }
+
+  projectStagesByName.set(projectName, projectUrl);
+  projectExternalUrls.add(projectUrl);
+}
+
+for (const [projectName, projectUrl] of expectedProjects) {
+  const verifiedProjectUrl = projectStagesByName.get(projectName);
+
+  if (verifiedProjectUrl === undefined) {
+    throw new Error(`section#projects is missing canonical project stage: ${projectName}`);
+  }
+
+  if (verifiedProjectUrl !== projectUrl) {
     throw new Error(`Project stage for ${projectName} is missing external link: ${projectUrl}`);
   }
 }
