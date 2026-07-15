@@ -147,19 +147,38 @@ index 07ae1c1fa0c1a0633c26672a547408addd4c66e9..edcb2aab5887b1103336bff72cf817a1
                          }
                        }}
 diff --git a/dist/eject-theme/components/SidebarMenu/index.tsx b/dist/eject-theme/components/SidebarMenu/index.tsx
-index 888dffc9d7b5e74c468a0883e9715eca49da3806..eebcf37dbd4509ef5bfa66ee1e333ba092c737f9 100644
+index 888dffc9d7b5e74c468a0883e9715eca49da3806..bc2db04f61037f13c56b80c72f83fdae43d03fde 100644
 --- a/dist/eject-theme/components/SidebarMenu/index.tsx
 +++ b/dist/eject-theme/components/SidebarMenu/index.tsx
-@@ -12,6 +12,8 @@ import { forwardRef, type ReactNode, useEffect, useRef } from 'react';
+@@ -12,6 +12,9 @@ import { forwardRef, type ReactNode, useEffect, useRef } from 'react';
  import { createPortal } from 'react-dom';
  import './index.scss';
  
 +const SIDEBAR_DRAWER_QUERY = '(max-width: 767px)';
++const OUTLINE_OVERLAY_QUERY = '(max-width: 1279px)';
 +
  /* Top Menu, only displayed on <1280px screen width */
  export const SidebarMenu = forwardRef(
    (
-@@ -52,7 +54,15 @@ export const SidebarMenu = forwardRef(
+@@ -24,9 +27,15 @@ export const SidebarMenu = forwardRef(
+       afterOutline,
+     }: {
+       isSidebarOpen: boolean;
+-      onIsSidebarOpenChange: (isOpen: boolean) => void;
++      onIsSidebarOpenChange: (
++        isOpen: boolean,
++        restoreFocus?: boolean,
++      ) => void;
+       isOutlineOpen: boolean;
+-      onIsOutlineOpenChange: (isOpen: boolean) => void;
++      onIsOutlineOpenChange: (
++        isOpen: boolean,
++        restoreFocus?: boolean,
++      ) => void;
+       beforeOutline?: ReactNode;
+       afterOutline?: ReactNode;
+     },
+@@ -52,23 +61,45 @@ export const SidebarMenu = forwardRef(
      const showSidebar = sidebarConfig === true;
  
      function openSidebar() {
@@ -172,11 +191,13 @@ index 888dffc9d7b5e74c468a0883e9715eca49da3806..eebcf37dbd4509ef5bfa66ee1e333ba0
 +      if (next) {
 +        onIsOutlineOpenChange(false);
 +      }
-+      onIsSidebarOpenChange(next);
++      onIsSidebarOpenChange(next, !next);
      }
  
-     function closeSidebar() {
-@@ -60,15 +70,25 @@ export const SidebarMenu = forwardRef(
+-    function closeSidebar() {
+-      onIsSidebarOpenChange(false);
++    function closeSidebar(restoreFocus = false) {
++      onIsSidebarOpenChange(false, restoreFocus);
      }
  
      function openOutline() {
@@ -185,25 +206,31 @@ index 888dffc9d7b5e74c468a0883e9715eca49da3806..eebcf37dbd4509ef5bfa66ee1e333ba0
 +      if (next) {
 +        onIsSidebarOpenChange(false);
 +      }
-+      onIsOutlineOpenChange(next);
++      onIsOutlineOpenChange(next, !next);
      }
  
-     function closeOutline() {
-       onIsOutlineOpenChange(false);
-     }
- 
-+    function closeOpenPanel() {
-+      closeSidebar();
-+      closeOutline();
+-    function closeOutline() {
+-      onIsOutlineOpenChange(false);
++    function closeOutline(restoreFocus = false) {
++      onIsOutlineOpenChange(false, restoreFocus);
 +    }
 +
++    function closeOpenPanel() {
++      if (isSidebarOpen) {
++        closeSidebar(true);
++      }
++      if (isOutlineOpen) {
++        closeOutline(true);
++      }
+     }
+ 
      useEffect(() => {
        closeSidebar();
 +      closeOutline();
      }, [pathname]);
  
      useEffect(() => {
-@@ -77,6 +97,21 @@ export const SidebarMenu = forwardRef(
+@@ -77,6 +108,36 @@ export const SidebarMenu = forwardRef(
        }
      }, [hash]);
  
@@ -222,10 +249,25 @@ index 888dffc9d7b5e74c468a0883e9715eca49da3806..eebcf37dbd4509ef5bfa66ee1e333ba0
 +      };
 +    }, [onIsSidebarOpenChange]);
 +
++    useEffect(() => {
++      const outlineOverlay = window.matchMedia(OUTLINE_OVERLAY_QUERY);
++      const closeDesktopOutline = () => {
++        if (!outlineOverlay.matches) {
++          onIsOutlineOpenChange(false);
++        }
++      };
++
++      closeDesktopOutline();
++      outlineOverlay.addEventListener('change', closeDesktopOutline);
++      return () => {
++        outlineOverlay.removeEventListener('change', closeDesktopOutline);
++      };
++    }, [onIsOutlineOpenChange]);
++
      return (
        <>
          <div
-@@ -93,6 +128,9 @@ export const SidebarMenu = forwardRef(
+@@ -93,6 +154,9 @@ export const SidebarMenu = forwardRef(
            {showSidebar ? (
              <button
                type="button"
@@ -235,7 +277,7 @@ index 888dffc9d7b5e74c468a0883e9715eca49da3806..eebcf37dbd4509ef5bfa66ee1e333ba0
                onClick={openSidebar}
                className="rp-sidebar-menu__left"
              >
-@@ -105,6 +143,9 @@ export const SidebarMenu = forwardRef(
+@@ -105,6 +169,9 @@ export const SidebarMenu = forwardRef(
            {showOutline ? (
              <button
                type="button"
@@ -245,7 +287,7 @@ index 888dffc9d7b5e74c468a0883e9715eca49da3806..eebcf37dbd4509ef5bfa66ee1e333ba0
                disabled={outlineDisabled}
                onClick={e => {
                  e.preventDefault();
-@@ -142,7 +183,7 @@ export const SidebarMenu = forwardRef(
+@@ -142,7 +209,7 @@ export const SidebarMenu = forwardRef(
          </div>
          {(isSidebarOpen || isOutlineOpen) &&
            createPortal(
@@ -255,10 +297,20 @@ index 888dffc9d7b5e74c468a0883e9715eca49da3806..eebcf37dbd4509ef5bfa66ee1e333ba0
            )}
        </>
 diff --git a/dist/eject-theme/components/SidebarMenu/useSidebarMenu.tsx b/dist/eject-theme/components/SidebarMenu/useSidebarMenu.tsx
-index 18c11780b9874d115775bd72325493d984b3ed89..daa5389aa1c54589103fd13b962e9b5e4e33a0ad 100644
+index 18c11780b9874d115775bd72325493d984b3ed89..897ae2eae097aa7259dc7b650905a401431be4ac 100644
 --- a/dist/eject-theme/components/SidebarMenu/useSidebarMenu.tsx
 +++ b/dist/eject-theme/components/SidebarMenu/useSidebarMenu.tsx
-@@ -3,6 +3,30 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+@@ -1,8 +1,92 @@
+ import { clearAllBodyScrollLocks, disableBodyScroll } from 'body-scroll-lock';
+-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
++import {
++  type ReactNode,
++  useCallback,
++  useEffect,
++  useMemo,
++  useRef,
++  useState,
++} from 'react';
  import { SidebarMenu } from '.';
  import { useClickOutside } from './useClickOutside';
  
@@ -273,31 +325,111 @@ index 18c11780b9874d115775bd72325493d984b3ed89..daa5389aa1c54589103fd13b962e9b5e
 +  '[tabindex]:not([tabindex="-1"])',
 +].join(',');
 +
++function hasVisibleAreaWithinTree(element: HTMLElement, root: HTMLElement) {
++  if (element.closest('[aria-hidden="true"], [hidden], [inert]')) {
++    return false;
++  }
++
++  const elementBounds = element.getBoundingClientRect();
++  if (elementBounds.width <= 0 || elementBounds.height <= 0) {
++    return false;
++  }
++
++  let visibleLeft = elementBounds.left;
++  let visibleRight = elementBounds.right;
++  let visibleTop = elementBounds.top;
++  let visibleBottom = elementBounds.bottom;
++  let current: HTMLElement | null = element;
++
++  while (current) {
++    const style = window.getComputedStyle(current);
++    if (
++      style.display === 'none' ||
++      style.visibility === 'hidden' ||
++      style.visibility === 'collapse' ||
++      style.opacity === '0' ||
++      style.contentVisibility === 'hidden'
++    ) {
++      return false;
++    }
++
++    if (current !== element) {
++      const clipsX = style.overflowX === 'hidden' || style.overflowX === 'clip';
++      const clipsY = style.overflowY === 'hidden' || style.overflowY === 'clip';
++      if (clipsX || clipsY) {
++        const bounds = current.getBoundingClientRect();
++        if (clipsX) {
++          visibleLeft = Math.max(visibleLeft, bounds.left);
++          visibleRight = Math.min(visibleRight, bounds.right);
++        }
++        if (clipsY) {
++          visibleTop = Math.max(visibleTop, bounds.top);
++          visibleBottom = Math.min(visibleBottom, bounds.bottom);
++        }
++        if (visibleRight - visibleLeft <= 0.5 || visibleBottom - visibleTop <= 0.5) {
++          return false;
++        }
++      }
++    }
++
++    if (current === root) {
++      return true;
++    }
++    current = current.parentElement;
++  }
++
++  return false;
++}
++
 +function getVisibleFocusableElements(root: HTMLElement | null) {
 +  if (!root) {
 +    return [];
 +  }
 +
-+  return Array.from(
-+    root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
-+  ).filter(element => {
-+    const style = window.getComputedStyle(element);
-+    return style.display !== 'none' && style.visibility !== 'hidden';
-+  });
++  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
++    element => hasVisibleAreaWithinTree(element, root),
++  );
 +}
 +
  function useSidebarMenu(beforeOutline?: ReactNode, afterOutline?: ReactNode) {
    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
    const [isOutlineOpen, setIsOutlineOpen] = useState(false);
-@@ -10,6 +34,7 @@ function useSidebarMenu(beforeOutline?: ReactNode, afterOutline?: ReactNode) {
+@@ -10,6 +94,34 @@ function useSidebarMenu(beforeOutline?: ReactNode, afterOutline?: ReactNode) {
    const sidebarMenuRef = useRef<HTMLDivElement>(null);
    const sidebarLayoutRef = useRef<HTMLDivElement>(null);
    const asideLayoutRef = useRef<HTMLDivElement>(null);
-+  const lastOpenPanelRef = useRef<OpenPanel | null>(null);
++  const restoreFocusPanelRef = useRef<OpenPanel | null>(null);
++
++  const changeSidebarOpen = useCallback(
++    (isOpen: boolean, restoreFocus = false) => {
++      if (isOpen) {
++        restoreFocusPanelRef.current = null;
++      } else if (restoreFocus) {
++        restoreFocusPanelRef.current = 'sidebar';
++      } else if (restoreFocusPanelRef.current === 'sidebar') {
++        restoreFocusPanelRef.current = null;
++      }
++      setIsSidebarOpen(isOpen);
++    },
++    [],
++  );
++  const changeOutlineOpen = useCallback(
++    (isOpen: boolean, restoreFocus = false) => {
++      if (isOpen) {
++        restoreFocusPanelRef.current = null;
++      } else if (restoreFocus) {
++        restoreFocusPanelRef.current = 'outline';
++      } else if (restoreFocusPanelRef.current === 'outline') {
++        restoreFocusPanelRef.current = null;
++      }
++      setIsOutlineOpen(isOpen);
++    },
++    [],
++  );
  
    // only sidebar, body scroll lock can not work in iOS safari in aside
    useEffect(() => {
-@@ -24,6 +49,72 @@ function useSidebarMenu(beforeOutline?: ReactNode, afterOutline?: ReactNode) {
+@@ -24,20 +136,102 @@ function useSidebarMenu(beforeOutline?: ReactNode, afterOutline?: ReactNode) {
      };
    }, [isSidebarOpen]);
  
@@ -307,17 +439,17 @@ index 18c11780b9874d115775bd72325493d984b3ed89..daa5389aa1c54589103fd13b962e9b5e
 +      : isOutlineOpen
 +        ? 'outline'
 +        : null;
-+    const lastOpenPanel = lastOpenPanelRef.current;
-+    lastOpenPanelRef.current = openPanel;
 +
 +    if (!openPanel) {
-+      if (!lastOpenPanel) {
++      const restoreFocusPanel = restoreFocusPanelRef.current;
++      if (!restoreFocusPanel) {
 +        return;
 +      }
++      restoreFocusPanelRef.current = null;
 +
 +      const animationFrame = window.requestAnimationFrame(() => {
 +        const triggerSelector =
-+          lastOpenPanel === 'sidebar'
++          restoreFocusPanel === 'sidebar'
 +            ? '.rp-sidebar-menu__left'
 +            : '.rp-sidebar-menu__right';
 +        sidebarMenuRef.current
@@ -338,6 +470,17 @@ index 18c11780b9874d115775bd72325493d984b3ed89..daa5389aa1c54589103fd13b962e9b5e
 +        return;
 +      }
 +
++      const activeElement = document.activeElement;
++      if (
++        !(activeElement instanceof HTMLElement) ||
++        !(
++          sidebarMenuRef.current?.contains(activeElement) ||
++          panel?.contains(activeElement)
++        )
++      ) {
++        return;
++      }
++
 +      const focusableElements = [
 +        ...getVisibleFocusableElements(sidebarMenuRef.current),
 +        ...getVisibleFocusableElements(panel),
@@ -346,9 +489,10 @@ index 18c11780b9874d115775bd72325493d984b3ed89..daa5389aa1c54589103fd13b962e9b5e
 +        return;
 +      }
 +
-+      const activeIndex = focusableElements.indexOf(
-+        document.activeElement as HTMLElement,
-+      );
++      const activeIndex = focusableElements.indexOf(activeElement);
++      if (activeIndex === -1) {
++        return;
++      }
 +      const nextIndex = event.shiftKey
 +        ? activeIndex <= 0
 +          ? focusableElements.length - 1
@@ -368,8 +512,41 @@ index 18c11780b9874d115775bd72325493d984b3ed89..daa5389aa1c54589103fd13b962e9b5e
 +  }, [isOutlineOpen, isSidebarOpen]);
 +
    useClickOutside([sidebarMenuRef, sidebarLayoutRef], () => {
-     setIsSidebarOpen(false);
+-    setIsSidebarOpen(false);
++    if (isSidebarOpen) {
++      changeSidebarOpen(false, true);
++    }
    });
+   useClickOutside([sidebarMenuRef, asideLayoutRef], () => {
+-    setIsOutlineOpen(false);
++    if (isOutlineOpen) {
++      changeOutlineOpen(false, true);
++    }
+   });
+ 
+   const sidebarMenu = useMemo(() => {
+     return (
+       <SidebarMenu
+         isSidebarOpen={isSidebarOpen}
+-        onIsSidebarOpenChange={setIsSidebarOpen}
++        onIsSidebarOpenChange={changeSidebarOpen}
+         isOutlineOpen={isOutlineOpen}
+-        onIsOutlineOpenChange={setIsOutlineOpen}
++        onIsOutlineOpenChange={changeOutlineOpen}
+         ref={sidebarMenuRef}
+         beforeOutline={beforeOutline}
+         afterOutline={afterOutline}
+@@ -46,8 +240,8 @@ function useSidebarMenu(beforeOutline?: ReactNode, afterOutline?: ReactNode) {
+   }, [
+     isOutlineOpen,
+     isSidebarOpen,
+-    setIsOutlineOpen,
+-    setIsSidebarOpen,
++    changeOutlineOpen,
++    changeSidebarOpen,
+     beforeOutline,
+     afterOutline,
+   ]);
 diff --git a/dist/theme/components/Search/SearchPanel.js b/dist/theme/components/Search/SearchPanel.js
 index cdab103aa4a5088f872da628a6b7851da2b33fbc..a4840dfac572a7838fb0cf57c8b9a295d2fbe639 100644
 --- a/dist/theme/components/Search/SearchPanel.js
@@ -499,19 +676,36 @@ index cdab103aa4a5088f872da628a6b7851da2b33fbc..a4840dfac572a7838fb0cf57c8b9a295
                                                      } else clearSearchState();
                                                  }
                                              }
+diff --git a/dist/theme/components/SidebarMenu/index.d.ts b/dist/theme/components/SidebarMenu/index.d.ts
+index 20fb2a5c23a5c398dee095ca16a21db90606ad82..b17777f274f85ec034bce15a1d417aae79294052 100644
+--- a/dist/theme/components/SidebarMenu/index.d.ts
++++ b/dist/theme/components/SidebarMenu/index.d.ts
+@@ -2,9 +2,9 @@ import { type ReactNode } from 'react';
+ import './index.scss';
+ export declare const SidebarMenu: import("react").ForwardRefExoticComponent<{
+     isSidebarOpen: boolean;
+-    onIsSidebarOpenChange: (isOpen: boolean) => void;
++    onIsSidebarOpenChange: (isOpen: boolean, restoreFocus?: boolean) => void;
+     isOutlineOpen: boolean;
+-    onIsOutlineOpenChange: (isOpen: boolean) => void;
++    onIsOutlineOpenChange: (isOpen: boolean, restoreFocus?: boolean) => void;
+     beforeOutline?: ReactNode;
+     afterOutline?: ReactNode;
+ } & import("react").RefAttributes<unknown>>;
 diff --git a/dist/theme/components/SidebarMenu/index.js b/dist/theme/components/SidebarMenu/index.js
-index b6d0da31e7892843b8aeeaf6f6b631394a5e3527..403646c0770351817a1c2691baf5b51a2c3027cd 100644
+index b6d0da31e7892843b8aeeaf6f6b631394a5e3527..19cc0a03d47f686a2de1ade26721d5fbfdd1a4e9 100644
 --- a/dist/theme/components/SidebarMenu/index.js
 +++ b/dist/theme/components/SidebarMenu/index.js
-@@ -4,6 +4,7 @@ import { IconArrowRight, IconMenu, ReadPercent, SvgWrapper, renderInlineMarkdown
+@@ -4,6 +4,8 @@ import { IconArrowRight, IconMenu, ReadPercent, SvgWrapper, renderInlineMarkdown
  import { forwardRef, useEffect, useRef } from "react";
  import { createPortal } from "react-dom";
  import "./index.css";
 +const SIDEBAR_DRAWER_QUERY = '(max-width: 767px)';
++const OUTLINE_OVERLAY_QUERY = '(max-width: 1279px)';
  const SidebarMenu = /*#__PURE__*/ forwardRef(({ isSidebarOpen, onIsSidebarOpenChange, isOutlineOpen, onIsOutlineOpenChange, beforeOutline, afterOutline }, forwardedRef)=>{
      const sidebarMenuRef = useRef(null);
      const t = useI18n();
-@@ -14,19 +15,32 @@ const SidebarMenu = /*#__PURE__*/ forwardRef(({ isSidebarOpen, onIsSidebarOpenCh
+@@ -14,19 +16,32 @@ const SidebarMenu = /*#__PURE__*/ forwardRef(({ isSidebarOpen, onIsSidebarOpenCh
      const { frontmatter: { sidebar: sidebarConfig = true, outline: showOutline = true } } = useFrontmatter();
      const showSidebar = true === sidebarConfig;
      function openSidebar() {
@@ -522,31 +716,35 @@ index b6d0da31e7892843b8aeeaf6f6b631394a5e3527..403646c0770351817a1c2691baf5b51a
 +        }
 +        const next = !isSidebarOpen;
 +        if (next) onIsOutlineOpenChange(false);
-+        onIsSidebarOpenChange(next);
++        onIsSidebarOpenChange(next, !next);
      }
-     function closeSidebar() {
-         onIsSidebarOpenChange(false);
+-    function closeSidebar() {
+-        onIsSidebarOpenChange(false);
++    function closeSidebar(restoreFocus = false) {
++        onIsSidebarOpenChange(false, restoreFocus);
      }
      function openOutline() {
 -        onIsOutlineOpenChange(!isOutlineOpen);
 +        const next = !isOutlineOpen;
 +        if (next) onIsSidebarOpenChange(false);
-+        onIsOutlineOpenChange(next);
++        onIsOutlineOpenChange(next, !next);
      }
-     function closeOutline() {
-         onIsOutlineOpenChange(false);
-     }
-+    function closeOpenPanel() {
-+        closeSidebar();
-+        closeOutline();
+-    function closeOutline() {
+-        onIsOutlineOpenChange(false);
++    function closeOutline(restoreFocus = false) {
++        onIsOutlineOpenChange(false, restoreFocus);
 +    }
++    function closeOpenPanel() {
++        if (isSidebarOpen) closeSidebar(true);
++        if (isOutlineOpen) closeOutline(true);
+     }
      useEffect(()=>{
          closeSidebar();
 +        closeOutline();
      }, [
          pathname
      ]);
-@@ -35,6 +49,19 @@ const SidebarMenu = /*#__PURE__*/ forwardRef(({ isSidebarOpen, onIsSidebarOpenCh
+@@ -35,6 +50,32 @@ const SidebarMenu = /*#__PURE__*/ forwardRef(({ isSidebarOpen, onIsSidebarOpenCh
      }, [
          hash
      ]);
@@ -563,10 +761,23 @@ index b6d0da31e7892843b8aeeaf6f6b631394a5e3527..403646c0770351817a1c2691baf5b51a
 +    }, [
 +        onIsSidebarOpenChange
 +    ]);
++    useEffect(()=>{
++        const outlineOverlay = window.matchMedia(OUTLINE_OVERLAY_QUERY);
++        const closeDesktopOutline = ()=>{
++            if (!outlineOverlay.matches) onIsOutlineOpenChange(false);
++        };
++        closeDesktopOutline();
++        outlineOverlay.addEventListener('change', closeDesktopOutline);
++        return ()=>{
++            outlineOverlay.removeEventListener('change', closeDesktopOutline);
++        };
++    }, [
++        onIsOutlineOpenChange
++    ]);
      return /*#__PURE__*/ jsxs(Fragment, {
          children: [
              /*#__PURE__*/ jsxs("div", {
-@@ -47,6 +74,9 @@ const SidebarMenu = /*#__PURE__*/ forwardRef(({ isSidebarOpen, onIsSidebarOpenCh
+@@ -47,6 +88,9 @@ const SidebarMenu = /*#__PURE__*/ forwardRef(({ isSidebarOpen, onIsSidebarOpenCh
                  children: [
                      showSidebar ? /*#__PURE__*/ jsxs("button", {
                          type: "button",
@@ -576,7 +787,7 @@ index b6d0da31e7892843b8aeeaf6f6b631394a5e3527..403646c0770351817a1c2691baf5b51a
                          onClick: openSidebar,
                          className: "rp-sidebar-menu__left",
                          children: [
-@@ -62,6 +92,9 @@ const SidebarMenu = /*#__PURE__*/ forwardRef(({ isSidebarOpen, onIsSidebarOpenCh
+@@ -62,6 +106,9 @@ const SidebarMenu = /*#__PURE__*/ forwardRef(({ isSidebarOpen, onIsSidebarOpenCh
                      }),
                      showOutline ? /*#__PURE__*/ jsxs("button", {
                          type: "button",
@@ -586,7 +797,7 @@ index b6d0da31e7892843b8aeeaf6f6b631394a5e3527..403646c0770351817a1c2691baf5b51a
                          disabled: outlineDisabled,
                          onClick: (e)=>{
                              e.preventDefault();
-@@ -96,7 +129,7 @@ const SidebarMenu = /*#__PURE__*/ forwardRef(({ isSidebarOpen, onIsSidebarOpenCh
+@@ -96,7 +143,7 @@ const SidebarMenu = /*#__PURE__*/ forwardRef(({ isSidebarOpen, onIsSidebarOpenCh
                  ]
              }),
              (isSidebarOpen || isOutlineOpen) && /*#__PURE__*/ createPortal(/*#__PURE__*/ jsx("div", {
@@ -596,11 +807,14 @@ index b6d0da31e7892843b8aeeaf6f6b631394a5e3527..403646c0770351817a1c2691baf5b51a
              }), document.getElementById('__rspress_modal_container'))
          ]
 diff --git a/dist/theme/components/SidebarMenu/useSidebarMenu.js b/dist/theme/components/SidebarMenu/useSidebarMenu.js
-index bcb5e74ef58571e5bc0c125fa58ae4f6f330a36f..bef417ccb531f392d8cd17542c0b2f3f0bcd2b27 100644
+index bcb5e74ef58571e5bc0c125fa58ae4f6f330a36f..e7d66c696a2bd782cd7e5bf9f0be1b1ef24afa2a 100644
 --- a/dist/theme/components/SidebarMenu/useSidebarMenu.js
 +++ b/dist/theme/components/SidebarMenu/useSidebarMenu.js
-@@ -3,12 +3,28 @@ import { clearAllBodyScrollLocks, disableBodyScroll } from "body-scroll-lock";
- import { useEffect, useMemo, useRef, useState } from "react";
+@@ -1,14 +1,72 @@
+ import { jsx } from "react/jsx-runtime";
+ import { clearAllBodyScrollLocks, disableBodyScroll } from "body-scroll-lock";
+-import { useEffect, useMemo, useRef, useState } from "react";
++import { useCallback, useEffect, useMemo, useRef, useState } from "react";
  import { SidebarMenu } from "./index.js";
  import { useClickOutside } from "./useClickOutside.js";
 +const FOCUSABLE_SELECTOR = [
@@ -611,12 +825,42 @@ index bcb5e74ef58571e5bc0c125fa58ae4f6f330a36f..bef417ccb531f392d8cd17542c0b2f3f
 +    'textarea:not([disabled])',
 +    '[tabindex]:not([tabindex="-1"])'
 +].join(',');
++function hasVisibleAreaWithinTree(element, root) {
++    if (element.closest('[aria-hidden="true"], [hidden], [inert]')) return false;
++    const elementBounds = element.getBoundingClientRect();
++    if (elementBounds.width <= 0 || elementBounds.height <= 0) return false;
++    let visibleLeft = elementBounds.left;
++    let visibleRight = elementBounds.right;
++    let visibleTop = elementBounds.top;
++    let visibleBottom = elementBounds.bottom;
++    let current = element;
++    while(current){
++        const style = window.getComputedStyle(current);
++        if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse' || style.opacity === '0' || style.contentVisibility === 'hidden') return false;
++        if (current !== element) {
++            const clipsX = style.overflowX === 'hidden' || style.overflowX === 'clip';
++            const clipsY = style.overflowY === 'hidden' || style.overflowY === 'clip';
++            if (clipsX || clipsY) {
++                const bounds = current.getBoundingClientRect();
++                if (clipsX) {
++                    visibleLeft = Math.max(visibleLeft, bounds.left);
++                    visibleRight = Math.min(visibleRight, bounds.right);
++                }
++                if (clipsY) {
++                    visibleTop = Math.max(visibleTop, bounds.top);
++                    visibleBottom = Math.min(visibleBottom, bounds.bottom);
++                }
++                if (visibleRight - visibleLeft <= .5 || visibleBottom - visibleTop <= .5) return false;
++            }
++        }
++        if (current === root) return true;
++        current = current.parentElement;
++    }
++    return false;
++}
 +function getVisibleFocusableElements(root) {
 +    if (!root) return [];
-+    return Array.from(root.querySelectorAll(FOCUSABLE_SELECTOR)).filter((element)=>{
-+        const style = window.getComputedStyle(element);
-+        return style.display !== 'none' && style.visibility !== 'hidden';
-+    });
++    return Array.from(root.querySelectorAll(FOCUSABLE_SELECTOR)).filter((element)=>hasVisibleAreaWithinTree(element, root));
 +}
  function useSidebarMenu(beforeOutline, afterOutline) {
      const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -624,22 +868,34 @@ index bcb5e74ef58571e5bc0c125fa58ae4f6f330a36f..bef417ccb531f392d8cd17542c0b2f3f
      const sidebarMenuRef = useRef(null);
      const sidebarLayoutRef = useRef(null);
      const asideLayoutRef = useRef(null);
-+    const lastOpenPanelRef = useRef(null);
++    const restoreFocusPanelRef = useRef(null);
++    const changeSidebarOpen = useCallback((isOpen, restoreFocus = false)=>{
++        if (isOpen) restoreFocusPanelRef.current = null;
++        else if (restoreFocus) restoreFocusPanelRef.current = 'sidebar';
++        else if (restoreFocusPanelRef.current === 'sidebar') restoreFocusPanelRef.current = null;
++        setIsSidebarOpen(isOpen);
++    }, []);
++    const changeOutlineOpen = useCallback((isOpen, restoreFocus = false)=>{
++        if (isOpen) restoreFocusPanelRef.current = null;
++        else if (restoreFocus) restoreFocusPanelRef.current = 'outline';
++        else if (restoreFocusPanelRef.current === 'outline') restoreFocusPanelRef.current = null;
++        setIsOutlineOpen(isOpen);
++    }, []);
      useEffect(()=>{
          sidebarMenuRef.current && isSidebarOpen && disableBodyScroll(sidebarMenuRef.current, {
              reserveScrollBarGap: true,
-@@ -20,6 +36,41 @@ function useSidebarMenu(beforeOutline, afterOutline) {
+@@ -20,31 +78,69 @@ function useSidebarMenu(beforeOutline, afterOutline) {
      }, [
          isSidebarOpen
      ]);
 +    useEffect(()=>{
 +        const openPanel = isSidebarOpen ? 'sidebar' : isOutlineOpen ? 'outline' : null;
-+        const lastOpenPanel = lastOpenPanelRef.current;
-+        lastOpenPanelRef.current = openPanel;
 +        if (!openPanel) {
-+            if (!lastOpenPanel) return;
++            const restoreFocusPanel = restoreFocusPanelRef.current;
++            if (!restoreFocusPanel) return;
++            restoreFocusPanelRef.current = null;
 +            const animationFrame = window.requestAnimationFrame(()=>{
-+                const triggerSelector = lastOpenPanel === 'sidebar' ? '.rp-sidebar-menu__left' : '.rp-sidebar-menu__right';
++                const triggerSelector = restoreFocusPanel === 'sidebar' ? '.rp-sidebar-menu__left' : '.rp-sidebar-menu__right';
 +                sidebarMenuRef.current?.querySelector(triggerSelector)?.focus();
 +            });
 +            return ()=>{
@@ -649,12 +905,15 @@ index bcb5e74ef58571e5bc0c125fa58ae4f6f330a36f..bef417ccb531f392d8cd17542c0b2f3f
 +        const panel = openPanel === 'sidebar' ? sidebarLayoutRef.current : asideLayoutRef.current;
 +        const handleKeyDown = (event)=>{
 +            if (event.key !== 'Tab') return;
++            const activeElement = document.activeElement;
++            if (!(activeElement instanceof HTMLElement) || !(sidebarMenuRef.current?.contains(activeElement) || panel?.contains(activeElement))) return;
 +            const focusableElements = [
 +                ...getVisibleFocusableElements(sidebarMenuRef.current),
 +                ...getVisibleFocusableElements(panel)
 +            ];
 +            if (focusableElements.length === 0) return;
-+            const activeIndex = focusableElements.indexOf(document.activeElement);
++            const activeIndex = focusableElements.indexOf(activeElement);
++            if (activeIndex === -1) return;
 +            const nextIndex = event.shiftKey ? activeIndex <= 0 ? focusableElements.length - 1 : activeIndex - 1 : activeIndex === -1 || activeIndex === focusableElements.length - 1 ? 0 : activeIndex + 1;
 +            event.preventDefault();
 +            focusableElements[nextIndex]?.focus();
@@ -670,6 +929,39 @@ index bcb5e74ef58571e5bc0c125fa58ae4f6f330a36f..bef417ccb531f392d8cd17542c0b2f3f
      useClickOutside([
          sidebarMenuRef,
          sidebarLayoutRef
+     ], ()=>{
+-        setIsSidebarOpen(false);
++        if (isSidebarOpen) changeSidebarOpen(false, true);
+     });
+     useClickOutside([
+         sidebarMenuRef,
+         asideLayoutRef
+     ], ()=>{
+-        setIsOutlineOpen(false);
++        if (isOutlineOpen) changeOutlineOpen(false, true);
+     });
+     const sidebarMenu = useMemo(()=>/*#__PURE__*/ jsx(SidebarMenu, {
+-            isSidebarOpen: isSidebarOpen,
+-            onIsSidebarOpenChange: setIsSidebarOpen,
+-            isOutlineOpen: isOutlineOpen,
+-            onIsOutlineOpenChange: setIsOutlineOpen,
++        isSidebarOpen: isSidebarOpen,
++        onIsSidebarOpenChange: changeSidebarOpen,
++        isOutlineOpen: isOutlineOpen,
++        onIsOutlineOpenChange: changeOutlineOpen,
+             ref: sidebarMenuRef,
+             beforeOutline: beforeOutline,
+             afterOutline: afterOutline
+         }), [
+         isOutlineOpen,
+         isSidebarOpen,
+-        setIsOutlineOpen,
+-        setIsSidebarOpen,
++        changeOutlineOpen,
++        changeSidebarOpen,
+         beforeOutline,
+         afterOutline
+     ]);
 diff --git a/dist/theme/layout/DocLayout/index.css b/dist/theme/layout/DocLayout/index.css
 index 775062ebeddd9ddccb01aadef067bcf0ed24f1dc..abdcb93585467f12e864ae5e0f6c8b89750f3d74 100644
 --- a/dist/theme/layout/DocLayout/index.css

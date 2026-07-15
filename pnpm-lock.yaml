@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  '@rspress/core@2.0.17': f6ea0698f53362b038e33db8da362b8a2498567e38721d6a9c0cd9d249a65ddf
+  '@rspress/core@2.0.17': 3e25292ca1b4b54df003837021e40a4832a09960ed90f42d4b9d3989ebeac692
 
 importers:
 
@@ -19,13 +19,13 @@ importers:
         version: 5.2.8
       '@rspress/core':
         specifier: 2.0.17
-        version: 2.0.17(patch_hash=f6ea0698f53362b038e33db8da362b8a2498567e38721d6a9c0cd9d249a65ddf)(@rspack/core@2.1.3(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.0)(micromark@4.0.0)
+        version: 2.0.17(patch_hash=3e25292ca1b4b54df003837021e40a4832a09960ed90f42d4b9d3989ebeac692)(@rspack/core@2.1.3(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.0)(micromark@4.0.0)
       '@rspress/plugin-llms':
         specifier: 2.0.17
-        version: 2.0.17(@rspress/core@2.0.17(patch_hash=f6ea0698f53362b038e33db8da362b8a2498567e38721d6a9c0cd9d249a65ddf)(@rspack/core@2.1.3(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.0)(micromark@4.0.0))
+        version: 2.0.17(@rspress/core@2.0.17(patch_hash=3e25292ca1b4b54df003837021e40a4832a09960ed90f42d4b9d3989ebeac692)(@rspack/core@2.1.3(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.0)(micromark@4.0.0))
       '@rspress/plugin-sitemap':
         specifier: 2.0.17
-        version: 2.0.17(@rspress/core@2.0.17(patch_hash=f6ea0698f53362b038e33db8da362b8a2498567e38721d6a9c0cd9d249a65ddf)(@rspack/core@2.1.3(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.0)(micromark@4.0.0))
+        version: 2.0.17(@rspress/core@2.0.17(patch_hash=3e25292ca1b4b54df003837021e40a4832a09960ed90f42d4b9d3989ebeac692)(@rspack/core@2.1.3(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.0)(micromark@4.0.0))
       lucide-react:
         specifier: 1.24.0
         version: 1.24.0(react@19.2.7)
@@ -2467,7 +2467,7 @@ snapshots:
     optionalDependencies:
       '@rspack/core': 2.1.3(@swc/helpers@0.5.23)
 
-  '@rspress/core@2.0.17(patch_hash=f6ea0698f53362b038e33db8da362b8a2498567e38721d6a9c0cd9d249a65ddf)(@rspack/core@2.1.3(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.0)(micromark@4.0.0)':
+  '@rspress/core@2.0.17(patch_hash=3e25292ca1b4b54df003837021e40a4832a09960ed90f42d4b9d3989ebeac692)(@rspack/core@2.1.3(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.0)(micromark@4.0.0)':
     dependencies:
       '@mdx-js/mdx': 3.1.1
       '@mdx-js/react': 3.1.1(@types/react@19.2.17)(react@19.2.7)
@@ -2517,9 +2517,9 @@ snapshots:
       - micromark-util-types
       - supports-color
 
-  '@rspress/plugin-llms@2.0.17(@rspress/core@2.0.17(patch_hash=f6ea0698f53362b038e33db8da362b8a2498567e38721d6a9c0cd9d249a65ddf)(@rspack/core@2.1.3(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.0)(micromark@4.0.0))':
+  '@rspress/plugin-llms@2.0.17(@rspress/core@2.0.17(patch_hash=3e25292ca1b4b54df003837021e40a4832a09960ed90f42d4b9d3989ebeac692)(@rspack/core@2.1.3(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.0)(micromark@4.0.0))':
     dependencies:
-      '@rspress/core': 2.0.17(patch_hash=f6ea0698f53362b038e33db8da362b8a2498567e38721d6a9c0cd9d249a65ddf)(@rspack/core@2.1.3(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.0)(micromark@4.0.0)
+      '@rspress/core': 2.0.17(patch_hash=3e25292ca1b4b54df003837021e40a4832a09960ed90f42d4b9d3989ebeac692)(@rspack/core@2.1.3(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.0)(micromark@4.0.0)
       remark-mdx: 3.1.1
       remark-parse: 11.0.0
       remark-stringify: 11.0.0
@@ -2528,9 +2528,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@rspress/plugin-sitemap@2.0.17(@rspress/core@2.0.17(patch_hash=f6ea0698f53362b038e33db8da362b8a2498567e38721d6a9c0cd9d249a65ddf)(@rspack/core@2.1.3(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.0)(micromark@4.0.0))':
+  '@rspress/plugin-sitemap@2.0.17(@rspress/core@2.0.17(patch_hash=3e25292ca1b4b54df003837021e40a4832a09960ed90f42d4b9d3989ebeac692)(@rspack/core@2.1.3(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.0)(micromark@4.0.0))':
     dependencies:
-      '@rspress/core': 2.0.17(patch_hash=f6ea0698f53362b038e33db8da362b8a2498567e38721d6a9c0cd9d249a65ddf)(@rspack/core@2.1.3(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.0)(micromark@4.0.0)
+      '@rspress/core': 2.0.17(patch_hash=3e25292ca1b4b54df003837021e40a4832a09960ed90f42d4b9d3989ebeac692)(@rspack/core@2.1.3(@swc/helpers@0.5.23))(@types/mdast@4.0.4)(@types/react@19.2.17)(micromark-util-types@2.0.0)(micromark@4.0.0)
 
   '@rspress/shared@2.0.17':
     dependencies:

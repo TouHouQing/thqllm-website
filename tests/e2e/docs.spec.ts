@@ -97,26 +97,18 @@ async function expectTabFocusConfinedToPanel(
   panelSelector: string,
   key: 'Shift+Tab' | 'Tab',
 ) {
-  const allowedFocusCount = await page.evaluate(
+  const upperBound = await page.evaluate(
     ({ focusableSelector, panel }) => {
       const roots = [document.querySelector('.rp-sidebar-menu'), document.querySelector(panel)];
-      return roots.flatMap((root) => {
-        if (!(root instanceof HTMLElement)) {
-          return [];
-        }
-        return Array.from(root.querySelectorAll<HTMLElement>(focusableSelector)).filter(
-          (element) => {
-            const style = getComputedStyle(element);
-            return style.display !== 'none' && style.visibility !== 'hidden';
-          },
-        );
-      }).length;
+      return roots.reduce((count, root) => {
+        return count + (root?.querySelectorAll(focusableSelector).length ?? 0);
+      }, 0);
     },
     { focusableSelector: docPanelFocusableSelector, panel: panelSelector },
   );
-  expect(allowedFocusCount).toBeGreaterThan(0);
+  expect(upperBound).toBeGreaterThan(0);
 
-  for (let index = 0; index < allowedFocusCount + 3; index += 1) {
+  for (let index = 0; index < upperBound + 3; index += 1) {
     await page.keyboard.press(key);
     const focusRegion = await page.evaluate((selector) => {
       const activeElement = document.activeElement;
@@ -499,6 +491,71 @@ test('mobile open sidebar confines Tab focus to the panel and its controls', asy
   await expectTabFocusConfinedToPanel(page, '.rp-doc-layout__sidebar', 'Shift+Tab');
 });
 
+for (const key of ['Tab', 'Shift+Tab'] as const) {
+  test(`mobile collapsed sidebar links stay out of ${key} focus and Enter navigation`, async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(!isMobile, 'Mobile documentation controls only');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/docs/fluctgraph/');
+
+    const originalUrl = page.url();
+    const menuButton = page.getByRole('button', { name: '菜单', exact: true });
+    const sidebar = page.getByRole('complementary', {
+      name: '文档导航',
+      includeHidden: true,
+    });
+    const startGroup = sidebar.locator('.rp-sidebar-group').filter({ hasText: '开始' }).first();
+    const startGroupContent = startGroup.locator('xpath=following-sibling::div[1]');
+    const overviewLink = sidebar.getByRole('link', { name: '概览', exact: true });
+    const quickStartLink = sidebar.getByRole('link', { name: '快速开始', exact: true });
+
+    await menuButton.click();
+    await expect(sidebar).toHaveClass(/rp-doc-layout__sidebar--open/);
+    await expect
+      .poll(async () => (await startGroupContent.boundingBox())?.height ?? 0)
+      .toBeGreaterThan(1);
+    await startGroup.click();
+    await expect
+      .poll(async () => (await startGroupContent.boundingBox())?.height ?? Number.POSITIVE_INFINITY)
+      .toBeLessThanOrEqual(1);
+
+    const candidateCount =
+      (await page.evaluate((focusableSelector) => {
+        const roots = [
+          document.querySelector('.rp-sidebar-menu'),
+          document.querySelector('.rp-doc-layout__sidebar'),
+        ];
+        return roots.reduce((count, root) => {
+          return count + (root?.querySelectorAll(focusableSelector).length ?? 0);
+        }, 0);
+      }, docPanelFocusableSelector)) + 3;
+    const hiddenFocusHits: string[] = [];
+    await menuButton.focus();
+
+    for (let index = 0; index < candidateCount; index += 1) {
+      await page.keyboard.press(key);
+      const [overviewFocused, quickStartFocused] = await Promise.all([
+        overviewLink.evaluate((element) => document.activeElement === element),
+        quickStartLink.evaluate((element) => document.activeElement === element),
+      ]);
+      if (overviewFocused) {
+        hiddenFocusHits.push('概览');
+      }
+      if (quickStartFocused) {
+        hiddenFocusHits.push('快速开始');
+        await page.keyboard.press('Enter');
+        break;
+      }
+    }
+
+    expect(hiddenFocusHits).toEqual([]);
+    await expect(page).toHaveURL(originalUrl);
+  });
+}
+
 test('mobile open outline confines Tab focus to the panel and its controls', async ({
   page,
   isMobile,
@@ -519,6 +576,65 @@ test('mobile open outline confines Tab focus to the panel and its controls', asy
   await expectTabFocusConfinedToPanel(page, '.rp-doc-layout__outline', 'Tab');
   await expectTabFocusConfinedToPanel(page, '.rp-doc-layout__outline', 'Shift+Tab');
 });
+
+for (const panel of [
+  {
+    name: 'sidebar',
+    panelSelector: '.rp-doc-layout__sidebar',
+    triggerName: '菜单',
+  },
+  {
+    name: 'outline',
+    panelSelector: '.rp-doc-layout__outline',
+    triggerName: '目录',
+  },
+] as const) {
+  test(`mobile search modal keeps ${panel.name} panel trap suspended until search closes`, async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(!isMobile, 'Mobile documentation controls only');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/docs/fluctgraph/');
+
+    const trigger = page.getByRole('button', { name: panel.triggerName, exact: true });
+    const documentationPanel = page.locator(panel.panelSelector);
+
+    await trigger.click();
+    await expect(documentationPanel).toHaveClass(/--open/);
+    await page.keyboard.press('ControlOrMeta+k');
+
+    const searchInput = page.getByLabel('SearchPanelInput');
+    const searchModal = page.locator('.rp-search-panel__modal');
+    await expect(searchInput).toBeVisible();
+    await expect(searchInput).toBeFocused();
+    await searchInput.fill('Toho Image Studio 概览');
+    await expect(page.locator('.rp-suggest-item--current .rp-suggest-item__link')).toBeVisible();
+
+    await page.keyboard.press('Tab');
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const activeElement = document.activeElement;
+          return Boolean(
+            activeElement instanceof HTMLElement &&
+              activeElement.closest('.rp-search-panel__modal'),
+          );
+        }),
+      )
+      .toBe(true);
+    await page.keyboard.press('Shift+Tab');
+    await expect
+      .poll(() => searchModal.evaluate((element) => element.contains(document.activeElement)))
+      .toBe(true);
+
+    await page.keyboard.press('Escape');
+    await expect(searchInput).toBeHidden();
+    await expect(documentationPanel).toHaveClass(/--open/);
+    await expect(trigger).toBeFocused();
+    await expectTabFocusConfinedToPanel(page, panel.panelSelector, 'Tab');
+  });
+}
 
 test('mobile sidebar mask closes the panel and restores focus to its trigger', async ({
   page,
@@ -570,6 +686,29 @@ test('mobile outline mask closes the panel and restores focus to its trigger', a
   await expect(outlineButton).toBeFocused();
 });
 
+test('tablet outline click outside closes the panel and restores its trigger focus', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(Boolean(isMobile), 'Custom tablet viewport only needs one browser project');
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto('/docs/fluctgraph/');
+
+  const outlineButton = page.getByRole('button', { name: '目录', exact: true });
+  const outline = page.getByRole('complementary', {
+    name: '页内目录',
+    includeHidden: true,
+  });
+
+  await outlineButton.click();
+  await outline.getByRole('link').first().focus();
+  await page.getByRole('heading', { level: 1, name: 'FluctGraph' }).click();
+
+  await expect(outline).not.toHaveClass(/rp-doc-layout__outline--open/);
+  await expect(outlineButton).toHaveAttribute('aria-expanded', 'false');
+  await expect(outlineButton).toBeFocused();
+});
+
 test('outline closes for project, history, and document pathname navigation', async ({
   page,
   isMobile,
@@ -587,12 +726,25 @@ test('outline closes for project, history, and document pathname navigation', as
   const expectOutlineClosedAfterNavigation = async () => {
     await expect(outline).not.toHaveClass(/rp-doc-layout__outline--open/);
     await expect(outline).toHaveCSS('visibility', 'hidden');
+    await expect(outlineButton).toHaveAttribute('aria-expanded', 'false');
+    await expect(outlineButton).not.toBeFocused();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const activeElement = document.activeElement;
+          return !(
+            activeElement instanceof HTMLElement && activeElement.closest('.rp-sidebar-menu')
+          );
+        }),
+      )
+      .toBe(true);
     await expect(page.locator('.rp-sidebar-menu__mask')).toHaveCount(0);
     await expect.poll(bodyOverflow).toBe('');
   };
 
   await outlineButton.click();
   await expect(outline).toHaveClass(/rp-doc-layout__outline--open/);
+  await page.getByRole('link', { name: 'THQ API 文档' }).focus();
   await page.locator('select[aria-label="切换当前项目文档"]').evaluate((element) => {
     const select = element as HTMLSelectElement;
     select.value = 'thq-api';
@@ -603,23 +755,63 @@ test('outline closes for project, history, and document pathname navigation', as
 
   await outlineButton.click();
   await expect(outline).toHaveClass(/rp-doc-layout__outline--open/);
+  await page.getByRole('link', { name: 'FluctGraph 文档' }).focus();
   await page.goBack();
   await expect(page).toHaveURL(/\/docs\/fluctgraph\/$/);
   await expectOutlineClosedAfterNavigation();
 
   await outlineButton.click();
   await expect(outline).toHaveClass(/rp-doc-layout__outline--open/);
+  await page.getByRole('link', { name: 'THQ API 文档' }).focus();
   await page.goForward();
   await expect(page).toHaveURL(/\/docs\/thq-api\/$/);
   await expectOutlineClosedAfterNavigation();
 
   await outlineButton.click();
   await expect(outline).toHaveClass(/rp-doc-layout__outline--open/);
-  await page
-    .getByRole('link', { name: /^下一页(?:\s|$)/ })
-    .evaluate((element) => (element as HTMLElement).click());
+  const nextPageLink = page.getByRole('link', { name: /^下一页(?:\s|$)/ });
+  await nextPageLink.focus();
+  await nextPageLink.evaluate((element) => (element as HTMLElement).click());
   await expect(page).not.toHaveURL(/\/docs\/thq-api\/$/);
   await expectOutlineClosedAfterNavigation();
+});
+
+test('outline overlay closes without focus theft when resizing from 1279px to desktop', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(Boolean(isMobile), 'Custom responsive viewport only needs one browser project');
+  await page.setViewportSize({ width: 1279, height: 768 });
+  await page.goto('/docs/fluctgraph/');
+
+  const outlineButton = page.getByRole('button', {
+    name: '目录',
+    exact: true,
+    includeHidden: true,
+  });
+  const sidebar = page.getByRole('complementary', { name: '文档导航' });
+  const outline = page.getByRole('complementary', {
+    name: '页内目录',
+    includeHidden: true,
+  });
+
+  await outlineButton.click();
+  await expect(outline).toHaveClass(/rp-doc-layout__outline--open/);
+  await expect(outlineButton).toHaveAttribute('aria-expanded', 'true');
+  await outline.getByRole('link').first().focus();
+
+  await page.setViewportSize({ width: 1280, height: 768 });
+  await expect(outline).not.toHaveClass(/rp-doc-layout__outline--open/);
+  await expect(outlineButton).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('.rp-sidebar-menu__mask')).toHaveCount(0);
+  await expect(outlineButton).not.toBeFocused();
+  await expect(outline).toHaveCSS('position', 'sticky');
+
+  const projectLink = page.getByLabel('打开 FluctGraph');
+  const firstSidebarLink = sidebar.getByRole('link').first();
+  await projectLink.focus();
+  await page.keyboard.press('Tab');
+  await expect(firstSidebarLink).toBeFocused();
 });
 
 test('tablet persistent sidebar has no inactive mobile trigger or body lock', async ({
@@ -723,6 +915,15 @@ test('mobile sidebar pathname navigation closes the panel and clears its lock', 
   await expect(page).toHaveURL(/\/docs\/fluctgraph\/quick-start(?:\.html|\/)?$/);
   await expect(sidebar).not.toHaveClass(/rp-doc-layout__sidebar--open/);
   await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+  await expect(menuButton).not.toBeFocused();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const activeElement = document.activeElement;
+        return !(activeElement instanceof HTMLElement && activeElement.closest('.rp-sidebar-menu'));
+      }),
+    )
+    .toBe(true);
   await expect(page.locator('.rp-sidebar-menu__mask')).toHaveCount(0);
   await expect
     .poll(() => page.locator('body').evaluate((element) => element.style.overflow))
@@ -761,6 +962,15 @@ test('mobile hash navigation closes the outline but keeps the sidebar open', asy
   await expect(page).toHaveURL((url) => url.hash.length > 1);
   await expect(outline).not.toHaveClass(/rp-doc-layout__outline--open/);
   await expect(outlineButton).toHaveAttribute('aria-expanded', 'false');
+  await expect(outlineButton).not.toBeFocused();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const activeElement = document.activeElement;
+        return !(activeElement instanceof HTMLElement && activeElement.closest('.rp-sidebar-menu'));
+      }),
+    )
+    .toBe(true);
   await expect(page.locator('.rp-sidebar-menu__mask')).toHaveCount(0);
 
   await menuButton.click();
@@ -924,6 +1134,8 @@ test('mobile documentation panel triggers keep the sidebar and outline mutually 
     await expect(outline).toHaveClass(/rp-doc-layout__outline--open/);
     await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
     await expect(outlineButton).toHaveAttribute('aria-expanded', 'true');
+    await expect(outlineButton).toBeFocused();
+    await expect(menuButton).not.toBeFocused();
     await expect(outline).toBeVisible();
     await expect.poll(visiblePanelCount).toBe(1);
     await expect.poll(bodyOverflow).toBe('');
@@ -952,6 +1164,8 @@ test('mobile documentation panel triggers keep the sidebar and outline mutually 
     await expect(sidebar).toHaveClass(/rp-doc-layout__sidebar--open/);
     await expect(menuButton).toHaveAttribute('aria-expanded', 'true');
     await expect(outlineButton).toHaveAttribute('aria-expanded', 'false');
+    await expect(menuButton).toBeFocused();
+    await expect(outlineButton).not.toBeFocused();
     await expect(sidebar).toBeVisible();
     await expect.poll(visiblePanelCount).toBe(1);
     await expect.poll(bodyOverflow).toBe('hidden');
