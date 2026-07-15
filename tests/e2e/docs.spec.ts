@@ -92,6 +92,17 @@ async function expectItemInsidePanel(panel: Locator, item: Locator) {
     .toBe(true);
 }
 
+async function waitForTwoAnimationFrames(page: Page) {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => resolve());
+        });
+      }),
+  );
+}
+
 async function expectTabFocusConfinedToPanel(
   page: Page,
   panelSelector: string,
@@ -577,6 +588,80 @@ test('mobile open outline confines Tab focus to the panel and its controls', asy
   await expectTabFocusConfinedToPanel(page, '.rp-doc-layout__outline', 'Shift+Tab');
 });
 
+for (const key of ['Tab', 'Shift+Tab'] as const) {
+  test(`short mobile outline scrolls every TOC item into ${key} focus without escaping`, async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(!isMobile, 'Mobile documentation controls only');
+    await page.setViewportSize({ width: 390, height: 320 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/docs/toho-image-studio/quick-start/');
+    await page.addStyleTag({
+      content: 'html { font-size: 200% !important; }',
+    });
+
+    const outlineButton = page.getByRole('button', { name: '目录', exact: true });
+    const outline = page.getByRole('complementary', {
+      name: '页内目录',
+      includeHidden: true,
+    });
+    const tocLinks = outline.locator('.rp-outline__toc a[href*="#"]');
+    await expect(tocLinks).toHaveCount(5);
+    const expectedHrefs = await tocLinks.evaluateAll((links) =>
+      links.map((link) => link.getAttribute('href')),
+    );
+
+    await outlineButton.click();
+    await expect(outline).toHaveClass(/rp-doc-layout__outline--open/);
+    await expect(outline).toBeVisible();
+    await outlineButton.focus();
+
+    const focusedHrefs = new Set<string | null>();
+    for (let index = 0; index < 20; index += 1) {
+      await page.keyboard.press(key);
+      const focusState = await page.evaluate(() => {
+        const activeElement = document.activeElement;
+        if (!(activeElement instanceof HTMLElement)) {
+          return { href: null, region: 'none' };
+        }
+        if (activeElement.closest('.rp-sidebar-menu')) {
+          return { href: null, region: 'menu' };
+        }
+        if (activeElement.closest('.rp-doc-layout__outline')) {
+          return {
+            href:
+              activeElement instanceof HTMLAnchorElement
+                ? activeElement.getAttribute('href')
+                : null,
+            region: 'outline',
+          };
+        }
+        return {
+          href: null,
+          region: `${activeElement.tagName.toLowerCase()}:${
+            activeElement.getAttribute('aria-label') ??
+            activeElement.textContent?.trim().slice(0, 40) ??
+            ''
+          }`,
+        };
+      });
+
+      expect(
+        ['menu', 'outline'],
+        `${key} ${index + 1} escaped the open outline to ${focusState.region}`,
+      ).toContain(focusState.region);
+
+      if (focusState.href && expectedHrefs.includes(focusState.href)) {
+        focusedHrefs.add(focusState.href);
+        await expectItemInsidePanel(outline, page.locator(':focus'));
+      }
+    }
+
+    expect([...focusedHrefs].sort()).toEqual([...expectedHrefs].sort());
+  });
+}
+
 for (const panel of [
   {
     name: 'sidebar',
@@ -636,6 +721,64 @@ for (const panel of [
   });
 }
 
+test('mobile sidebar search pointer keeps focus in the search input', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'Mobile documentation controls only');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/docs/fluctgraph/');
+
+  const menuButton = page.getByRole('button', { name: '菜单', exact: true });
+  const sidebar = page.getByRole('complementary', {
+    name: '文档导航',
+    includeHidden: true,
+  });
+  const searchButton = page.getByRole('button', { name: '搜索', exact: true });
+
+  await menuButton.click();
+  await expect(sidebar).toHaveClass(/rp-doc-layout__sidebar--open/);
+  await expect(searchButton).toBeVisible();
+  await searchButton.click();
+
+  const searchInput = page.getByLabel('SearchPanelInput');
+  await expect(searchInput).toBeVisible();
+  await waitForTwoAnimationFrames(page);
+  await expect(searchInput).toBeFocused();
+  await page.keyboard.type('pointer focus stays');
+  await expect(searchInput).toHaveValue('pointer focus stays');
+  await expect(menuButton).not.toBeFocused();
+});
+
+test('tablet outline search pointer keeps focus in the search input', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(Boolean(isMobile), 'Custom tablet viewport only needs one browser project');
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto('/docs/fluctgraph/');
+
+  const outlineButton = page.getByRole('button', { name: '目录', exact: true });
+  const outline = page.getByRole('complementary', {
+    name: '页内目录',
+    includeHidden: true,
+  });
+  const searchButton = page.getByRole('button', { name: /^搜索(?:\s|$)/ });
+
+  await outlineButton.click();
+  await expect(outline).toHaveClass(/rp-doc-layout__outline--open/);
+  await expect(searchButton).toBeVisible();
+  await searchButton.click();
+
+  const searchInput = page.getByLabel('SearchPanelInput');
+  await expect(searchInput).toBeVisible();
+  await waitForTwoAnimationFrames(page);
+  await expect(searchInput).toBeFocused();
+  await page.keyboard.type('pointer focus stays');
+  await expect(searchInput).toHaveValue('pointer focus stays');
+  await expect(outlineButton).not.toBeFocused();
+});
+
 test('mobile sidebar mask closes the panel and restores focus to its trigger', async ({
   page,
   isMobile,
@@ -686,7 +829,7 @@ test('mobile outline mask closes the panel and restores focus to its trigger', a
   await expect(outlineButton).toBeFocused();
 });
 
-test('tablet outline click outside closes the panel and restores its trigger focus', async ({
+test('tablet outline pointer navigation closes without restoring its trigger focus', async ({
   page,
   isMobile,
 }) => {
@@ -701,12 +844,15 @@ test('tablet outline click outside closes the panel and restores its trigger foc
   });
 
   await outlineButton.click();
-  await outline.getByRole('link').first().focus();
-  await page.getByRole('heading', { level: 1, name: 'FluctGraph' }).click();
+  await expect(outline).toHaveClass(/rp-doc-layout__outline--open/);
+  const nextPageLink = page.getByRole('link', { name: /^下一页(?:\s|$)/ });
+  await nextPageLink.click();
 
+  await expect(page).toHaveURL(/\/docs\/fluctgraph\/quick-start(?:\.html|\/)?$/);
   await expect(outline).not.toHaveClass(/rp-doc-layout__outline--open/);
   await expect(outlineButton).toHaveAttribute('aria-expanded', 'false');
-  await expect(outlineButton).toBeFocused();
+  await waitForTwoAnimationFrames(page);
+  await expect(outlineButton).not.toBeFocused();
 });
 
 test('outline closes for project, history, and document pathname navigation', async ({
