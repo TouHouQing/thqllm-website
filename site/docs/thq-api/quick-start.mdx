@@ -11,11 +11,11 @@ description: 从控制台创建 API Key，并完成第一条 OpenAI 兼容请求
 
 <ProjectLink href="https://sub.thqllm.com/">打开 THQ API 控制台</ProjectLink>
 
-## 2. 注册或登录并确认条款
+## 2. 注册或登录
 
 按页面提示注册或登录。继续前，确认控制台当前显示的服务条款、适用范围和数据处理说明符合你的使用场景。
 
-## 3. 确认额度
+## 3. 确认可用额度
 
 查看账户当前可用额度，并同时确认目标模型的价格、限额和可用状态。不要根据旧文档或他人的账户信息估算本账户可用量。
 
@@ -31,7 +31,7 @@ description: 从控制台创建 API Key，并完成第一条 OpenAI 兼容请求
 
 下面的示例仅适用于控制台标明支持 OpenAI 兼容 Chat Completions 的模型。
 
-## 6. 发起最小 curl 请求
+## 6. 发起最小请求
 
 在可信终端中运行：
 
@@ -46,7 +46,7 @@ curl https://api.thqllm.com/v1/chat/completions \
     "messages": [
       {
         "role": "user",
-        "content": "请回复：THQ API 连接成功"
+        "content": "请只回复：THQ API 连接成功"
       }
     ]
   }'
