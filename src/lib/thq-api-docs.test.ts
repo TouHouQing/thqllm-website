@@ -24,6 +24,28 @@ const docFiles = [
 
 type DocFile = (typeof docFiles)[number];
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function hasExactConfigLine(content: string, expectedLine: string) {
+  const flexibleWhitespace = expectedLine.trim().split(/\s+/).map(escapeRegExp).join('\\s+');
+  const exactLine = new RegExp(`^\\s*${flexibleWhitespace}\\s*$`, 'm');
+
+  return exactLine.test(content);
+}
+
+function hasShellAssignment(content: string, name: string, expectedValue: string) {
+  const escapedName = escapeRegExp(name);
+  const escapedValue = escapeRegExp(expectedValue);
+  const assignment = new RegExp(
+    `^\\s*(?:export\\s+)?${escapedName}\\s*=\\s*(?:"${escapedValue}"|'${escapedValue}'|${escapedValue})\\s*$`,
+    'm',
+  );
+
+  return assignment.test(content);
+}
+
 function isMissingFileError(error: unknown) {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT';
 }
@@ -65,6 +87,47 @@ async function readExistingDocs() {
     (doc): doc is { relativePath: DocFile; content: string } => doc.content !== undefined,
   );
 }
+
+describe('THQ API endpoint contract matchers', () => {
+  it('accepts the exact Codex v1 base URL configuration line', () => {
+    const validCodexConfig = '  base_url   =   "https://api.thqllm.com/v1"  ';
+
+    expect(hasExactConfigLine(validCodexConfig, 'base_url = "https://api.thqllm.com/v1"')).toBe(
+      true,
+    );
+  });
+
+  it('does not accept a Codex v1beta base URL as the v1 configuration', () => {
+    const invalidCodexConfig = 'base_url = "https://api.thqllm.com/v1beta"';
+
+    expect(hasExactConfigLine(invalidCodexConfig, 'base_url = "https://api.thqllm.com/v1"')).toBe(
+      false,
+    );
+  });
+
+  it('accepts quoted or exported shell assignments with the exact value', () => {
+    expect(
+      hasShellAssignment(
+        'export GOOGLE_GEMINI_BASE_URL="https://api.thqllm.com"',
+        'GOOGLE_GEMINI_BASE_URL',
+        'https://api.thqllm.com',
+      ),
+    ).toBe(true);
+    expect(
+      hasShellAssignment("GOOGLE_GENAI_API_VERSION='v1beta'", 'GOOGLE_GENAI_API_VERSION', 'v1beta'),
+    ).toBe(true);
+  });
+
+  it('does not accept a Gemini base host that already includes the API version', () => {
+    expect(
+      hasShellAssignment(
+        'GOOGLE_GEMINI_BASE_URL=https://api.thqllm.com/v1beta',
+        'GOOGLE_GEMINI_BASE_URL',
+        'https://api.thqllm.com',
+      ),
+    ).toBe(false);
+  });
+});
 
 describe('THQ API documentation contract', () => {
   it.each(docFiles)('publishes %s', async (relativePath) => {
@@ -126,7 +189,8 @@ describe('THQ API documentation contract', () => {
       return;
     }
 
-    expect(content).toContain('https://api.thqllm.com/v1');
+    expect(hasExactConfigLine(content, 'base_url = "https://api.thqllm.com/v1"')).toBe(true);
+    expect(hasExactConfigLine(content, 'wire_api = "responses"')).toBe(true);
   });
 
   it('uses the Gemini v1beta endpoint in the Gemini CLI guide', async () => {
@@ -136,6 +200,10 @@ describe('THQ API documentation contract', () => {
       return;
     }
 
+    expect(hasShellAssignment(content, 'GOOGLE_GEMINI_BASE_URL', 'https://api.thqllm.com')).toBe(
+      true,
+    );
+    expect(hasShellAssignment(content, 'GOOGLE_GENAI_API_VERSION', 'v1beta')).toBe(true);
     expect(content).toContain('https://api.thqllm.com/v1beta');
   });
 
