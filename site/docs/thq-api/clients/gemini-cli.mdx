@@ -45,8 +45,17 @@ Gemini CLI 会将主机与版本组合，最终有效根地址为
 不要把 `/v1beta` 直接写进 `GOOGLE_GEMINI_BASE_URL`。否则客户端再次追加
 `GOOGLE_GENAI_API_VERSION` 时，可能形成重复版本路径。
 
-这些变量可以写入项目 `.env`，也可以由用户环境提供。项目 `.env` 只适合受控的本地文件；
-确保它被版本控制忽略。修改后完全退出并重新启动 Gemini CLI 或承载它的 IDE。
+如果改用项目 `.env`，请去掉 shell 的 `export`：
+
+```dotenv
+GEMINI_API_KEY=YOUR_THQ_API_KEY
+GOOGLE_GEMINI_BASE_URL=https://api.thqllm.com
+GOOGLE_GENAI_API_VERSION=v1beta
+GEMINI_MODEL=CONTROL_PANEL_MODEL_ID
+```
+
+终端环境变量和项目 `.env` 任选一种即可。项目 `.env` 只适合受控的本地文件；确保它被版本控制
+忽略。修改后完全退出并重新启动 Gemini CLI 或承载它的 IDE。
 
 ## 选择模型
 
