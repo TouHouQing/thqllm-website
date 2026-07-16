@@ -28,15 +28,44 @@ function hasExactConfigLine(content: string, expectedLine: string) {
   return exactLine.test(content);
 }
 
-function hasShellAssignment(content: string, name: string, expectedValue: string) {
+function normalizeAssignedValue(value: string) {
+  const trimmedValue = value.trim();
+  const quote = trimmedValue[0];
+
+  if (
+    (quote === '"' || quote === "'") &&
+    trimmedValue.length >= 2 &&
+    trimmedValue.at(-1) === quote
+  ) {
+    return trimmedValue.slice(1, -1);
+  }
+
+  return trimmedValue;
+}
+
+function getShellAssignmentValue(content: string, name: string) {
   const escapedName = escapeRegExp(name);
-  const escapedValue = escapeRegExp(expectedValue);
-  const assignment = new RegExp(
-    `^\\s*(?:export\\s+)?${escapedName}\\s*=\\s*(?:"${escapedValue}"|'${escapedValue}'|${escapedValue})\\s*$`,
-    'm',
+  const assignment = content.match(
+    new RegExp(`^\\s*(?:export\\s+)?${escapedName}\\s*=\\s*(.+?)\\s*$`, 'm'),
   );
 
-  return assignment.test(content);
+  return assignment ? normalizeAssignedValue(assignment[1] ?? '') : undefined;
+}
+
+function hasShellAssignment(content: string, name: string, expectedValue: string) {
+  return getShellAssignmentValue(content, name) === expectedValue;
+}
+
+function createsGeminiV1BetaEndpoint(content: string) {
+  const baseUrl = getShellAssignmentValue(content, 'GOOGLE_GEMINI_BASE_URL');
+  const apiVersion = getShellAssignmentValue(content, 'GOOGLE_GENAI_API_VERSION');
+
+  return (
+    baseUrl !== undefined &&
+    apiVersion !== undefined &&
+    `${baseUrl.replace(/\/+$/, '')}/${apiVersion.replace(/^\/+/, '')}` ===
+      'https://api.thqllm.com/v1beta'
+  );
 }
 
 type FencedCodeBlock = {
@@ -109,8 +138,13 @@ const credentialVariableNames = [
   'GEMINI_API_KEY',
 ] as const;
 const credentialVariablePattern = credentialVariableNames.map(escapeRegExp).join('|');
-const allowedCredentialReference =
-  /YOUR_THQ_API_KEY|\$(?:THQ_API_KEY|\{THQ_API_KEY\})|\{env:THQ_API_KEY\}|process\.env\.THQ_API_KEY/;
+const allowedCredentialValues = new Set([
+  'YOUR_THQ_API_KEY',
+  '$THQ_API_KEY',
+  '$' + '{THQ_API_KEY}',
+  '{env:THQ_API_KEY}',
+  'process.env.THQ_API_KEY',
+]);
 
 function findCredentialViolations(content: string): CredentialViolation[] {
   return parseFencedCodeBlocks(content).flatMap((block) =>
@@ -123,7 +157,7 @@ function findCredentialViolations(content: string): CredentialViolation[] {
       );
       const assignment = shellAssignment ?? fieldAssignment;
 
-      if (!assignment || allowedCredentialReference.test(assignment[2] ?? '')) {
+      if (!assignment || allowedCredentialValues.has(normalizeAssignedValue(assignment[2] ?? ''))) {
         return [];
       }
 
@@ -301,6 +335,16 @@ describe('THQ API endpoint contract matchers', () => {
       { line: 6, name: 'apiKey' },
     ]);
   });
+
+  it.each([
+    'THQ_API_KEY=YOUR_THQ_API_KEY-real-secret',
+    'OPENAI_API_KEY=$THQ_API_KEY_SUFFIX',
+    'ANTHROPIC_AUTH_TOKEN=process.env.THQ_API_KEY_BACKUP',
+    'ANTHROPIC_API_KEY=literal # $THQ_API_KEY',
+    '{ "apiKey": "literal", "fallback": "$THQ_API_KEY" }',
+  ])('does not allow a credential merely because it contains an allowed substring: %s', (line) => {
+    expect(findCredentialViolations(['```bash', line, '```'].join('\n'))).toHaveLength(1);
+  });
 });
 
 describe('THQ API documentation contract', () => {
@@ -404,11 +448,11 @@ describe('THQ API documentation contract', () => {
       recommendedConfigMatches(content, 'bash title="推荐配置"', (block) => {
         return (
           hasShellAssignment(block.content, 'GOOGLE_GEMINI_BASE_URL', 'https://api.thqllm.com') &&
-          hasShellAssignment(block.content, 'GOOGLE_GENAI_API_VERSION', 'v1beta')
+          hasShellAssignment(block.content, 'GOOGLE_GENAI_API_VERSION', 'v1beta') &&
+          createsGeminiV1BetaEndpoint(block.content)
         );
       }),
     ).toBe(true);
-    expect(content).toContain('https://api.thqllm.com/v1beta');
   });
 
   it('uses the unversioned API origin in the Claude Code guide', async () => {
