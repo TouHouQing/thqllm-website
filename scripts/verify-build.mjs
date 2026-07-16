@@ -8,6 +8,11 @@ import sharp from 'sharp';
 import { unified } from 'unified';
 import { parseDocument } from 'yaml';
 import { z } from 'zod';
+import {
+  analyzeRgbaContent,
+  meaningfulPixelDeltaThreshold,
+  visibleAlphaThreshold,
+} from './image-content.mjs';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
@@ -71,15 +76,19 @@ const pngCrc32Table = Array.from({ length: 256 }, (_, value) => {
 
   return checksum >>> 0;
 });
-const visibleAlphaThreshold = 16;
 const minimumVisiblePixelRatio = 0.01;
+const minimumAlphaCoverageRatio = 0.01;
 const minimumColorDynamicRange = 16;
 const minimumColorStandardDeviation = 2;
-const meaningfulPixelDeltaThreshold = 16;
 const minimumMeaningfulPixelRatio = 0.01;
 const faviconRenderSize = 128;
 const faviconRenderDensity = 144;
 const faviconInputPixelLimit = 4096 * 4096;
+const maximumFaviconBytes = 64 * 1024;
+const maximumFaviconElements = 512;
+const maximumFaviconAttributes = 2048;
+const maximumFaviconDepth = 32;
+const forbiddenSvgDeclarationPattern = /<!\s*(?:doctype|entity)\b/i;
 const forbiddenTerms = ['智能结界', '结界'].map((text) => ({
   bytes: Buffer.from(text),
   text,
@@ -1375,91 +1384,24 @@ function parsePngStructure(imageBytes, relativePath) {
   return { hasAnimationControl };
 }
 
-function findHistogramMedian(histogram, valueCount) {
-  const medianRank = Math.floor((valueCount - 1) / 2);
-  let valuesSeen = 0;
-
-  for (let value = 0; value < histogram.length; value += 1) {
-    valuesSeen += histogram[value];
-
-    if (valuesSeen > medianRank) {
-      return value;
-    }
-  }
-
-  throw new Error('Could not calculate an RGBA histogram median.');
-}
-
-function analyzeRgbaContent(data, channels) {
-  if (channels !== 4 || data.length % channels !== 0) {
-    throw new Error(`Expected decoded sRGB RGBA pixels; found ${channels} channels.`);
-  }
-
-  const totalPixels = data.length / channels;
-  const histograms = Array.from({ length: channels }, () => new Uint32Array(256));
-  const minima = Array(channels).fill(255);
-  const maxima = Array(channels).fill(0);
-  const means = Array(channels).fill(0);
-  const squaredDifferences = Array(channels).fill(0);
-  let visiblePixels = 0;
-
-  for (
-    let offset = 0, pixelNumber = 1;
-    offset < data.length;
-    offset += channels, pixelNumber += 1
-  ) {
-    const alpha = data[offset + 3];
-
-    if (alpha >= visibleAlphaThreshold) {
-      visiblePixels += 1;
-    }
-
-    for (let channel = 0; channel < channels; channel += 1) {
-      const value = channel === 3 ? alpha : Math.round((data[offset + channel] * alpha) / 255);
-      histograms[channel][value] += 1;
-      minima[channel] = Math.min(minima[channel], value);
-      maxima[channel] = Math.max(maxima[channel], value);
-      const delta = value - means[channel];
-      means[channel] += delta / pixelNumber;
-      squaredDifferences[channel] += delta * (value - means[channel]);
-    }
-  }
-
-  const medians = histograms.map((histogram) => findHistogramMedian(histogram, totalPixels));
-  let meaningfulPixels = 0;
-
-  for (let offset = 0; offset < data.length; offset += channels) {
-    const alpha = data[offset + 3];
-    let maximumDelta = 0;
-
-    for (let channel = 0; channel < channels; channel += 1) {
-      const value = channel === 3 ? alpha : Math.round((data[offset + channel] * alpha) / 255);
-      maximumDelta = Math.max(maximumDelta, Math.abs(value - medians[channel]));
-    }
-
-    if (maximumDelta >= meaningfulPixelDeltaThreshold) {
-      meaningfulPixels += 1;
-    }
-  }
-
-  const channelRanges = maxima.map((maximum, index) => maximum - minima[index]);
-  const channelStandardDeviations = squaredDifferences.map((sum) => Math.sqrt(sum / totalPixels));
-
-  return {
+function verifyRgbaContent(data, channels, description) {
+  const {
+    alphaCoverageRatio,
     channelRanges,
     channelStandardDeviations,
-    meaningfulPixelRatio: meaningfulPixels / totalPixels,
-    visiblePixelRatio: visiblePixels / totalPixels,
-  };
-}
-
-function verifyRgbaContent(data, channels, description) {
-  const { channelRanges, channelStandardDeviations, meaningfulPixelRatio, visiblePixelRatio } =
-    analyzeRgbaContent(data, channels);
+    meaningfulPixelRatio,
+    visiblePixelRatio,
+  } = analyzeRgbaContent(data, channels);
 
   if (visiblePixelRatio < minimumVisiblePixelRatio) {
     throw new Error(
       `${description} has insufficient visible pixels: ${(visiblePixelRatio * 100).toFixed(4)}% is below ${(minimumVisiblePixelRatio * 100).toFixed(2)}% at alpha >= ${visibleAlphaThreshold}.`,
+    );
+  }
+
+  if (alphaCoverageRatio < minimumAlphaCoverageRatio) {
+    throw new Error(
+      `${description} has insufficient weighted alpha coverage: ${(alphaCoverageRatio * 100).toFixed(4)}% is below ${(minimumAlphaCoverageRatio * 100).toFixed(2)}%.`,
     );
   }
 
@@ -1472,7 +1414,7 @@ function verifyRgbaContent(data, channels, description) {
 
   if (maximumRange < minimumColorDynamicRange) {
     throw new Error(
-      `${description} has insufficient visible color variation: max range ${maximumRange.toFixed(2)} (minimum ${minimumColorDynamicRange}), max stddev ${maximumStandardDeviation.toFixed(4)} (minimum ${minimumColorStandardDeviation}).`,
+      `${description} has insufficient premultiplied RGBA variation: max range ${maximumRange.toFixed(2)} (minimum ${minimumColorDynamicRange}), max stddev ${maximumStandardDeviation.toFixed(4)} (minimum ${minimumColorStandardDeviation}).`,
     );
   }
 
@@ -1484,11 +1426,12 @@ function verifyRgbaContent(data, channels, description) {
 
   if (maximumStandardDeviation < minimumColorStandardDeviation) {
     throw new Error(
-      `${description} has insufficient visible color variation: max range ${maximumRange.toFixed(2)} (minimum ${minimumColorDynamicRange}), max stddev ${maximumStandardDeviation.toFixed(4)} (minimum ${minimumColorStandardDeviation}).`,
+      `${description} has insufficient premultiplied RGBA variation: max range ${maximumRange.toFixed(2)} (minimum ${minimumColorDynamicRange}), max stddev ${maximumStandardDeviation.toFixed(4)} (minimum ${minimumColorStandardDeviation}).`,
     );
   }
 
   return {
+    alphaCoverageRatio,
     maximumRange,
     maximumStandardDeviation,
     meaningfulPixelRatio,
@@ -1567,11 +1510,67 @@ async function verifyCriticalImage(imageBytes, expectedImage) {
   verifyRgbaContent(data, info.channels, `Critical image ${expectedImage.relativePath}`);
 }
 
+function readSafeFaviconSvgSource(svgBytes) {
+  if (svgBytes.length > maximumFaviconBytes) {
+    throw new Error(
+      `Critical asset favicon.svg violates SVG safety limits: ${svgBytes.length} bytes exceeds maximum ${maximumFaviconBytes}.`,
+    );
+  }
+
+  const svgSource = svgBytes.toString('utf8');
+
+  if (forbiddenSvgDeclarationPattern.test(svgSource)) {
+    throw new Error(
+      'Critical asset favicon.svg violates SVG safety policy: DOCTYPE and ENTITY declarations are forbidden.',
+    );
+  }
+
+  return svgSource;
+}
+
+function verifyFaviconSvgComplexity(rootElement) {
+  const pendingElements = [{ depth: 1, element: rootElement }];
+  let attributeCount = 0;
+  let elementCount = 0;
+
+  while (pendingElements.length > 0) {
+    const { depth, element } = pendingElements.pop();
+    elementCount += 1;
+    attributeCount += element.attributes.length;
+
+    if (depth > maximumFaviconDepth) {
+      throw new Error(
+        `Critical asset favicon.svg violates SVG safety limits: element depth ${depth} exceeds maximum ${maximumFaviconDepth}.`,
+      );
+    }
+
+    if (elementCount > maximumFaviconElements) {
+      throw new Error(
+        `Critical asset favicon.svg violates SVG safety limits: element count ${elementCount} exceeds maximum ${maximumFaviconElements}.`,
+      );
+    }
+
+    if (attributeCount > maximumFaviconAttributes) {
+      throw new Error(
+        `Critical asset favicon.svg violates SVG safety limits: attribute count ${attributeCount} exceeds maximum ${maximumFaviconAttributes}.`,
+      );
+    }
+
+    for (let index = element.children.length - 1; index >= 0; index -= 1) {
+      pendingElements.push({
+        depth: depth + 1,
+        element: element.children[index],
+      });
+    }
+  }
+}
+
 async function verifyFavicon(svgBytes) {
+  const svgSource = readSafeFaviconSvgSource(svgBytes);
   let svgDom;
 
   try {
-    svgDom = new JSDOM(svgBytes.toString('utf8'), {
+    svgDom = new JSDOM(svgSource, {
       contentType: 'image/svg+xml',
     });
   } catch (error) {
@@ -1590,6 +1589,8 @@ async function verifyFavicon(svgBytes) {
         `Critical asset favicon.svg must use namespace ${svgNamespace}; found ${rootElement.namespaceURI ?? 'none'}.`,
       );
     }
+
+    verifyFaviconSvgComplexity(rootElement);
 
     const viewBoxMatch = (rootElement.getAttribute('viewBox') ?? '').match(svgViewBoxPattern);
     const viewBoxValues = viewBoxMatch?.slice(1).map(Number) ?? [];

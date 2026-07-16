@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const scriptSource = path.join(import.meta.dirname, 'verify-build.mjs');
+const imageContentSource = path.join(import.meta.dirname, 'image-content.mjs');
 const publicAssetsRoot = path.join(repoRoot, 'site/public');
 const verifierTimeoutMs = 20_000;
 const expectedHomepageReferences = {
@@ -695,6 +696,33 @@ async function writeAlphaOnlyPng(relativePath, { height, width }) {
   await writeRawPng(relativePath, { channels: 4, data, height, width });
 }
 
+async function writeLowAlphaCoveragePng(relativePath, { height, width }) {
+  const pixelCount = width * height;
+  const lowAlphaPixels = Math.floor(pixelCount * 0.01);
+  const data = Buffer.alloc(pixelCount * 4);
+
+  for (let pixelIndex = 0; pixelIndex < lowAlphaPixels; pixelIndex += 1) {
+    data[pixelIndex * 4 + 3] = 21;
+  }
+
+  await writeRawPng(relativePath, { channels: 4, data, height, width });
+}
+
+async function writeLowAlphaRandomRgbPng(relativePath, { height, width }) {
+  const pixelCount = width * height;
+  const data = Buffer.alloc(pixelCount * 4);
+
+  for (let pixelIndex = 0; pixelIndex < pixelCount; pixelIndex += 1) {
+    const offset = pixelIndex * 4;
+    data[offset] = pixelIndex % 256;
+    data[offset + 1] = 255 - (pixelIndex % 256);
+    data[offset + 2] = (pixelIndex * 17) % 256;
+    data[offset + 3] = 16;
+  }
+
+  await writeRawPng(relativePath, { channels: 4, data, height, width });
+}
+
 async function writeTransparentRandomRgbPng(relativePath, { height, width }) {
   const pixelCount = width * height;
   const data = Buffer.alloc(pixelCount * 4);
@@ -789,6 +817,7 @@ beforeEach(async () => {
   }
 
   await copyFile(scriptSource, path.join(fixtureRoot, 'scripts/verify-build.mjs'));
+  await copyFile(imageContentSource, path.join(fixtureRoot, 'scripts/image-content.mjs'));
 
   for (const criticalFile of criticalFiles) {
     await copyPublicAsset(criticalFile);
@@ -2142,7 +2171,7 @@ describe('verify-build critical static asset validation', () => {
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain(
-      'Critical image og-cover.png has insufficient visible color variation:',
+      'Critical image og-cover.png has insufficient premultiplied RGBA variation:',
     );
   });
 
@@ -2171,6 +2200,35 @@ describe('verify-build critical static asset validation', () => {
     const result = await runVerifier();
 
     expect(result.status, result.stderr || result.stdout).toBe(0);
+  });
+
+  it('rejects one percent low-alpha coverage despite enough visible pixels', async () => {
+    await writeLowAlphaCoveragePng('og-cover.png', {
+      height: 630,
+      width: 1200,
+    });
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'Critical image og-cover.png has insufficient weighted alpha coverage:',
+    );
+    expect(result.stderr).toContain('0.0824% is below 1.00%');
+  });
+
+  it('rejects high raw RGB variation when alpha 16 makes premultiplied changes too small', async () => {
+    await writeLowAlphaRandomRgbPng('og-cover.png', {
+      height: 630,
+      width: 1200,
+    });
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'Critical image og-cover.png has insufficient meaningful pixel ratio:',
+    );
   });
 
   it('rejects fully transparent random RGB data', async () => {
@@ -2218,6 +2276,99 @@ describe('verify-build critical static asset validation', () => {
     expect(result.stderr).toContain(
       'Critical asset favicon.svg must use namespace http://www.w3.org/2000/svg; found none.',
     );
+  });
+
+  it('rejects mixed-case SVG DOCTYPE and ENTITY declarations before parsing', async () => {
+    await writeFixtureFile(
+      'doc_build/favicon.svg',
+      '<!DoCtYpE svg [<!EnTiTy payload "expanded">]><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#111"/><text>&payload;</text></svg>',
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'Critical asset favicon.svg violates SVG safety policy: DOCTYPE and ENTITY declarations are forbidden.',
+    );
+  });
+
+  it('rejects a small internal entity expansion before parsing', async () => {
+    await writeFixtureFile(
+      'doc_build/favicon.svg',
+      '<!DOCTYPE svg [<!ENTITY seed "THQ"><!ENTITY expanded "&seed;&seed;&seed;&seed;&seed;&seed;&seed;&seed;">]><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#111"/><text>&expanded;&expanded;&expanded;&expanded;</text></svg>',
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'Critical asset favicon.svg violates SVG safety policy: DOCTYPE and ENTITY declarations are forbidden.',
+    );
+  });
+
+  it('rejects an oversized SVG before parsing', async () => {
+    const padding = 'x'.repeat(64 * 1024);
+    await writeFixtureFile(
+      'doc_build/favicon.svg',
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><!--${padding}--><rect width="64" height="64" fill="#111"/><circle cx="32" cy="32" r="12" fill="#fff"/></svg>`,
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('Critical asset favicon.svg violates SVG safety limits:');
+    expect(result.stderr).toContain('bytes exceeds maximum 65536');
+  });
+
+  it('rejects an SVG whose element depth exceeds the safety limit', async () => {
+    const nestedGroups = '<g>'.repeat(32);
+    const closingGroups = '</g>'.repeat(32);
+    await writeFixtureFile(
+      'doc_build/favicon.svg',
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">${nestedGroups}<rect width="64" height="64" fill="#111"/><circle cx="32" cy="32" r="12" fill="#fff"/>${closingGroups}</svg>`,
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'Critical asset favicon.svg violates SVG safety limits: element depth',
+    );
+    expect(result.stderr).toContain('exceeds maximum 32');
+  });
+
+  it('rejects an SVG whose element count exceeds the safety limit', async () => {
+    const fillerElements = '<g/>'.repeat(512);
+    await writeFixtureFile(
+      'doc_build/favicon.svg',
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">${fillerElements}<rect width="64" height="64" fill="#111"/><circle cx="32" cy="32" r="12" fill="#fff"/></svg>`,
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'Critical asset favicon.svg violates SVG safety limits: element count',
+    );
+    expect(result.stderr).toContain('exceeds maximum 512');
+  });
+
+  it('rejects an SVG whose attribute count exceeds the safety limit', async () => {
+    const fillerAttributes = Array.from({ length: 2048 }, (_, index) => ` data-a${index}=""`).join(
+      '',
+    );
+    await writeFixtureFile(
+      'doc_build/favicon.svg',
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"${fillerAttributes}><rect width="64" height="64" fill="#111"/><circle cx="32" cy="32" r="12" fill="#fff"/></svg>`,
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'Critical asset favicon.svg violates SVG safety limits: attribute count',
+    );
+    expect(result.stderr).toContain('exceeds maximum 2048');
   });
 
   it('reports favicon rendering failures with asset context', async () => {
