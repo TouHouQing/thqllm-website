@@ -24,11 +24,37 @@ if (!thqApiProject?.docs) {
 }
 
 const thqApiDocs = thqApiProject.docs;
+const thqApiExpectedHeadings = new Map<string, string>([
+  ['index', 'THQ API'],
+  ['quick-start', '快速开始'],
+  ['clients/index', '客户端接入总览'],
+  ['clients/codex', 'Codex 接入 THQ API'],
+  ['clients/claude-code', 'Claude Code 接入 THQ API'],
+  ['clients/gemini-cli', 'Gemini CLI 接入 THQ API'],
+  ['clients/vscode', 'VS Code 接入 THQ API'],
+  ['clients/opencode', 'OpenCode 接入 THQ API'],
+  ['clients/openclaw', 'OpenClaw 接入 THQ API'],
+  ['clients/cherry-studio', 'Cherry Studio 接入 THQ API'],
+  ['configuration', '手动配置'],
+  ['endpoints', '端点说明'],
+  ['account', '账户、额度与使用记录'],
+  ['faq', '常见问题与错误排查'],
+  ['changelog', '更新记录'],
+]);
 const thqApiDocumentationRoutes = thqApiDocs.sections.flatMap((section) =>
-  section.items.map((item) => ({
-    path: createProjectDocRoutePath(thqApiDocs.basePath, item.slug),
-    sidebarItemText: item.text,
-  })),
+  section.items.map((item) => {
+    const expectedHeading = thqApiExpectedHeadings.get(item.slug);
+
+    if (expectedHeading === undefined) {
+      throw new Error(`Missing THQ API heading expectation for ${item.slug}`);
+    }
+
+    return {
+      expectedHeading,
+      path: createProjectDocRoutePath(thqApiDocs.basePath, item.slug),
+      sidebarItemText: item.text,
+    };
+  }),
 );
 
 if (thqApiDocumentationRoutes.length !== 15) {
@@ -198,7 +224,13 @@ for (const route of thqApiDocumentationRoutes) {
 
     await page.goto(route.path);
 
-    await expect(page.locator('main h1')).toBeVisible();
+    await expect(
+      page.getByRole('heading', {
+        exact: true,
+        level: 1,
+        name: route.expectedHeading,
+      }),
+    ).toBeVisible();
     const sidebarLink = page
       .locator('nav[aria-label="文档导航"]')
       .getByRole('link', { name: route.sidebarItemText, exact: true });
