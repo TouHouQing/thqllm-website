@@ -75,7 +75,11 @@ const visibleAlphaThreshold = 16;
 const minimumVisiblePixelRatio = 0.01;
 const minimumColorDynamicRange = 16;
 const minimumColorStandardDeviation = 2;
-// Current assets are 100% visible with max channel ranges 252-255 and max stddev 65.66-77.89.
+const meaningfulPixelDeltaThreshold = 16;
+const minimumMeaningfulPixelRatio = 0.01;
+const faviconRenderSize = 128;
+const faviconRenderDensity = 144;
+const faviconInputPixelLimit = 4096 * 4096;
 const forbiddenTerms = ['智能结界', '结界'].map((text) => ({
   bytes: Buffer.from(text),
   text,
@@ -1371,6 +1375,127 @@ function parsePngStructure(imageBytes, relativePath) {
   return { hasAnimationControl };
 }
 
+function findHistogramMedian(histogram, valueCount) {
+  const medianRank = Math.floor((valueCount - 1) / 2);
+  let valuesSeen = 0;
+
+  for (let value = 0; value < histogram.length; value += 1) {
+    valuesSeen += histogram[value];
+
+    if (valuesSeen > medianRank) {
+      return value;
+    }
+  }
+
+  throw new Error('Could not calculate an RGBA histogram median.');
+}
+
+function analyzeRgbaContent(data, channels) {
+  if (channels !== 4 || data.length % channels !== 0) {
+    throw new Error(`Expected decoded sRGB RGBA pixels; found ${channels} channels.`);
+  }
+
+  const totalPixels = data.length / channels;
+  const histograms = Array.from({ length: channels }, () => new Uint32Array(256));
+  const minima = Array(channels).fill(255);
+  const maxima = Array(channels).fill(0);
+  const means = Array(channels).fill(0);
+  const squaredDifferences = Array(channels).fill(0);
+  let visiblePixels = 0;
+
+  for (
+    let offset = 0, pixelNumber = 1;
+    offset < data.length;
+    offset += channels, pixelNumber += 1
+  ) {
+    const alpha = data[offset + 3];
+
+    if (alpha >= visibleAlphaThreshold) {
+      visiblePixels += 1;
+    }
+
+    for (let channel = 0; channel < channels; channel += 1) {
+      const value = channel === 3 ? alpha : Math.round((data[offset + channel] * alpha) / 255);
+      histograms[channel][value] += 1;
+      minima[channel] = Math.min(minima[channel], value);
+      maxima[channel] = Math.max(maxima[channel], value);
+      const delta = value - means[channel];
+      means[channel] += delta / pixelNumber;
+      squaredDifferences[channel] += delta * (value - means[channel]);
+    }
+  }
+
+  const medians = histograms.map((histogram) => findHistogramMedian(histogram, totalPixels));
+  let meaningfulPixels = 0;
+
+  for (let offset = 0; offset < data.length; offset += channels) {
+    const alpha = data[offset + 3];
+    let maximumDelta = 0;
+
+    for (let channel = 0; channel < channels; channel += 1) {
+      const value = channel === 3 ? alpha : Math.round((data[offset + channel] * alpha) / 255);
+      maximumDelta = Math.max(maximumDelta, Math.abs(value - medians[channel]));
+    }
+
+    if (maximumDelta >= meaningfulPixelDeltaThreshold) {
+      meaningfulPixels += 1;
+    }
+  }
+
+  const channelRanges = maxima.map((maximum, index) => maximum - minima[index]);
+  const channelStandardDeviations = squaredDifferences.map((sum) => Math.sqrt(sum / totalPixels));
+
+  return {
+    channelRanges,
+    channelStandardDeviations,
+    meaningfulPixelRatio: meaningfulPixels / totalPixels,
+    visiblePixelRatio: visiblePixels / totalPixels,
+  };
+}
+
+function verifyRgbaContent(data, channels, description) {
+  const { channelRanges, channelStandardDeviations, meaningfulPixelRatio, visiblePixelRatio } =
+    analyzeRgbaContent(data, channels);
+
+  if (visiblePixelRatio < minimumVisiblePixelRatio) {
+    throw new Error(
+      `${description} has insufficient visible pixels: ${(visiblePixelRatio * 100).toFixed(4)}% is below ${(minimumVisiblePixelRatio * 100).toFixed(2)}% at alpha >= ${visibleAlphaThreshold}.`,
+    );
+  }
+
+  const maximumRange = Math.max(...channelRanges);
+  const maximumStandardDeviation = Math.max(...channelStandardDeviations);
+
+  if (maximumRange === 0 && maximumStandardDeviation === 0) {
+    throw new Error(`${description} must not be a solid-color or blank image.`);
+  }
+
+  if (maximumRange < minimumColorDynamicRange) {
+    throw new Error(
+      `${description} has insufficient visible color variation: max range ${maximumRange.toFixed(2)} (minimum ${minimumColorDynamicRange}), max stddev ${maximumStandardDeviation.toFixed(4)} (minimum ${minimumColorStandardDeviation}).`,
+    );
+  }
+
+  if (meaningfulPixelRatio < minimumMeaningfulPixelRatio) {
+    throw new Error(
+      `${description} has insufficient meaningful pixel ratio: ${(meaningfulPixelRatio * 100).toFixed(4)}% is below ${(minimumMeaningfulPixelRatio * 100).toFixed(2)}% at premultiplied RGBA delta >= ${meaningfulPixelDeltaThreshold} from the median baseline.`,
+    );
+  }
+
+  if (maximumStandardDeviation < minimumColorStandardDeviation) {
+    throw new Error(
+      `${description} has insufficient visible color variation: max range ${maximumRange.toFixed(2)} (minimum ${minimumColorDynamicRange}), max stddev ${maximumStandardDeviation.toFixed(4)} (minimum ${minimumColorStandardDeviation}).`,
+    );
+  }
+
+  return {
+    maximumRange,
+    maximumStandardDeviation,
+    meaningfulPixelRatio,
+    visiblePixelRatio,
+  };
+}
+
 async function verifyCriticalImage(imageBytes, expectedImage) {
   const hasPngSignature =
     imageBytes.length >= pngSignature.length &&
@@ -1428,6 +1553,8 @@ async function verifyCriticalImage(imageBytes, expectedImage) {
 
   try {
     decodedImage = await sharp(imageBytes, { failOn: 'warning' })
+      .toColourspace('srgb')
+      .ensureAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
   } catch (error) {
@@ -1437,63 +1564,10 @@ async function verifyCriticalImage(imageBytes, expectedImage) {
   }
 
   const { data, info } = decodedImage;
-  const channels = info.channels;
-  const alphaChannel = metadata.hasAlpha ? channels - 1 : -1;
-  const colorChannels = alphaChannel === -1 ? channels : alphaChannel;
-  const totalPixels = data.length / channels;
-  const minima = Array(colorChannels).fill(255);
-  const maxima = Array(colorChannels).fill(0);
-  const means = Array(colorChannels).fill(0);
-  const squaredDifferences = Array(colorChannels).fill(0);
-  let visiblePixels = 0;
-
-  for (let offset = 0; offset < data.length; offset += channels) {
-    if (alphaChannel !== -1 && data[offset + alphaChannel] < visibleAlphaThreshold) {
-      continue;
-    }
-
-    visiblePixels += 1;
-
-    for (let channel = 0; channel < colorChannels; channel += 1) {
-      const value = data[offset + channel];
-      minima[channel] = Math.min(minima[channel], value);
-      maxima[channel] = Math.max(maxima[channel], value);
-      const delta = value - means[channel];
-      means[channel] += delta / visiblePixels;
-      squaredDifferences[channel] += delta * (value - means[channel]);
-    }
-  }
-
-  const visiblePixelRatio = visiblePixels / totalPixels;
-
-  if (visiblePixelRatio < minimumVisiblePixelRatio) {
-    throw new Error(
-      `Critical image ${expectedImage.relativePath} has insufficient visible pixels: ${(visiblePixelRatio * 100).toFixed(4)}% is below ${(minimumVisiblePixelRatio * 100).toFixed(2)}% at alpha >= ${visibleAlphaThreshold}.`,
-    );
-  }
-
-  const channelRanges = maxima.map((maximum, index) => maximum - minima[index]);
-  const channelStandardDeviations = squaredDifferences.map((sum) => Math.sqrt(sum / visiblePixels));
-  const maximumRange = Math.max(...channelRanges);
-  const maximumStandardDeviation = Math.max(...channelStandardDeviations);
-
-  if (maximumRange === 0 && maximumStandardDeviation === 0) {
-    throw new Error(
-      `Critical image ${expectedImage.relativePath} must not be a solid-color or blank image.`,
-    );
-  }
-
-  if (
-    maximumRange < minimumColorDynamicRange ||
-    maximumStandardDeviation < minimumColorStandardDeviation
-  ) {
-    throw new Error(
-      `Critical image ${expectedImage.relativePath} has insufficient visible color variation: max range ${maximumRange.toFixed(2)} (minimum ${minimumColorDynamicRange}), max stddev ${maximumStandardDeviation.toFixed(4)} (minimum ${minimumColorStandardDeviation}).`,
-    );
-  }
+  verifyRgbaContent(data, info.channels, `Critical image ${expectedImage.relativePath}`);
 }
 
-function verifyFavicon(svgBytes) {
+async function verifyFavicon(svgBytes) {
   let svgDom;
 
   try {
@@ -1531,6 +1605,30 @@ function verifyFavicon(svgBytes) {
   } finally {
     svgDom.window.close();
   }
+
+  let renderedImage;
+
+  try {
+    renderedImage = await sharp(svgBytes, {
+      density: faviconRenderDensity,
+      failOn: 'warning',
+      limitInputPixels: faviconInputPixelLimit,
+    })
+      .resize(faviconRenderSize, faviconRenderSize, {
+        background: { alpha: 0, b: 0, g: 0, r: 0 },
+        fit: 'contain',
+      })
+      .toColourspace('srgb')
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+  } catch (error) {
+    throw new Error(
+      `Critical asset favicon.svg cannot be rendered and decoded. ${describeError(error)}`,
+    );
+  }
+
+  verifyRgbaContent(renderedImage.data, renderedImage.info.channels, 'Critical asset favicon.svg');
 }
 
 function parseRobots(robotsBytes) {
@@ -1848,7 +1946,7 @@ for (const expectedImage of criticalImages) {
   await verifyCriticalImage(criticalAssets.get(expectedImage.relativePath), expectedImage);
 }
 
-verifyFavicon(criticalAssets.get('favicon.svg'));
+await verifyFavicon(criticalAssets.get('favicon.svg'));
 verifyRobots(criticalAssets.get('robots.txt'));
 
 const homepagePath = path.join(buildDir, 'index.html');

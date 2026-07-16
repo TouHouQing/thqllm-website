@@ -678,6 +678,37 @@ async function writeNearlySolidPng(relativePath, { height, width }) {
   await writeRawPng(relativePath, { channels: 3, data, height, width });
 }
 
+async function writeSparsePng(relativePath, { changedPixels, height, width }) {
+  const data = Buffer.alloc(width * height * 3);
+  data.fill(255, 0, changedPixels * 3);
+  await writeRawPng(relativePath, { channels: 3, data, height, width });
+}
+
+async function writeAlphaOnlyPng(relativePath, { height, width }) {
+  const pixelCount = width * height;
+  const data = Buffer.alloc(pixelCount * 4);
+
+  for (let pixelIndex = Math.floor(pixelCount / 2); pixelIndex < pixelCount; pixelIndex += 1) {
+    data[pixelIndex * 4 + 3] = 255;
+  }
+
+  await writeRawPng(relativePath, { channels: 4, data, height, width });
+}
+
+async function writeTransparentRandomRgbPng(relativePath, { height, width }) {
+  const pixelCount = width * height;
+  const data = Buffer.alloc(pixelCount * 4);
+
+  for (let pixelIndex = 0; pixelIndex < pixelCount; pixelIndex += 1) {
+    const offset = pixelIndex * 4;
+    data[offset] = pixelIndex % 256;
+    data[offset + 1] = (pixelIndex * 17) % 256;
+    data[offset + 2] = (pixelIndex * 31) % 256;
+  }
+
+  await writeRawPng(relativePath, { channels: 4, data, height, width });
+}
+
 async function writeVariedPng(relativePath, { channels, height, width }) {
   const pixelCount = width * height;
   const data = Buffer.alloc(pixelCount * channels);
@@ -2115,6 +2146,45 @@ describe('verify-build critical static asset validation', () => {
     );
   });
 
+  it('rejects an opaque sparse PNG with only 100 white pixels', async () => {
+    await writeSparsePng('og-cover.png', {
+      changedPixels: 100,
+      height: 630,
+      width: 1200,
+    });
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'Critical image og-cover.png has insufficient meaningful pixel ratio:',
+    );
+    expect(result.stderr).toContain('0.0132% is below 1.00%');
+  });
+
+  it('accepts an alpha-only PNG with enough opacity variation', async () => {
+    await writeAlphaOnlyPng('og-cover.png', {
+      height: 630,
+      width: 1200,
+    });
+
+    const result = await runVerifier();
+
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+  });
+
+  it('rejects fully transparent random RGB data', async () => {
+    await writeTransparentRandomRgbPng('og-cover.png', {
+      height: 630,
+      width: 1200,
+    });
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('Critical image og-cover.png has insufficient visible pixels:');
+  });
+
   it.each([1, 2, 4])('accepts a varied PNG with %s raw channels', async (channels) => {
     await writeVariedPng('og-cover.png', {
       channels,
@@ -2150,6 +2220,72 @@ describe('verify-build critical static asset validation', () => {
     );
   });
 
+  it('reports favicon rendering failures with asset context', async () => {
+    await writeFixtureFile(
+      'doc_build/favicon.svg',
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100000 100000"><rect width="100000" height="100000" fill="#111"/></svg>',
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('Critical asset favicon.svg cannot be rendered and decoded.');
+    expect(result.stderr).toContain('Input image exceeds pixel limit');
+  });
+
+  it('rejects an empty SVG with valid structure', async () => {
+    await writeFixtureFile(
+      'doc_build/favicon.svg',
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"></svg>',
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('Critical asset favicon.svg has insufficient visible pixels:');
+  });
+
+  it('rejects a fully transparent SVG drawing', async () => {
+    await writeFixtureFile(
+      'doc_build/favicon.svg',
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#fff" fill-opacity="0"/></svg>',
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('Critical asset favicon.svg has insufficient visible pixels:');
+  });
+
+  it('rejects a solid-color SVG drawing', async () => {
+    await writeFixtureFile(
+      'doc_build/favicon.svg',
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#111"/></svg>',
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'Critical asset favicon.svg must not be a solid-color or blank image.',
+    );
+  });
+
+  it('rejects a nearly empty SVG drawing', async () => {
+    await writeFixtureFile(
+      'doc_build/favicon.svg',
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect width="128" height="128" fill="#000"/><rect width="1" height="1" fill="#fff"/></svg>',
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'Critical asset favicon.svg has insufficient meaningful pixel ratio:',
+    );
+    expect(result.stderr).toContain('is below 1.00%');
+  });
+
   it('rejects hexadecimal viewBox tokens', async () => {
     await writeFixtureFile(
       'doc_build/favicon.svg',
@@ -2165,7 +2301,7 @@ describe('verify-build critical static asset validation', () => {
   it('accepts decimal and scientific-notation viewBox tokens with mixed ASCII separators', async () => {
     await writeFixtureFile(
       'doc_build/favicon.svg',
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="\t-1e1,\r\n-.5 6.4e1,\t6.4E+1\n"></svg>',
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="\t-1e1,\r\n-.5 6.4e1,\t6.4E+1\n"><rect x="-10" y="-.5" width="64" height="64" fill="#111"/><circle cx="22" cy="31.5" r="12" fill="#fff"/></svg>',
     );
 
     const result = await runVerifier();
