@@ -29,6 +29,10 @@ afterEach(cleanup);
 describe('HomeLayout', () => {
   it('renders HUD counts and project content from the injected registry fixture', () => {
     const projectRegistry = [...projects, pendingProject];
+    const expectedProjectCount = String(projectRegistry.length).padStart(2, '0');
+    const expectedDocsCount = String(
+      projectRegistry.filter((project) => project.docs).length,
+    ).padStart(2, '0');
 
     render(
       <MemoryRouter>
@@ -38,8 +42,10 @@ describe('HomeLayout', () => {
 
     const hud = document.querySelector('dl[aria-label="站点信息"]');
     expect(hud).not.toBeNull();
-    expect(within(hud as HTMLElement).getByText('04 NODES')).toBeInTheDocument();
-    expect(within(hud as HTMLElement).getByText('03 DOCS')).toBeInTheDocument();
+    expect(
+      within(hud as HTMLElement).getByText(`${expectedProjectCount} NODES`),
+    ).toBeInTheDocument();
+    expect(within(hud as HTMLElement).getByText(`${expectedDocsCount} DOCS`)).toBeInTheDocument();
 
     const projectCard = screen
       .getByRole('heading', { level: 3, name: 'Pending Project' })

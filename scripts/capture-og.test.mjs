@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { once } from 'node:events';
+import { EventEmitter, once } from 'node:events';
 import { cp, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { connect } from 'node:net';
@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromium } from '@playwright/test';
 import sharp from 'sharp';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import * as captureOg from './capture-og.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
@@ -17,6 +17,7 @@ const packageManager = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 const sharedBuildRoot = path.join(repoRoot, 'doc_build');
 
 const { validatePreviewReady, waitForPageAssets } = captureOg;
+const signalIt = process.platform === 'win32' ? it.skip : it;
 
 async function startServer(port, handler) {
   const server = createServer(handler);
@@ -62,6 +63,7 @@ function spawnCapture(outputPath, port, extraArgs = [], env = {}) {
     [captureScript, '--output', outputPath, '--port', String(port), ...extraArgs],
     {
       cwd: repoRoot,
+      detached: process.platform !== 'win32',
       env: { ...process.env, CI: '1', TZ: 'UTC', ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
     },
@@ -88,17 +90,75 @@ async function waitForExit(child, timeoutMs = 20_000) {
     return { code: child.exitCode, signal: child.signalCode };
   }
 
-  return Promise.race([
-    once(child, 'exit').then(([code, signal]) => ({ code, signal })),
-    new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Timed out waiting for capture process')), timeoutMs);
-    }),
-  ]);
+  return new Promise((resolve, reject) => {
+    const onExit = (code, signal) => {
+      clearTimeout(timer);
+      resolve({ code, signal });
+    };
+    const timer = setTimeout(() => {
+      child.off('exit', onExit);
+      reject(new Error('Timed out waiting for capture process'));
+    }, timeoutMs);
+    child.once('exit', onExit);
+  });
+}
+
+async function terminateCapture(child) {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+
+  if (process.platform === 'win32') {
+    const taskkill = spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
+      windowsHide: true,
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+    await once(taskkill, 'exit').catch(() => undefined);
+    await waitForExit(child, 2_000).catch(() => undefined);
+    return;
+  }
+
+  const processTarget = -child.pid;
+  try {
+    process.kill(processTarget, 'SIGTERM');
+  } catch {
+    try {
+      child.kill('SIGTERM');
+    } catch {
+      return;
+    }
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  if (child.exitCode === null && child.signalCode === null) {
+    try {
+      process.kill(processTarget, 'SIGTERM');
+    } catch {
+      // The child may have exited between the state check and the signal.
+    }
+  }
+
+  try {
+    await waitForExit(child, 5_000);
+  } catch {
+    try {
+      process.kill(processTarget, 'SIGKILL');
+    } catch {
+      // The child may have exited while the timeout was handled.
+    }
+    await waitForExit(child, 2_000).catch(() => undefined);
+  }
 }
 
 async function runCapture(outputPath, port, extraArgs = []) {
   const processHandle = spawnCapture(outputPath, port, extraArgs);
-  const result = await waitForExit(processHandle.child, 120_000);
+  let result;
+  try {
+    result = await waitForExit(processHandle.child, 120_000);
+  } catch (error) {
+    await terminateCapture(processHandle.child);
+    throw error;
+  }
   if (result.code !== 0) {
     const { stdout, stderr } = processHandle.output;
     throw new Error(`capture-og failed with ${result.code ?? result.signal}\n${stdout}\n${stderr}`);
@@ -109,7 +169,13 @@ async function runCapture(outputPath, port, extraArgs = []) {
 
 async function runCaptureFailure(outputPath, port, extraArgs = [], env = {}) {
   const processHandle = spawnCapture(outputPath, port, extraArgs, env);
-  const result = await waitForExit(processHandle.child, 120_000);
+  let result;
+  try {
+    result = await waitForExit(processHandle.child, 120_000);
+  } catch (error) {
+    await terminateCapture(processHandle.child);
+    throw error;
+  }
   return {
     ...result,
     output: processHandle.output,
@@ -189,6 +255,42 @@ function sha256(bytes) {
 
 describe('capture-og', () => {
   beforeAll(runBuild, 120_000);
+
+  it('clears the waitForExit timeout after a normal child exit', async () => {
+    vi.useFakeTimers();
+    const child = new EventEmitter();
+    child.exitCode = null;
+    child.signalCode = null;
+
+    try {
+      const exitPromise = waitForExit(child, 1_000);
+      child.exitCode = 0;
+      child.emit('exit', 0, null);
+
+      await expect(exitPromise).resolves.toEqual({ code: 0, signal: null });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the operation error first in combined cleanup error metadata', () => {
+    const operationError = new Error(
+      'Required image failed to load or decode: /assets/hero/broken.webp',
+    );
+    const cleanupError = new AggregateError(
+      [new Error('cleanup sentinel')],
+      'Resource cleanup failed: cleanup sentinel',
+    );
+
+    const combinedError = captureOg.combineOperationAndCleanupErrors(operationError, cleanupError);
+
+    expect(combinedError).toBeInstanceOf(AggregateError);
+    expect(combinedError.message.startsWith(operationError.message)).toBe(true);
+    expect(combinedError.message).toContain(cleanupError.message);
+    expect(combinedError.cause).toBe(operationError);
+    expect(combinedError.errors).toEqual([operationError, cleanupError]);
+  });
 
   it('captures deterministic 1200x630 output and uses an independent port per run', async () => {
     const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'thqllm-capture-og-'));
@@ -349,6 +451,90 @@ describe('capture-og', () => {
     }
   });
 
+  it('fails fast instead of traversing candidates for a persistent 404 service', async () => {
+    const tracker = captureOg.createResourceTracker();
+    const session = await captureOg.createIsolatedPreview(sharedBuildRoot, tracker);
+    const fakeServers = [];
+    let attempts = 0;
+    const startedAt = Date.now();
+    const operation = captureOg.startPreviewWithRetry({
+      attemptTimeoutMs: 250,
+      configPath: session.configPath,
+      identity: session.identity,
+      maxCandidates: 4,
+      preferredPort: await getAvailablePort(),
+      previewRoot: session.previewRoot,
+      totalTimeoutMs: 1_500,
+      tracker,
+      afterPortRelease: async ({ port }) => {
+        attempts += 1;
+        fakeServers.push(
+          await startServer(port, (_request, response) => {
+            response.writeHead(404, { 'content-type': 'text/plain' });
+            response.end('persistent broken preview');
+          }),
+        );
+      },
+    });
+
+    try {
+      const outcome = await Promise.race([
+        operation.then(
+          () => ({ status: 'resolved' }),
+          (error) => ({ status: 'rejected', error }),
+        ),
+        new Promise((resolve) => setTimeout(() => resolve({ status: 'pending' }), 2_500)),
+      ]);
+
+      expect(outcome.status).toBe('rejected');
+      expect(Date.now() - startedAt).toBeLessThan(2_500);
+      expect(attempts).toBeLessThanOrEqual(4);
+      expect(outcome.error.message).toMatch(/404|identity|retry/i);
+    } finally {
+      await tracker.cleanup().catch(() => undefined);
+      await operation.catch(() => undefined);
+      await Promise.all(fakeServers.map(({ server }) => closeServer(server)));
+    }
+  }, 10_000);
+
+  it('does not retry a preview that exits from a broken config', async () => {
+    const tracker = captureOg.createResourceTracker();
+    const session = await captureOg.createIsolatedPreview(sharedBuildRoot, tracker);
+    let attempts = 0;
+    const startedAt = Date.now();
+    const operation = captureOg.startPreviewWithRetry({
+      attemptTimeoutMs: 1_500,
+      configPath: path.join(session.previewRoot, 'missing-rspress.config.ts'),
+      identity: session.identity,
+      maxCandidates: 4,
+      preferredPort: 0,
+      previewRoot: session.previewRoot,
+      totalTimeoutMs: 2_000,
+      tracker,
+      afterPortRelease: () => {
+        attempts += 1;
+      },
+    });
+
+    try {
+      const outcome = await Promise.race([
+        operation.then(
+          () => ({ status: 'resolved' }),
+          (error) => ({ status: 'rejected', error }),
+        ),
+        new Promise((resolve) => setTimeout(() => resolve({ status: 'pending' }), 2_500)),
+      ]);
+
+      expect(outcome.status).toBe('rejected');
+      expect(Date.now() - startedAt).toBeLessThan(2_500);
+      expect(attempts).toBe(1);
+      expect(outcome.error.message).toMatch(/preview exited|config/i);
+    } finally {
+      await tracker.cleanup().catch(() => undefined);
+      await operation.catch(() => undefined);
+    }
+  }, 10_000);
+
   it('revalidates preview identity immediately before capture so a replacement is rejected', async () => {
     const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'thqllm-capture-replacement-'));
     const outputPath = path.join(fixtureRoot, 'capture.png');
@@ -420,6 +606,24 @@ describe('capture-og', () => {
     await tracker.cleanup();
 
     expect(closeCount).toBe(1);
+  });
+
+  it('bounds cleanup while a browser launch promise remains unresolved', async () => {
+    const tracker = captureOg.createResourceTracker({
+      cleanupTimeoutMs: 200,
+      resourceTimeoutMs: 100,
+    });
+    tracker.trackBrowser(new Promise(() => {}));
+
+    const outcome = await Promise.race([
+      tracker.cleanup().then(
+        () => 'resolved',
+        (error) => `rejected:${error.message}`,
+      ),
+      new Promise((resolve) => setTimeout(() => resolve('pending'), 500)),
+    ]);
+
+    expect(outcome).toMatch(/^rejected:.*timed out/i);
   });
 
   it('waits for a delayed cleanup registered after cleanup has started', async () => {
@@ -618,46 +822,98 @@ describe('capture-og', () => {
     120_000,
   );
 
-  it.each([
-    'SIGINT',
-    'SIGTERM',
-  ])('idempotently cleans the preview process tree when the parent receives %s', async (signal) => {
-    const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'thqllm-capture-signal-'));
+  it('keeps the broken-image failure primary when cleanup also fails', async () => {
+    const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'thqllm-capture-primary-error-'));
     const outputPath = path.join(fixtureRoot, 'capture.png');
-    const requestedPort = await getAvailablePort();
-    const processHandle = spawnCapture(outputPath, requestedPort, ['--skip-build'], {
-      THQLLM_CAPTURE_TEST_EVENTS: '1',
-    });
-    let actualPort;
+    const previewRoot = path.join(fixtureRoot, 'preview-source');
+    const sentinel = Buffer.from('untouched-primary-error');
+
+    await cp(sharedBuildRoot, previewRoot, { recursive: true });
+    await writeFile(outputPath, sentinel);
+    const indexPath = path.join(previewRoot, 'index.html');
+    const indexHtml = await readFile(indexPath, 'utf8');
+    await writeFile(
+      indexPath,
+      indexHtml.replace(
+        '/assets/hero/thqllm-title-desktop.webp',
+        '/assets/hero/definitely-missing.webp',
+      ),
+      'utf8',
+    );
+
+    const processHandle = spawnCapture(
+      outputPath,
+      await getAvailablePort(),
+      ['--skip-build', '--preview-root', previewRoot],
+      {
+        THQLLM_CAPTURE_TEST_CLEANUP_FAILURE: 'cleanup sentinel',
+        THQLLM_CAPTURE_TEST_EVENTS: '1',
+      },
+    );
 
     try {
-      const readyMatch = await waitForOutput(
-        processHandle,
-        /Preview ready at http:\/\/127\.0\.0\.1:(\d+)/,
-      );
-      actualPort = Number(readyMatch[1]);
-      expect(await isPortListening(actualPort)).toBe(true);
-
-      processHandle.child.kill(signal);
-      processHandle.child.kill(signal);
-      const result = await waitForExit(processHandle.child);
+      const result = await waitForExit(processHandle.child, 120_000);
+      const combinedOutput = `${processHandle.output.stdout}\n${processHandle.output.stderr}`;
+      const operationIndex = combinedOutput.indexOf('Required image failed to load or decode');
+      const cleanupIndex = combinedOutput.indexOf('cleanup sentinel');
 
       expect(result.code).not.toBe(0);
-      await waitForPortState(actualPort, false);
-      const markerFiles = (await readdir(sharedBuildRoot)).filter((name) =>
-        name.startsWith('__thqllm-capture-marker-'),
-      );
-      expect(markerFiles).toEqual([]);
+      expect(await readFile(outputPath)).toEqual(sentinel);
+      expect(operationIndex).toBeGreaterThanOrEqual(0);
+      expect(cleanupIndex).toBeGreaterThan(operationIndex);
     } finally {
-      if (processHandle.child.exitCode === null && processHandle.child.signalCode === null) {
-        processHandle.child.kill('SIGKILL');
-        await waitForExit(processHandle.child).catch(() => undefined);
-      }
+      await terminateCapture(processHandle.child);
       await rm(fixtureRoot, { force: true, recursive: true });
     }
-  }, 60_000);
+  }, 120_000);
 
-  it.each([
+  signalIt.each(['SIGINT', 'SIGTERM'])(
+    'gracefully cleans the preview process tree when the parent receives %s',
+    async (signal) => {
+      const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'thqllm-capture-signal-'));
+      const outputPath = path.join(fixtureRoot, 'capture.png');
+      const requestedPort = await getAvailablePort();
+      const processHandle = spawnCapture(outputPath, requestedPort, ['--skip-build'], {
+        THQLLM_CAPTURE_TEST_EVENTS: '1',
+      });
+      let actualPort;
+
+      try {
+        const readyMatch = await waitForOutput(
+          processHandle,
+          /Preview ready at http:\/\/127\.0\.0\.1:(\d+)/,
+        );
+        actualPort = Number(readyMatch[1]);
+        const previewRootMatch = await waitForOutput(
+          processHandle,
+          /Capture preview root: ([^\r\n]+)/,
+        );
+        const configRootMatch = await waitForOutput(
+          processHandle,
+          /Capture preview config root: ([^\r\n]+)/,
+          5_000,
+        );
+        expect(await isPortListening(actualPort)).toBe(true);
+
+        processHandle.child.kill(signal);
+        const result = await waitForExit(processHandle.child);
+
+        expect(result.code).not.toBe(0);
+        await waitForPortState(actualPort, false);
+        await expect(stat(previewRootMatch[1].trim())).rejects.toMatchObject({ code: 'ENOENT' });
+        await expect(stat(configRootMatch[1].trim())).rejects.toMatchObject({ code: 'ENOENT' });
+      } finally {
+        if (processHandle.child.exitCode === null && processHandle.child.signalCode === null) {
+          processHandle.child.kill('SIGKILL');
+          await waitForExit(processHandle.child).catch(() => undefined);
+        }
+        await rm(fixtureRoot, { force: true, recursive: true });
+      }
+    },
+    60_000,
+  );
+
+  signalIt.each([
     ['SIGINT', 130],
     ['SIGTERM', 143],
   ])(
@@ -685,7 +941,6 @@ describe('capture-og', () => {
         const isolatedRoot = rootMatch[1].trim();
 
         processHandle.child.kill(signal);
-        processHandle.child.kill(signal);
         const result = await waitForExit(processHandle.child, 30_000);
 
         expect(result.code).toBe(expectedExitCode);
@@ -701,5 +956,57 @@ describe('capture-og', () => {
       }
     },
     60_000,
+  );
+
+  signalIt(
+    'force exits on a second signal while cleanup is blocked',
+    async () => {
+      const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'thqllm-capture-force-signal-'));
+      const outputPath = path.join(fixtureRoot, 'capture.png');
+      const requestedPort = await getAvailablePort();
+      const processHandle = spawnCapture(outputPath, requestedPort, ['--skip-build'], {
+        THQLLM_CAPTURE_TEST_EVENTS: '1',
+        THQLLM_CAPTURE_TEST_HANG_CLEANUP: '1',
+      });
+      let actualPort;
+
+      try {
+        const readyMatch = await waitForOutput(
+          processHandle,
+          /Preview ready at http:\/\/127\.0\.0\.1:(\d+)/,
+          5_000,
+        );
+        actualPort = Number(readyMatch[1]);
+        const previewRootMatch = await waitForOutput(
+          processHandle,
+          /Capture preview root: ([^\r\n]+)/,
+          1_000,
+        );
+        const configRootMatch = await waitForOutput(
+          processHandle,
+          /Capture preview config root: ([^\r\n]+)/,
+          1_000,
+        );
+        await waitForOutput(processHandle, /Capture test cleanup pending/, 1_000);
+
+        processHandle.child.kill('SIGINT');
+        await waitForOutput(processHandle, /Capture signal cleanup started: SIGINT/, 1_000);
+        expect(await isPortListening(actualPort)).toBe(true);
+
+        const forcedAt = Date.now();
+        processHandle.child.kill('SIGINT');
+        const result = await waitForExit(processHandle.child, 2_000);
+
+        expect(result.code).toBe(130);
+        expect(Date.now() - forcedAt).toBeLessThan(2_000);
+        await waitForPortState(actualPort, false, 2_000);
+        await expect(stat(previewRootMatch[1].trim())).rejects.toMatchObject({ code: 'ENOENT' });
+        await expect(stat(configRootMatch[1].trim())).rejects.toMatchObject({ code: 'ENOENT' });
+      } finally {
+        await terminateCapture(processHandle.child);
+        await rm(fixtureRoot, { force: true, recursive: true });
+      }
+    },
+    15_000,
   );
 });

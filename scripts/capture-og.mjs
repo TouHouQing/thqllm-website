@@ -16,9 +16,16 @@ const defaultPort = 4317;
 const previewHost = '127.0.0.1';
 const captureWidth = 1200;
 const captureHeight = 630;
-const serverTimeoutMs = 60_000;
 const fetchTimeoutMs = 2_000;
 const shutdownTimeoutMs = 5_000;
+const previewAttemptTimeoutMs = 6_000;
+const previewTotalTimeoutMs = 18_000;
+const previewCandidateLimit = 4;
+const cleanupResourceTimeoutMs = 5_000;
+const cleanupTotalTimeoutMs = 15_000;
+const forceCleanupResourceTimeoutMs = 500;
+const forceCleanupTotalTimeoutMs = 1_250;
+const signalForceExitTimeoutMs = 1_500;
 const markerPrefix = '__thqllm-capture-marker-';
 const previewRootPrefix = 'thqllm-capture-preview-';
 const previewConfigPrefix = 'thqllm-capture-config-';
@@ -35,9 +42,57 @@ const requiredFonts = [
   },
 ];
 
+class PreviewRetryableError extends Error {}
+
+class PreviewPortConflictError extends PreviewRetryableError {}
+
+class PreviewIdentityError extends PreviewRetryableError {}
+
 class PreviewNotReadyError extends Error {}
 
-class PreviewIdentityError extends Error {}
+class PreviewStartupError extends Error {}
+
+class PreviewRetryLimitError extends Error {}
+
+function normalizeError(error) {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+function combineOperationAndCleanupErrors(operationError, cleanupError) {
+  const primaryError = normalizeError(operationError);
+  const secondaryError = normalizeError(cleanupError);
+  return new AggregateError(
+    [primaryError, secondaryError],
+    `${primaryError.message}\nCleanup also failed: ${secondaryError.message}`,
+    { cause: primaryError },
+  );
+}
+
+function withTimeout(promise, timeoutMs, label) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new Error(`Invalid timeout for ${label}: ${timeoutMs}`);
+  }
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      callback(value);
+    };
+    const timer = setTimeout(() => {
+      finish(reject, new Error(`${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    Promise.resolve(promise).then(
+      (value) => finish(resolve, value),
+      (error) => finish(reject, error),
+    );
+  });
+}
 
 function printUsage() {
   console.log(`Usage: pnpm capture:og [options]
@@ -247,7 +302,39 @@ function stopProcessTree(child) {
   return stopPromise;
 }
 
-function createResourceTracker() {
+async function forceStopProcessTree(child, timeoutMs = forceCleanupResourceTimeoutMs) {
+  if (!child || child.pid === undefined || child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+
+  if (process.platform === 'win32') {
+    try {
+      await runTaskkill(child.pid);
+    } catch (error) {
+      if (child.exitCode === null && child.signalCode === null) {
+        throw error;
+      }
+    }
+  } else {
+    try {
+      process.kill(-child.pid, 'SIGKILL');
+    } catch {
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill('SIGKILL');
+      }
+    }
+  }
+
+  if (!(await waitForExit(child, timeoutMs))) {
+    throw new Error(`Process tree ${child.pid} did not exit after forced termination`);
+  }
+}
+
+function createResourceTracker(options = {}) {
+  const resourceTimeoutMs = options.resourceTimeoutMs ?? cleanupResourceTimeoutMs;
+  const totalTimeoutMs = options.cleanupTimeoutMs ?? cleanupTotalTimeoutMs;
+  const forcedResourceTimeoutMs = options.forceResourceTimeoutMs ?? forceCleanupResourceTimeoutMs;
+  const forcedTotalTimeoutMs = options.forceCleanupTimeoutMs ?? forceCleanupTotalTimeoutMs;
   const cleanupPhasePriority = {
     filesystem: 1,
     runtime: 2,
@@ -257,6 +344,14 @@ function createResourceTracker() {
   let cleanupStarted = false;
   let cleanupFinished = false;
   let cleanupPromise;
+  let forceCleanupPromise;
+
+  function resourcesInCleanupOrder(candidates) {
+    return candidates.toSorted((left, right) => {
+      const phaseDifference = cleanupPhasePriority[right.phase] - cleanupPhasePriority[left.phase];
+      return phaseDifference || right.sequence - left.sequence;
+    });
+  }
 
   function runResource(resource) {
     if (resource.promise) {
@@ -264,18 +359,20 @@ function createResourceTracker() {
     }
 
     resource.state = 'running';
-    resource.promise = Promise.resolve()
-      .then(resource.cleanup)
-      .then(
-        () => {
-          resource.state = 'completed';
-        },
-        (error) => {
-          resource.error = error;
-          resource.state = 'failed';
-          throw error;
-        },
-      );
+    resource.promise = withTimeout(
+      Promise.resolve().then(resource.cleanup),
+      resource.timeoutMs,
+      `${resource.label} cleanup`,
+    ).then(
+      () => {
+        resource.state = 'completed';
+      },
+      (error) => {
+        resource.error = error;
+        resource.state = 'failed';
+        throw error;
+      },
+    );
     return resource.promise;
   }
 
@@ -286,12 +383,16 @@ function createResourceTracker() {
 
     const resource = {
       cleanup,
+      blocksFilesystemOnFailure: options.blocksFilesystemOnFailure ?? false,
       error: undefined,
+      forceCleanup: options.forceCleanup,
+      forceTimeoutMs: options.forceTimeoutMs ?? forcedResourceTimeoutMs,
       label: options.label ?? `resource ${registrationVersion + 1}`,
       phase: options.phase ?? 'runtime',
       promise: undefined,
       sequence: registrationVersion,
       state: 'pending',
+      timeoutMs: options.timeoutMs ?? resourceTimeoutMs,
     };
     if (!(resource.phase in cleanupPhasePriority)) {
       throw new Error(`Unknown cleanup phase: ${resource.phase}`);
@@ -303,18 +404,15 @@ function createResourceTracker() {
   }
 
   function nextPendingResource() {
-    return resources
-      .filter((resource) => resource.state === 'pending')
-      .toSorted((left, right) => {
-        const phaseDifference =
-          cleanupPhasePriority[right.phase] - cleanupPhasePriority[left.phase];
-        return phaseDifference || right.sequence - left.sequence;
-      })[0];
+    return resourcesInCleanupOrder(resources.filter((resource) => resource.state === 'pending'))[0];
   }
 
-  function pendingRuntimeFailure() {
+  function pendingFilesystemBlockerFailure() {
     return resources.some(
-      (resource) => resource.phase === 'runtime' && resource.state === 'failed',
+      (resource) =>
+        resource.phase === 'runtime' &&
+        resource.blocksFilesystemOnFailure &&
+        resource.state === 'failed',
     );
   }
 
@@ -349,7 +447,7 @@ function createResourceTracker() {
       const pending = nextPendingResource();
       if (pending) {
         quietPasses = 0;
-        if (pending.phase === 'filesystem' && pendingRuntimeFailure()) {
+        if (pending.phase === 'filesystem' && pendingFilesystemBlockerFailure()) {
           skipUnsafeFilesystemCleanup();
           continue;
         }
@@ -392,12 +490,77 @@ function createResourceTracker() {
     }
   }
 
+  async function forceDrain() {
+    const failures = [];
+    let runtimeBlockerFailed = false;
+
+    for (const resource of resourcesInCleanupOrder(
+      resources.filter(
+        (resource) => resource.state !== 'completed' && typeof resource.forceCleanup === 'function',
+      ),
+    )) {
+      if (resource.phase === 'filesystem' && runtimeBlockerFailed) {
+        failures.push(
+          new Error(`${resource.label} was not force-cleaned because process termination failed`),
+        );
+        continue;
+      }
+
+      try {
+        await withTimeout(
+          Promise.resolve().then(resource.forceCleanup),
+          resource.forceTimeoutMs,
+          `${resource.label} forced cleanup`,
+        );
+      } catch (error) {
+        const failure = normalizeError(error);
+        failures.push(new Error(`${resource.label}: ${failure.message}`, { cause: failure }));
+        if (resource.phase === 'runtime' && resource.blocksFilesystemOnFailure) {
+          runtimeBlockerFailed = true;
+        }
+      }
+    }
+
+    if (failures.length > 0) {
+      throw new AggregateError(
+        failures,
+        `Forced resource cleanup failed: ${failures.map((error) => error.message).join('; ')}`,
+      );
+    }
+  }
+
+  function forceCleanup() {
+    forceCleanupPromise ??= withTimeout(
+      forceDrain(),
+      forcedTotalTimeoutMs,
+      'Forced resource cleanup',
+    );
+    return forceCleanupPromise;
+  }
+
+  function cleanup() {
+    cleanupPromise ??= withTimeout(drain(), totalTimeoutMs, 'Resource cleanup').catch(
+      async (cleanupError) => {
+        try {
+          await forceCleanup();
+        } catch (forceError) {
+          throw combineOperationAndCleanupErrors(cleanupError, forceError);
+        }
+        throw cleanupError;
+      },
+    );
+    return cleanupPromise;
+  }
+
   return {
     addCleanup,
     addChild(child) {
       addCleanup(() => stopProcessTree(child), {
+        blocksFilesystemOnFailure: true,
+        forceCleanup: () => forceStopProcessTree(child),
         label: `process tree ${child.pid ?? 'unknown'}`,
         phase: 'runtime',
+        timeoutMs: shutdownTimeoutMs * 2 + 1_000,
       });
     },
     assertActive() {
@@ -406,26 +569,34 @@ function createResourceTracker() {
       }
     },
     trackBrowser(browserPromise) {
+      const browserStepTimeoutMs = resourceTimeoutMs;
       addCleanup(
         async () => {
-          const browser = await browserPromise.catch(() => undefined);
-          await browser?.close();
+          const browser = await withTimeout(
+            browserPromise.catch(() => undefined),
+            browserStepTimeoutMs,
+            'Chromium browser launch',
+          );
+          if (browser) {
+            await withTimeout(browser.close(), browserStepTimeoutMs, 'Chromium browser close');
+          }
         },
         {
           label: 'Chromium browser',
           phase: 'runtime',
+          timeoutMs: browserStepTimeoutMs * 2 + 100,
         },
       );
     },
-    cleanup() {
-      cleanupPromise ??= drain();
-      return cleanupPromise;
-    },
+    cleanup,
+    forceCleanup,
   };
 }
 
 function installSignalHandlers(tracker) {
   let signalCleanup;
+  let forceExitStarted = false;
+  let initialExitCode;
   const signalConfigs = [
     ['SIGINT', 130],
     ['SIGTERM', 143],
@@ -435,13 +606,33 @@ function installSignalHandlers(tracker) {
   for (const [signal, exitCode] of signalConfigs) {
     const handler = () => {
       if (signalCleanup) {
+        if (forceExitStarted) {
+          process.exit(initialExitCode ?? exitCode);
+        }
+
+        forceExitStarted = true;
+        emitTestEvent(`signal cleanup forced: ${signal}`);
+        const forceExitTimer = setTimeout(() => {
+          process.exit(initialExitCode ?? exitCode);
+        }, signalForceExitTimeoutMs);
+        void tracker
+          .forceCleanup()
+          .catch((error) => {
+            console.error(normalizeError(error).message);
+          })
+          .finally(() => {
+            clearTimeout(forceExitTimer);
+            process.exit(initialExitCode ?? exitCode);
+          });
         return;
       }
 
+      initialExitCode = exitCode;
+      emitTestEvent(`signal cleanup started: ${signal}`);
       signalCleanup = tracker
         .cleanup()
         .catch((error) => {
-          console.error(error instanceof Error ? error.message : error);
+          console.error(normalizeError(error).message);
         })
         .finally(() => {
           process.exit(exitCode);
@@ -525,12 +716,12 @@ function closeServer(server) {
 
 function previewPortCandidates(preferredPort) {
   if (preferredPort === 0) {
-    return Array.from({ length: 8 }, () => 0);
+    return [0, 0, 0];
   }
 
   return [
     preferredPort,
-    ...Array.from({ length: 32 }, (_, index) => preferredPort + index + 1).filter(
+    ...Array.from({ length: 2 }, (_, index) => preferredPort + index + 1).filter(
       (port) => port <= 65_535,
     ),
     0,
@@ -540,6 +731,7 @@ function previewPortCandidates(preferredPort) {
 async function reservePort(candidate, tracker) {
   const server = createServer();
   tracker.addCleanup(() => closeServer(server), {
+    forceCleanup: () => closeServer(server),
     label: `preview port ${candidate}`,
     phase: 'runtime',
   });
@@ -566,22 +758,6 @@ async function reservePort(candidate, tracker) {
     await closeServer(server);
     throw error;
   }
-}
-
-async function reserveAvailablePort(preferredPort, tracker, startIndex = 0) {
-  const candidates = previewPortCandidates(preferredPort);
-
-  for (let index = startIndex; index < candidates.length; index += 1) {
-    try {
-      return await reservePort(candidates[index], tracker);
-    } catch (error) {
-      if (error?.code !== 'EADDRINUSE') {
-        throw error;
-      }
-    }
-  }
-
-  throw new Error(`No available preview port near ${preferredPort}`);
 }
 
 function isPathInside(parentPath, childPath) {
@@ -626,6 +802,7 @@ function stagePreviewMarker(previewRoot, tracker) {
       await rm(markerFilePath, { force: true });
     },
     {
+      forceCleanup: () => rm(markerFilePath, { force: true }),
       label: `preview marker ${markerFilePath}`,
       phase: 'filesystem',
     },
@@ -654,6 +831,7 @@ async function createIsolatedPreview(sourceRoot, tracker) {
       await rm(previewRoot, { force: true, recursive: true });
     },
     {
+      forceCleanup: () => rm(previewRoot, { force: true, recursive: true }),
       label: `preview root ${previewRoot}`,
       phase: 'filesystem',
     },
@@ -667,6 +845,7 @@ async function createIsolatedPreview(sourceRoot, tracker) {
   tracker.assertActive();
 
   const configRoot = mkdtempSync(path.join(tmpdir(), previewConfigPrefix));
+  emitTestEvent(`preview config root: ${configRoot}`);
   let configWritePromise = Promise.resolve();
   tracker.addCleanup(
     async () => {
@@ -674,6 +853,7 @@ async function createIsolatedPreview(sourceRoot, tracker) {
       await rm(configRoot, { force: true, recursive: true });
     },
     {
+      forceCleanup: () => rm(configRoot, { force: true, recursive: true }),
       label: `preview config root ${configRoot}`,
       phase: 'filesystem',
     },
@@ -715,7 +895,7 @@ async function validatePreviewReady(previewUrl, identity) {
   }
 
   if (!rootResponse.ok) {
-    throw new PreviewNotReadyError(`Preview root returned HTTP ${rootResponse.status}`);
+    throw new PreviewIdentityError(`Preview root returned HTTP ${rootResponse.status}`);
   }
 
   const contentType = rootResponse.headers.get('content-type') ?? '';
@@ -743,52 +923,99 @@ async function validatePreviewReady(previewUrl, identity) {
   }
 }
 
-async function waitForPreview(preview, previewUrl, identity) {
+function previewOutputShowsPortFallback(output, requestedPort) {
+  return (
+    new RegExp(`port\\s+${requestedPort}\\s+is\\s+in\\s+use`, 'i').test(output) ||
+    /trying another (?:available )?port/i.test(output)
+  );
+}
+
+async function waitForPreview(preview, previewUrl, identity, options) {
   const output = { value: '' };
-  preview.stdout?.on('data', (chunk) => appendOutput(output, chunk));
-  preview.stderr?.on('data', (chunk) => appendOutput(output, chunk));
-  const deadline = Date.now() + serverTimeoutMs;
+  const appendPreviewOutput = (chunk) => appendOutput(output, chunk);
+  preview.stdout?.on('data', appendPreviewOutput);
+  preview.stderr?.on('data', appendPreviewOutput);
 
-  while (Date.now() < deadline) {
-    if (preview.exitCode !== null || preview.signalCode !== null) {
-      throw new Error(`Preview exited before becoming ready\n${output.value}`);
-    }
+  try {
+    while (Date.now() < options.deadline) {
+      if (preview.exitCode !== null || preview.signalCode !== null) {
+        throw new PreviewStartupError(`Preview exited before becoming ready\n${output.value}`);
+      }
 
-    try {
-      await validatePreviewReady(previewUrl, identity);
-      return;
-    } catch (error) {
-      if (!(error instanceof PreviewNotReadyError)) {
-        throw error;
+      if (previewOutputShowsPortFallback(output.value, options.requestedPort)) {
+        throw new PreviewPortConflictError(
+          `Rspress selected another port instead of ${options.requestedPort}\n${output.value}`,
+        );
+      }
+
+      try {
+        await validatePreviewReady(previewUrl, identity);
+        return;
+      } catch (error) {
+        if (!(error instanceof PreviewNotReadyError)) {
+          throw error;
+        }
+      }
+
+      const remainingMs = options.deadline - Date.now();
+      if (remainingMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, Math.min(100, remainingMs)));
       }
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
+    if (previewOutputShowsPortFallback(output.value, options.requestedPort)) {
+      throw new PreviewPortConflictError(
+        `Rspress selected another port instead of ${options.requestedPort}\n${output.value}`,
+      );
+    }
 
-  throw new Error(`Preview did not become ready at ${previewUrl}\n${output.value}`);
+    throw new PreviewStartupError(
+      `Preview did not become ready at ${previewUrl} within the attempt timeout\n${output.value}`,
+    );
+  } finally {
+    preview.stdout?.off('data', appendPreviewOutput);
+    preview.stderr?.off('data', appendPreviewOutput);
+  }
 }
 
 async function startPreviewWithRetry({
   afterPortRelease,
+  attemptTimeoutMs = previewAttemptTimeoutMs,
   identity,
+  maxCandidates = previewCandidateLimit,
   preferredPort,
   previewRoot,
   configPath,
+  totalTimeoutMs = previewTotalTimeoutMs,
   tracker,
 }) {
-  const candidates = previewPortCandidates(preferredPort);
+  if (!Number.isInteger(maxCandidates) || maxCandidates < 1) {
+    throw new Error(`Invalid preview candidate limit: ${maxCandidates}`);
+  }
+
+  const candidates = previewPortCandidates(preferredPort).slice(0, maxCandidates);
+  const totalDeadline = Date.now() + totalTimeoutMs;
   let lastError;
 
   for (let attempt = 0; attempt < candidates.length; attempt += 1) {
+    if (Date.now() >= totalDeadline) {
+      break;
+    }
+
     let reservation;
     try {
-      reservation = await reserveAvailablePort(preferredPort, tracker, attempt);
+      reservation = await reservePort(candidates[attempt], tracker);
       tracker.assertActive();
     } catch (error) {
       tracker.assertActive();
-      lastError = error;
-      continue;
+      if (error?.code === 'EADDRINUSE') {
+        lastError = new PreviewPortConflictError(
+          `Preview port ${candidates[attempt]} is already in use`,
+          { cause: error },
+        );
+        continue;
+      }
+      throw error;
     }
 
     const port = reservation.port;
@@ -819,7 +1046,10 @@ async function startPreviewWithRetry({
     );
 
     try {
-      await waitForPreview(preview, previewUrl, identity);
+      await waitForPreview(preview, previewUrl, identity, {
+        deadline: Math.min(totalDeadline, Date.now() + attemptTimeoutMs),
+        requestedPort: port,
+      });
       tracker.assertActive();
       await new Promise((resolve) => setTimeout(resolve, 50));
       tracker.assertActive();
@@ -833,13 +1063,30 @@ async function startPreviewWithRetry({
         url: previewUrl,
       };
     } catch (error) {
-      lastError = error;
-      await stopProcessTree(preview);
+      let stopError;
+      try {
+        await stopProcessTree(preview);
+      } catch (caughtStopError) {
+        stopError = caughtStopError;
+      }
       tracker.assertActive();
+      if (stopError) {
+        throw combineOperationAndCleanupErrors(error, stopError);
+      }
+      if (!(error instanceof PreviewRetryableError)) {
+        throw error;
+      }
+      lastError = error;
     }
   }
 
-  throw lastError ?? new Error(`Could not start a THQLLM preview near ${preferredPort}`);
+  const retryError = normalizeError(
+    lastError ?? new Error(`No candidate preview port was available near ${preferredPort}`),
+  );
+  throw new PreviewRetryLimitError(
+    `Could not start a THQLLM preview after ${candidates.length} candidate ports: ${retryError.message}`,
+    { cause: retryError },
+  );
 }
 
 async function waitForPageAssets(page) {
@@ -963,6 +1210,18 @@ async function capture(options, tracker, hooks = {}) {
   tracker.assertActive();
   console.log(`Preview ready at ${preview.url} marker=${session.identity.markerPath}`);
 
+  if (
+    process.env.THQLLM_CAPTURE_TEST_EVENTS === '1' &&
+    process.env.THQLLM_CAPTURE_TEST_HANG_CLEANUP === '1'
+  ) {
+    tracker.addCleanup(() => new Promise(() => {}), {
+      label: 'test pending cleanup',
+      phase: 'runtime',
+    });
+    emitTestEvent('test cleanup pending');
+    await new Promise(() => {});
+  }
+
   const browserPromise = chromium.launch({ headless: true });
   tracker.trackBrowser(browserPromise);
   const browser = await browserPromise;
@@ -1003,6 +1262,7 @@ async function capture(options, tracker, hooks = {}) {
   await mkdir(path.dirname(options.outputPath), { recursive: true });
   const temporaryOutputPath = `${options.outputPath}.capture-${randomUUID()}.png`;
   tracker.addCleanup(() => rm(temporaryOutputPath, { force: true }), {
+    forceCleanup: () => rm(temporaryOutputPath, { force: true }),
     label: `temporary capture ${temporaryOutputPath}`,
     phase: 'filesystem',
   });
@@ -1016,29 +1276,69 @@ async function capture(options, tracker, hooks = {}) {
   await rename(temporaryOutputPath, options.outputPath);
 }
 
+async function runOperationWithCleanup(operation, tracker) {
+  let operationError;
+  try {
+    await operation();
+  } catch (error) {
+    operationError = normalizeError(error);
+  }
+
+  let cleanupError;
+  try {
+    await tracker.cleanup();
+  } catch (error) {
+    cleanupError = normalizeError(error);
+  }
+
+  if (operationError && cleanupError) {
+    throw combineOperationAndCleanupErrors(operationError, cleanupError);
+  }
+  if (operationError) {
+    throw operationError;
+  }
+  if (cleanupError) {
+    throw cleanupError;
+  }
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const tracker = createResourceTracker();
+  const testCleanupFailure = process.env.THQLLM_CAPTURE_TEST_CLEANUP_FAILURE;
+  if (process.env.THQLLM_CAPTURE_TEST_EVENTS === '1' && testCleanupFailure) {
+    tracker.addCleanup(
+      async () => {
+        throw new Error(testCleanupFailure);
+      },
+      {
+        label: 'test cleanup failure',
+        phase: 'filesystem',
+      },
+    );
+  }
   const removeSignalHandlers = installSignalHandlers(tracker);
 
   try {
-    if (!options.skipBuild) {
-      await runCommand(commandName(), ['build'], tracker);
-      tracker.assertActive();
-    }
+    await runOperationWithCleanup(async () => {
+      if (!options.skipBuild) {
+        await runCommand(commandName(), ['build'], tracker);
+        tracker.assertActive();
+      }
 
-    await capture(options, tracker);
-    console.log(
-      `Captured deterministic ${captureWidth}x${captureHeight} OG PNG at ${path.relative(repoRoot, options.outputPath)}`,
-    );
+      await capture(options, tracker);
+      console.log(
+        `Captured deterministic ${captureWidth}x${captureHeight} OG PNG at ${path.relative(repoRoot, options.outputPath)}`,
+      );
+    }, tracker);
   } finally {
-    await tracker.cleanup();
     removeSignalHandlers();
   }
 }
 
 export {
   capture,
+  combineOperationAndCleanupErrors,
   createIsolatedPreview,
   createResourceTracker,
   startPreviewWithRetry,
