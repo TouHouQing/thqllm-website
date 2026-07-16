@@ -583,6 +583,32 @@ describe('project registry', () => {
     );
   });
 
+  it('rejects equivalent project docs routes at the second conflicting item path', () => {
+    const fixture = structuredClone(validProject);
+    fixture.docs.sections.push({
+      text: '客户端',
+      items: [
+        { text: '客户端', slug: 'clients' },
+        { text: '客户端首页', slug: 'clients/index' },
+      ],
+    });
+
+    const result = projectListSchema.safeParse([fixture]);
+
+    expect(result.success).toBe(false);
+
+    if (result.success) {
+      throw new Error('Expected equivalent project docs routes to fail');
+    }
+
+    expect(result.error.issues).toContainEqual(
+      expect.objectContaining({
+        message: 'Duplicate project docs route: clients',
+        path: [0, 'docs', 'sections', 1, 'items', 1, 'slug'],
+      }),
+    );
+  });
+
   it('requires docs.basePath to match the project id', () => {
     const result = projectListSchema.safeParse([
       {

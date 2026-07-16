@@ -101,6 +101,14 @@ function normalizeExternalUrl(value: string): string | undefined {
   }
 }
 
+function createProjectDocRouteKey(slug: string): string {
+  if (slug === 'index') {
+    return '';
+  }
+
+  return slug.endsWith('/index') ? slug.slice(0, -'/index'.length) : slug;
+}
+
 export const projectSchema = z
   .object({
     id: slugSchema,
@@ -142,11 +150,15 @@ export const projectSchema = z
     }
 
     const itemSlugs = new Set<string>();
+    const routeKeys = new Set<string>();
     let hasIndexItem = false;
 
     docs.sections.forEach((section, sectionIndex) => {
       section.items.forEach((item, itemIndex) => {
-        if (itemSlugs.has(item.slug)) {
+        const hasDuplicateItemSlug = itemSlugs.has(item.slug);
+        const routeKey = createProjectDocRouteKey(item.slug);
+
+        if (hasDuplicateItemSlug) {
           context.addIssue({
             code: 'custom',
             message: `Duplicate project docs item slug: ${item.slug}`,
@@ -154,7 +166,16 @@ export const projectSchema = z
           });
         }
 
+        if (!hasDuplicateItemSlug && routeKeys.has(routeKey)) {
+          context.addIssue({
+            code: 'custom',
+            message: `Duplicate project docs route: ${routeKey}`,
+            path: ['docs', 'sections', sectionIndex, 'items', itemIndex, 'slug'],
+          });
+        }
+
         itemSlugs.add(item.slug);
+        routeKeys.add(routeKey);
         hasIndexItem ||= item.slug === 'index';
       });
     });
