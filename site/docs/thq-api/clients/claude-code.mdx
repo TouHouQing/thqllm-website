@@ -1,0 +1,106 @@
+---
+title: Claude Code 接入 THQ API
+description: 通过 Anthropic Messages 网关为 Claude Code 配置 THQ API。
+---
+
+# Claude Code 接入 THQ API
+
+Claude Code 通过 Anthropic Messages 协议连接网关。THQ 推荐使用 Bearer 认证，并通过
+`ANTHROPIC_AUTH_TOKEN` 提供 Key。
+
+## 配置前准备
+
+- 在 [THQ API 控制台](https://sub.thqllm.com)创建 API Key。
+- 从控制台复制适用于 Claude Code 的完整模型 ID。
+- 确认启动 Claude Code 的终端可以读取所需环境变量。
+
+模型 ID 和可用能力以控制台当前显示为准。
+
+## 安装
+
+在 macOS 或 Linux 上可使用官方安装脚本：
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+claude --version
+```
+
+其他系统、更新方式和安装要求见
+[Anthropic Claude Code 官方文档](https://code.claude.com/docs/en/setup)。
+
+## 设置环境变量
+
+在启动 Claude Code 的终端中设置：
+
+```bash title="推荐配置"
+export ANTHROPIC_BASE_URL="https://api.thqllm.com"
+export ANTHROPIC_AUTH_TOKEN="YOUR_THQ_API_KEY"
+export ANTHROPIC_MODEL="CONTROL_PANEL_MODEL_ID"
+```
+
+`ANTHROPIC_MODEL` 可选；不设置时，应在 Claude Code 中选择控制台当前可用且适配该协议的
+模型。
+
+Base URL 末尾不要添加 `/v1`。Claude Code 会自动追加 Anthropic Messages 路径，最终请求
+发送到 `/v1/messages`。手动写成 `https://api.thqllm.com/v1` 可能造成路径重复。
+
+THQ 推荐示例使用 `ANTHROPIC_AUTH_TOKEN`，它会以 Bearer 方式认证。若某个网关明确要求
+`x-api-key`，才使用 `ANTHROPIC_API_KEY`；配置 THQ 时不要同时设置两者，以免凭据优先级导致
+请求使用了错误认证方式。
+
+设置后完全退出并重新启动 Claude Code。通过 IDE 或后台进程使用时，也要重启对应进程。
+
+## 启动并验证
+
+先执行一次非交互请求：
+
+```bash
+claude -p "请只回复：Claude Code 已连接 THQ API"
+```
+
+随后可运行 `claude` 进入交互模式，并使用 `/status` 检查当前模型、登录方式和配置来源。最后
+到控制台核对是否出现对应请求记录。
+
+若 `claude -p` 与交互模式表现不同，检查两者是否由同一个 shell 环境启动，以及是否有项目级
+设置覆盖环境变量。
+
+## 模型与能力
+
+`ANTHROPIC_MODEL` 必须填写控制台中的完整模型 ID。不要根据模型展示名称猜测 ID，也不要假设
+所有模型都支持 Claude Code 使用的 Anthropic Messages 协议。
+
+Claude Code 的工具调用、上下文处理和其他能力还取决于模型与网关当前支持情况。配置成功只
+说明请求链路可用，不代表每个客户端功能都由所选模型实现；以控制台和实际最小验证结果为准。
+
+## 常见问题
+
+### 404 或请求路径异常
+
+确认 `ANTHROPIC_BASE_URL` 是 `https://api.thqllm.com`，末尾没有 `/v1` 或
+`/v1/messages`。客户端负责追加最终路径。
+
+### 401 或认证方式不正确
+
+确认使用 `ANTHROPIC_AUTH_TOKEN`，并清除当前进程中可能冲突的 `ANTHROPIC_API_KEY`。修改后
+重新启动 Claude Code，再用 `/status` 检查当前认证来源。
+
+### 修改环境变量后仍使用旧配置
+
+已运行的进程不会自动重新读取 shell 环境。退出 Claude Code、IDE 和相关后台进程，再从已
+设置变量的终端重新启动。
+
+### 模型不存在或不可用
+
+从控制台重新复制完整模型 ID，确认它适用于 Anthropic Messages。不要使用其他客户端页面中
+的示例模型值。
+
+更多排查顺序见[客户端接入总览](/docs/thq-api/clients/)和
+[常见问题](/docs/thq-api/faq/)。
+
+## 密钥安全
+
+- 不要把真实 Key 写入项目文件、脚本、日志或命令历史。
+- 需要持久化时使用受控的用户环境或密钥管理工具，并限制文件读取权限。
+- 为不同设备、项目和自动化用途创建不同 Key。
+- 怀疑泄露时立即在控制台撤销旧 Key，并重启所有仍可能持有旧环境变量的进程。
+- 提交诊断信息时移除完整 Key 和敏感请求内容。

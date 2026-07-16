@@ -1,0 +1,115 @@
+---
+title: Codex 接入 THQ API
+description: 为 Codex 配置 THQ Responses provider、模型与环境变量。
+---
+
+# Codex 接入 THQ API
+
+Codex 的自定义 provider 使用 OpenAI Responses API。仅支持 Chat Completions 的兼容服务
+不能直接用于当前 Codex 自定义 provider；THQ 侧所选模型必须支持 Responses。
+
+## 配置前准备
+
+- 在 [THQ API 控制台](https://sub.thqllm.com)创建 API Key。
+- 从控制台复制一个支持 Responses 的完整模型 ID。
+- 确认能够修改用户级配置文件 `~/.codex/config.toml`。
+
+模型 ID 和可用能力以控制台当前显示为准。
+
+## 安装或更新
+
+使用 npm 安装或更新 Codex：
+
+```bash
+npm install -g @openai/codex@latest
+codex --version
+```
+
+其他安装方式和系统要求见
+[OpenAI Codex 官方文档](https://developers.openai.com/codex/cli/reference/)。
+
+## 配置 THQ provider
+
+先在启动 Codex 的终端中设置 Key：
+
+```bash
+export THQ_API_KEY="YOUR_THQ_API_KEY"
+```
+
+然后编辑用户级 `~/.codex/config.toml`。下面是建议的完整配置，将
+`CONTROL_PANEL_MODEL_ID` 替换为控制台中的完整模型 ID：
+
+```toml title="推荐配置"
+model_provider = "thq"
+model = "CONTROL_PANEL_MODEL_ID"
+
+[model_providers.thq]
+name = "THQ API"
+base_url = "https://api.thqllm.com/v1"
+env_key = "THQ_API_KEY"
+wire_api = "responses"
+requires_openai_auth = false
+```
+
+`env_key` 只保存环境变量名，不保存 Key 本身。Codex 会基于该 Base URL 调用实际的
+`/v1/responses` 请求路径。
+
+保存后，完全退出并重新启动 Codex。通过 IDE 使用 Codex 时，也要重启 IDE，使其重新加载
+配置文件和环境变量。
+
+## 选择模型
+
+推荐直接在用户级配置的顶层 `model` 字段中填写控制台模型 ID。不要把模型展示名称、别名或
+其他协议下的 ID 当作 Codex 模型值。
+
+切换模型时同时确认：
+
+- 新模型在控制台中当前可用。
+- 新模型支持 Responses API。
+- `model_provider` 仍为 `thq`。
+
+## 验证
+
+启动 Codex 后，先执行 `/status` 查看当前 provider 与模型。若版本支持
+`/debug-config`，可用它检查配置来源和最终生效值。
+
+然后发送一条最小提示词：
+
+```text
+请只回复：Codex 已连接 THQ API
+```
+
+请求成功后，到控制台核对对应使用记录。若状态页仍显示其他 provider 或模型，先确认修改的是
+`~/.codex/config.toml`，再重启终端、Codex 和承载它的 IDE。
+
+## 常见问题
+
+### 配置了 `/v1` 仍然返回 404
+
+确认 `wire_api = "responses"`，并检查最终请求路径是否为 `/v1/responses`。不要把
+`/responses` 手动写进 `base_url`，也不要使用 Gemini 的 `/v1beta`。
+
+### 模型能用于 Chat Completions，但 Codex 请求失败
+
+当前 Codex 自定义 provider 要求 Responses API。模型仅支持 Chat Completions 并不代表它
+能用于 Codex，请在控制台选择明确支持 Responses 的模型。
+
+### 环境变量已设置，但提示缺少 Key
+
+在启动 Codex 的同一个终端中确认 `THQ_API_KEY` 已导出。通过 IDE 启动时，IDE 可能没有继承
+后来修改的 shell 环境；完全退出 IDE 后，从已设置变量的终端重新启动。
+
+### 配置没有生效
+
+检查 TOML 段名是否为 `[model_providers.thq]`，顶层 `model_provider` 是否为 `thq`，以及
+是否存在其他配置来源覆盖用户级设置。使用 `/status` 或 `/debug-config` 确认最终值。
+
+更多通用步骤见[客户端接入总览](/docs/thq-api/clients/)和
+[常见问题](/docs/thq-api/faq/)。
+
+## 密钥安全
+
+- 不要把 Key 直接写入 `config.toml`；只通过 `env_key = "THQ_API_KEY"` 引用。
+- 不要将包含真实 Key 的 shell 配置、终端记录或诊断信息提交到仓库。
+- 为不同设备和用途创建不同 Key，不再使用或怀疑泄露时在控制台撤销。
+- 提交问题时保留变量名、状态码和 request ID（如有），删除完整 Key 与敏感请求内容。

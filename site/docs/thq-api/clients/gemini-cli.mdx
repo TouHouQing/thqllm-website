@@ -1,0 +1,101 @@
+---
+title: Gemini CLI 接入 THQ API
+description: 使用 Gemini 原生协议为 Gemini CLI 配置 THQ API 自定义端点。
+---
+
+# Gemini CLI 接入 THQ API
+
+Gemini CLI 使用 Gemini 原生协议，不是 OpenAI 兼容协议。接入 THQ 时需要分别配置主机地址
+与 API 版本。
+
+## 配置前准备
+
+- 在 [THQ API 控制台](https://sub.thqllm.com)创建 API Key。
+- 从控制台复制适用于 Gemini 协议的完整模型 ID。
+- 准备 Node.js 环境，并确认启动 Gemini CLI 的进程能读取环境变量。
+
+模型 ID 和可用能力以控制台当前显示为准。
+
+## 安装
+
+使用 npm 安装或更新 Gemini CLI：
+
+```bash
+npm install -g @google/gemini-cli@latest
+gemini --version
+```
+
+其他安装方式和系统要求见
+[Gemini CLI 官方文档](https://geminicli.com/docs/get-started/installation/)。
+
+## 配置自定义端点
+
+在启动 Gemini CLI 的终端中设置：
+
+```bash title="推荐配置"
+export GEMINI_API_KEY="YOUR_THQ_API_KEY"
+export GOOGLE_GEMINI_BASE_URL="https://api.thqllm.com"
+export GOOGLE_GENAI_API_VERSION="v1beta"
+export GEMINI_MODEL="CONTROL_PANEL_MODEL_ID"
+```
+
+Gemini CLI 会将主机与版本组合，最终有效根地址为
+`https://api.thqllm.com/v1beta`。
+
+不要把 `/v1beta` 直接写进 `GOOGLE_GEMINI_BASE_URL`。否则客户端再次追加
+`GOOGLE_GENAI_API_VERSION` 时，可能形成重复版本路径。
+
+这些变量可以写入项目 `.env`，也可以由用户环境提供。项目 `.env` 只适合受控的本地文件；
+确保它被版本控制忽略。修改后完全退出并重新启动 Gemini CLI 或承载它的 IDE。
+
+## 选择模型
+
+将 `GEMINI_MODEL` 设置为控制台中的完整模型 ID。切换模型时，重新确认它当前支持 Gemini
+原生协议，不要使用 OpenAI 或 Anthropic 客户端示例中的模型值。
+
+如果项目环境和用户环境同时设置了模型，使用 Gemini CLI 实际加载的值进行验证。排查时每次
+只保留一个明确的配置来源。
+
+## 验证
+
+运行最小非交互请求：
+
+```bash
+gemini -p "请只回复：Gemini CLI 已连接 THQ API"
+```
+
+请求成功后，到控制台核对模型、请求时间和状态。若失败，先确认最终根地址应为
+`https://api.thqllm.com/v1beta`，再检查 Key 与模型 ID。
+
+## 常见问题
+
+### 请求路径中出现两个 `v1beta`
+
+将 `GOOGLE_GEMINI_BASE_URL` 改回 `https://api.thqllm.com`，并单独保留
+`GOOGLE_GENAI_API_VERSION="v1beta"`。重启 Gemini CLI 后再次验证。
+
+### 误用了 OpenAI `/v1` 地址
+
+Gemini CLI 使用 Gemini 原生协议。不要把 `https://api.thqllm.com/v1` 当作
+`GOOGLE_GEMINI_BASE_URL`，也不要使用 OpenAI Chat Completions 请求判断 Gemini 配置是否
+正确。
+
+### 修改 `.env` 后没有生效
+
+确认 Gemini CLI 从预期项目目录启动，并检查是否已有用户环境变量覆盖项目值。完全退出相关
+进程后重新启动；必要时只保留一种配置来源进行排查。
+
+### 提示模型不存在
+
+从控制台重新复制完整模型 ID，并确认它适用于 Gemini 协议。模型展示名称不能替代模型 ID。
+
+更多排查步骤见[客户端接入总览](/docs/thq-api/clients/)和
+[常见问题](/docs/thq-api/faq/)。
+
+## 密钥安全
+
+- 不要提交包含真实 `GEMINI_API_KEY` 的 `.env`。
+- 不要在仓库、日志、截图或问题描述中公开完整 Key。
+- 为不同项目与设备使用不同 Key，便于单独撤销和定位请求来源。
+- 怀疑泄露时立即在控制台撤销旧 Key，并更新所有依赖它的本地环境。
+- 提交诊断信息时只保留变量名、状态码和 request ID（如有）。

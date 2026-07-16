@@ -1,0 +1,77 @@
+---
+title: THQ API 客户端接入总览
+description: 按客户端协议选择 THQ API 地址，并完成密钥、模型与连接验证。
+---
+
+# 客户端接入总览
+
+接入客户端时，先确认客户端实际使用的协议，再填写对应地址。不要因为某个客户端支持
+“自定义服务”就默认它能使用任意协议。
+
+模型 ID 和可用能力会动态调整，请从
+[THQ API 控制台](https://sub.thqllm.com)复制当前可用的完整模型 ID。
+
+## 选择客户端
+
+| 客户端 | 协议 | Base URL 填法 | 指南 |
+| --- | --- | --- | --- |
+| Codex | OpenAI Responses | `https://api.thqllm.com/v1` | [Codex](/docs/thq-api/clients/codex/) |
+| Claude Code | Anthropic Messages | `https://api.thqllm.com`，不带版本后缀 | [Claude Code](/docs/thq-api/clients/claude-code/) |
+| Gemini CLI | Gemini 原生协议 | 主机 `https://api.thqllm.com` 与版本 `v1beta` 分开配置，最终根地址为 `https://api.thqllm.com/v1beta` | [Gemini CLI](/docs/thq-api/clients/gemini-cli/) |
+| VS Code 扩展 | 按扩展实际支持的协议 | 先确认扩展是否允许自定义地址，再按其协议填写 | [VS Code](/docs/thq-api/clients/vscode/) |
+| OpenCode | 按客户端配置的协议 | 以对应客户端页为准 | [OpenCode](/docs/thq-api/clients/opencode/) |
+| OpenClaw | 按客户端配置的协议 | 以对应客户端页为准 | [OpenClaw](/docs/thq-api/clients/openclaw/) |
+| Cherry Studio | 按供应商类型对应的协议 | 以对应客户端页为准 | [Cherry Studio](/docs/thq-api/clients/cherry-studio/) |
+
+VS Code 只是编辑器平台，不代表其中所有扩展都支持自定义 API 地址。选择扩展前，应先查看其
+官方说明或设置项，确认它能配置所需协议、Base URL、API Key 和模型 ID。
+
+## Base URL 怎么填
+
+客户端可能要求填写主机、API 根地址或完整请求地址，这三者不能混用：
+
+- Codex 的 THQ provider 使用 `https://api.thqllm.com/v1`，由客户端请求
+  `/v1/responses`。
+- Claude Code 使用 `https://api.thqllm.com`，由客户端追加 `/v1/messages`。
+- Gemini CLI 把主机与 API 版本分开配置，组合后的有效根地址是
+  `https://api.thqllm.com/v1beta`。
+
+如果客户端会自动追加路径，不要手动再补相同后缀。更完整的差异说明见
+[端点说明](/docs/thq-api/endpoints/)。
+
+## API Key 与模型名称
+
+1. 在控制台创建仅用于当前客户端的 API Key。
+2. 将 Key 放入环境变量或客户端提供的安全凭据存储，不要写入仓库。
+3. 从控制台复制完整模型 ID，不要根据展示名称自行缩写或猜测。
+4. 确认模型支持当前客户端所用协议；同一个模型 ID 不一定适用于所有协议。
+
+本文档中的 `YOUR_THQ_API_KEY` 是密钥占位符，`CONTROL_PANEL_MODEL_ID` 是控制台模型 ID
+占位符。
+
+## 配置后如何验证
+
+先完全退出并重新启动客户端，确保新环境变量和配置文件被重新加载。然后发送一条短提示词，
+例如“请只回复：连接成功”，并检查：
+
+- 客户端是否返回正常内容。
+- 客户端状态页或调试信息中的 Base URL、provider 和模型是否符合预期。
+- 控制台使用记录中是否出现对应请求。
+- 失败时是否能取得 HTTP 状态码、request ID 或脱敏错误信息。
+
+首次验证只发送最小请求。不要在端点尚未确认时直接运行长任务、批量任务或自动重试。
+
+## 通用排查顺序
+
+每次只改一项，按以下顺序检查：
+
+1. **协议**：确认客户端使用 Responses、Anthropic Messages 还是 Gemini 原生协议。
+2. **Base URL**：确认是否多写、漏写或重复追加 `/v1`、`/v1beta`。
+3. **API Key**：确认变量名正确、Key 有效，且启动客户端的进程确实读取到了它。
+4. **模型 ID**：从控制台重新复制完整 ID，并确认它支持当前协议。
+5. **重启进程**：完全退出客户端或 IDE 后重新启动。
+6. **最小验证**：使用客户端的单次提示命令或状态命令验证。
+7. **请求记录**：在控制台核对时间、模型、状态与 request ID（如有）。
+
+仍无法定位时，继续查看[常见问题](/docs/thq-api/faq/)，提交信息前移除完整 API Key 和敏感
+请求内容。
