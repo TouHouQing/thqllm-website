@@ -36,13 +36,23 @@ export const projectDocSectionSchema = z
 
 const externalUrlSchema = z
   .string()
-  .url()
+  .refine((value) => value === value.trim(), {
+    message: 'Project URLs must not include surrounding whitespace',
+  })
   .superRefine((value, context) => {
+    if (value !== value.trim()) {
+      return;
+    }
+
     let parsedUrl: URL;
 
     try {
       parsedUrl = new URL(value);
     } catch {
+      context.addIssue({
+        code: 'custom',
+        message: 'Project URLs must be valid absolute URLs',
+      });
       return;
     }
 
@@ -60,15 +70,19 @@ const externalUrlSchema = z
       });
     }
 
-    if (parsedUrl.origin === 'https://thqllm.com') {
+    if (parsedUrl.hostname.toLowerCase().replace(/\.$/, '') === 'thqllm.com') {
       context.addIssue({
         code: 'custom',
-        message: 'Project URLs must not use the site origin',
+        message: 'Project URLs must not use the site hostname',
       });
     }
   });
 
 function normalizeExternalUrl(value: string): string | undefined {
+  if (value !== value.trim()) {
+    return undefined;
+  }
+
   try {
     return new URL(value).href;
   } catch {

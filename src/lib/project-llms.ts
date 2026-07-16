@@ -4,11 +4,19 @@ import type { ProjectDefinition } from '../data/project-schema';
 
 interface RemarkRoot {
   type: string;
-  children: unknown[];
+  children: RemarkNode[];
 }
 
 interface RemarkFile {
   path?: string;
+}
+
+interface RemarkNode {
+  type?: string;
+  data?: {
+    thqllmProjectExternalLinks?: boolean;
+  };
+  [key: string]: unknown;
 }
 
 export function createProjectExternalLinksRemarkPlugin(
@@ -23,8 +31,15 @@ export function createProjectExternalLinksRemarkPlugin(
       return;
     }
 
+    if (tree.children.some((child) => child.data?.thqllmProjectExternalLinks === true)) {
+      return;
+    }
+
     tree.children.push({
       type: 'list',
+      data: {
+        thqllmProjectExternalLinks: true,
+      },
       ordered: false,
       spread: false,
       children: orderedProjects.map((project) => ({

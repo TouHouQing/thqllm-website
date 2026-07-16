@@ -62,6 +62,7 @@ describe('ProjectStageGrid', () => {
 
       const external = within(card).getByRole('link', { name: `进入 ${project.name}` });
       expect(external).toHaveAttribute('href', project.externalUrl);
+      expect(external).toHaveAttribute('data-project-external-link', project.id);
       expect(external).toHaveAttribute('target', '_blank');
       expect(external).toHaveAttribute('rel', 'noreferrer noopener');
     }

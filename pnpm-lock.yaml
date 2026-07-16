@@ -35,6 +35,18 @@ importers:
       react-dom:
         specifier: 19.2.7
         version: 19.2.7(react@19.2.7)
+      remark-frontmatter:
+        specifier: 5.0.0
+        version: 5.0.0
+      remark-parse:
+        specifier: 11.0.0
+        version: 11.0.0
+      unified:
+        specifier: 11.0.5
+        version: 11.0.5
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -80,7 +92,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: 4.1.10
-        version: 4.1.10(@types/node@22.20.1)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@8.1.4(@types/node@22.20.1))
+        version: 4.1.10(@types/node@22.20.1)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@8.1.4(@types/node@22.20.1)(yaml@2.9.0))
 
 packages:
 
@@ -1069,6 +1081,9 @@ packages:
   extend@3.0.2:
     resolution: {integrity: sha512-fjquC59cD7CyW6urNXK0FBufkZcoiGG80wTuPujX590cB5Ttln20E2UB4S/WARVqhXffZl2LNgS+gQdPIIim/g==}
 
+  fault@2.0.1:
+    resolution: {integrity: sha512-WtySTkS4OKev5JtpHXnib4Gxiurzh5NCGvWrFaZ34m6JehfTUhKZvn9njTfw48t6JumVQOmrKqpmGcdwxnhqBQ==}
+
   fdir@6.5.0:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
     engines: {node: '>=12.0.0'}
@@ -1080,6 +1095,10 @@ packages:
 
   flexsearch@0.8.212:
     resolution: {integrity: sha512-wSyJr1GUWoOOIISRu+X2IXiOcVfg9qqBRyCPRUdLMIGJqPzMo+jMRlvE83t14v1j0dRMEaBbER/adQjp6Du2pw==}
+
+  format@0.2.2:
+    resolution: {integrity: sha512-wzsgA6WOq+09wrU1tsJ09udeR/YZRaeArL9e1wPbFg3GG2yDnC2ldKpxs4xunpFF9DgqCqOIra3bc1HWrJ37Ww==}
+    engines: {node: '>=0.4.x'}
 
   fsevents@2.3.2:
     resolution: {integrity: sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==}
@@ -1318,6 +1337,9 @@ packages:
   mdast-util-from-markdown@2.0.3:
     resolution: {integrity: sha512-W4mAWTvSlKvf8L6J+VN9yLSqQ9AOAAvHuoDAmPkz4dHf553m5gVj2ejadHJhoJmcmxEnOv6Pa8XJhpxE93kb8Q==}
 
+  mdast-util-frontmatter@2.0.1:
+    resolution: {integrity: sha512-LRqI9+wdgC25P0URIJY9vwocIzCcksduHQ9OF2joxQoyTNVduwLAFUzjoopuRJbJAReaKrNQKAZKL3uCMugWJA==}
+
   mdast-util-gfm-autolink-literal@2.0.1:
     resolution: {integrity: sha512-5HVP2MKaP6L+G6YaxPNjuL0BPrq9orG3TsrZ9YXbA3vDw/ACI4MEsnoDpn6ZNm7GnZgtAcONJyPhOP8tNJQavQ==}
 
@@ -1418,6 +1440,9 @@ packages:
     peerDependenciesMeta:
       micromark-util-types:
         optional: true
+
+  micromark-extension-frontmatter@2.0.0:
+    resolution: {integrity: sha512-C4AkuM3dA58cgZha7zVnuVxBhDsbttIMiytjgsM2XbHAB2faRVaHRle40558FBN+DJcrLNCoqG5mlrpdU4cRtg==}
 
   micromark-extension-gfm-autolink-literal@2.1.0:
     resolution: {integrity: sha512-oOg7knzhicgQ3t4QCjCWgTmfNhvQbDDnJeVu9v81r7NltNCVmhPy1fJRX27pISafdjL+SVc4d3l48Gb6pbRypw==}
@@ -1704,6 +1729,9 @@ packages:
     peerDependenciesMeta:
       '@types/mdast':
         optional: true
+
+  remark-frontmatter@5.0.0:
+    resolution: {integrity: sha512-XTFYvNASMe5iPN0719nPrdItC9aU0ssC4v14mH1BCi1u0n1gAocqcujWUrByftZTbLhRtiKRyjYTSIOcr69UVQ==}
 
   remark-gfm@4.0.1:
     resolution: {integrity: sha512-1quofZ2RQ9EWdeN34S79+KExV1764+wCUGop5CPL1WGdD0ocPpu91lzPGbwWMECpEpd42kJGQwzRfyov9j4yNg==}
@@ -2010,6 +2038,11 @@ packages:
 
   xmlchars@2.2.0:
     resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
+
+  yaml@2.9.0:
+    resolution: {integrity: sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
 
   zod@4.4.3:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
@@ -2717,7 +2750,7 @@ snapshots:
       obug: 2.1.3
       std-env: 4.2.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.10(@types/node@22.20.1)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@8.1.4(@types/node@22.20.1))
+      vitest: 4.1.10(@types/node@22.20.1)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@8.1.4(@types/node@22.20.1)(yaml@2.9.0))
 
   '@vitest/expect@4.1.10':
     dependencies:
@@ -2728,13 +2761,13 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.0
 
-  '@vitest/mocker@4.1.10(vite@8.1.4(@types/node@22.20.1))':
+  '@vitest/mocker@4.1.10(vite@8.1.4(@types/node@22.20.1)(yaml@2.9.0))':
     dependencies:
       '@vitest/spy': 4.1.10
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 8.1.4(@types/node@22.20.1)
+      vite: 8.1.4(@types/node@22.20.1)(yaml@2.9.0)
 
   '@vitest/pretty-format@4.1.10':
     dependencies:
@@ -2936,11 +2969,17 @@ snapshots:
 
   extend@3.0.2: {}
 
+  fault@2.0.1:
+    dependencies:
+      format: 0.2.2
+
   fdir@6.5.0(picomatch@4.0.5):
     optionalDependencies:
       picomatch: 4.0.5
 
   flexsearch@0.8.212: {}
+
+  format@0.2.2: {}
 
   fsevents@2.3.2:
     optional: true
@@ -3249,6 +3288,17 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  mdast-util-frontmatter@2.0.1:
+    dependencies:
+      '@types/mdast': 4.0.4
+      devlop: 1.1.0
+      escape-string-regexp: 5.0.0
+      mdast-util-from-markdown: 2.0.3
+      mdast-util-to-markdown: 2.0.0
+      micromark-extension-frontmatter: 2.0.0
+    transitivePeerDependencies:
+      - supports-color
+
   mdast-util-gfm-autolink-literal@2.0.1:
     dependencies:
       '@types/mdast': 4.0.4
@@ -3271,7 +3321,7 @@ snapshots:
     dependencies:
       '@types/mdast': 4.0.4
       mdast-util-from-markdown: 2.0.3
-      mdast-util-to-markdown: 2.1.2
+      mdast-util-to-markdown: 2.0.0
     transitivePeerDependencies:
       - supports-color
 
@@ -3476,6 +3526,13 @@ snapshots:
     optionalDependencies:
       micromark-util-types: 2.0.0
 
+  micromark-extension-frontmatter@2.0.0:
+    dependencies:
+      fault: 2.0.1
+      micromark-util-character: 2.0.0
+      micromark-util-symbol: 2.0.0
+      micromark-util-types: 2.0.0
+
   micromark-extension-gfm-autolink-literal@2.1.0:
     dependencies:
       micromark-util-character: 2.0.0
@@ -3635,7 +3692,7 @@ snapshots:
 
   micromark-util-character@2.1.1:
     dependencies:
-      micromark-util-symbol: 2.0.1
+      micromark-util-symbol: 2.0.0
       micromark-util-types: 2.0.0
 
   micromark-util-chunked@2.0.0:
@@ -3644,7 +3701,7 @@ snapshots:
 
   micromark-util-chunked@2.0.1:
     dependencies:
-      micromark-util-symbol: 2.0.1
+      micromark-util-symbol: 2.0.0
 
   micromark-util-classify-character@2.0.0:
     dependencies:
@@ -3929,6 +3986,15 @@ snapshots:
       - micromark
       - micromark-util-types
 
+  remark-frontmatter@5.0.0:
+    dependencies:
+      '@types/mdast': 4.0.4
+      mdast-util-frontmatter: 2.0.1
+      micromark-extension-frontmatter: 2.0.0
+      unified: 11.0.5
+    transitivePeerDependencies:
+      - supports-color
+
   remark-gfm@4.0.1:
     dependencies:
       '@types/mdast': 4.0.4
@@ -4195,7 +4261,7 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
 
-  vite@8.1.4(@types/node@22.20.1):
+  vite@8.1.4(@types/node@22.20.1)(yaml@2.9.0):
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.5
@@ -4205,11 +4271,12 @@ snapshots:
     optionalDependencies:
       '@types/node': 22.20.1
       fsevents: 2.3.3
+      yaml: 2.9.0
 
-  vitest@4.1.10(@types/node@22.20.1)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@8.1.4(@types/node@22.20.1)):
+  vitest@4.1.10(@types/node@22.20.1)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@8.1.4(@types/node@22.20.1)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.10
-      '@vitest/mocker': 4.1.10(vite@8.1.4(@types/node@22.20.1))
+      '@vitest/mocker': 4.1.10(vite@8.1.4(@types/node@22.20.1)(yaml@2.9.0))
       '@vitest/pretty-format': 4.1.10
       '@vitest/runner': 4.1.10
       '@vitest/snapshot': 4.1.10
@@ -4226,7 +4293,7 @@ snapshots:
       tinyexec: 1.2.4
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.0
-      vite: 8.1.4(@types/node@22.20.1)
+      vite: 8.1.4(@types/node@22.20.1)(yaml@2.9.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 22.20.1
@@ -4261,6 +4328,8 @@ snapshots:
   xml-name-validator@5.0.0: {}
 
   xmlchars@2.2.0: {}
+
+  yaml@2.9.0: {}
 
   zod@4.4.3: {}
 

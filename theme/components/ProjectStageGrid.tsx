@@ -45,6 +45,7 @@ export function ProjectStageGrid({ projects, featuredOnly = true }: ProjectStage
             <div className={styles.actions}>
               <a
                 href={project.externalUrl}
+                data-project-external-link={project.id}
                 target="_blank"
                 rel="noreferrer noopener"
                 aria-label={`进入 ${project.name}`}

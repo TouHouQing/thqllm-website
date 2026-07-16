@@ -53,6 +53,9 @@ describe('project llms registry links', () => {
 
     expect(tree.children.at(-1)).toEqual({
       type: 'list',
+      data: {
+        thqllmProjectExternalLinks: true,
+      },
       ordered: false,
       spread: false,
       children: [
@@ -103,5 +106,23 @@ describe('project llms registry links', () => {
     transform(tree, { path: '/repo/site/about/index.mdx' });
 
     expect(tree).toEqual(originalTree);
+  });
+
+  it('does not inject duplicate project links when the transformer runs twice', () => {
+    const tree = {
+      type: 'root',
+      children: [{ type: 'heading', depth: 1, children: [{ type: 'text', value: '项目' }] }],
+    };
+    const transform = createProjectExternalLinksRemarkPlugin(registry, projectsSourcePath);
+
+    transform(tree, { path: projectsSourcePath });
+    transform(tree, { path: projectsSourcePath });
+
+    expect(
+      tree.children.filter(
+        (child) =>
+          typeof child === 'object' && child !== null && 'type' in child && child.type === 'list',
+      ),
+    ).toHaveLength(1);
   });
 });

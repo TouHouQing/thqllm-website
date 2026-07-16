@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { once } from 'node:events';
+import { EventEmitter, once } from 'node:events';
 import {
   chmod,
   copyFile,
@@ -14,9 +14,9 @@ import {
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { runBuildWithManifestCleanup } from './build.mjs';
+import { runRspressBuild, spawnRspressBuild } from './build.mjs';
 
 const buildScriptSource = path.join(import.meta.dirname, 'build.mjs');
 const temporaryDirectories = new Set();
@@ -28,6 +28,49 @@ async function createManifestFixture() {
   await mkdir(path.dirname(manifestPath), { recursive: true });
   await writeFile(manifestPath, '{"stale":true}\n');
   return manifestPath;
+}
+
+function createFakeBuildSpawn({ beforeOutcome, error, exitCode = 0 }) {
+  const child = new EventEmitter();
+
+  Object.assign(child, {
+    exitCode: null,
+    kill: vi.fn(),
+    pid: 41_042,
+    signalCode: null,
+  });
+
+  const spawnImpl = vi.fn(() => {
+    void Promise.resolve()
+      .then(() => beforeOutcome?.())
+      .then(() => {
+        if (error) {
+          child.emit('error', error);
+          return;
+        }
+
+        child.exitCode = exitCode;
+        child.emit('exit', exitCode, null);
+      })
+      .catch((spawnError) => child.emit('error', spawnError));
+
+    return child;
+  });
+
+  return { child, spawnImpl };
+}
+
+function buildRunOptions(manifestOutputPath, spawnImpl) {
+  return {
+    cwd: path.dirname(path.dirname(manifestOutputPath)),
+    env: {
+      npm_execpath: '/opt/pnpm/pnpm.cjs',
+    },
+    execPath: '/opt/node/bin/node',
+    manifestOutputPath,
+    platform: 'darwin',
+    spawnImpl,
+  };
 }
 
 async function waitForFile(filePath, timeoutMs = 5_000) {
@@ -220,6 +263,7 @@ async function createSignalFixture() {
     env: {
       ...process.env,
       PATH: `${binDirectory}${path.delimiter}${process.env.PATH ?? ''}`,
+      npm_execpath: '',
       THQLLM_CHILD_PID_PATH: childPidPath,
       THQLLM_MANIFEST_PATH: manifestPath,
       THQLLM_SIGNAL_SENT_PATH: signalSentPath,
@@ -258,12 +302,14 @@ afterEach(async () => {
 describe('Rspress build manifest cleanup wrapper', () => {
   it('removes stale output before build and preserves the new manifest after success', async () => {
     const manifestPath = await createManifestFixture();
-
-    const exitCode = await runBuildWithManifestCleanup(manifestPath, async () => {
-      await expect(readFile(manifestPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
-      await writeFile(manifestPath, '{"current":true}\n');
-      return 0;
+    const { spawnImpl } = createFakeBuildSpawn({
+      beforeOutcome: async () => {
+        await expect(readFile(manifestPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+        await writeFile(manifestPath, '{"current":true}\n');
+      },
     });
+
+    const exitCode = await runRspressBuild([], buildRunOptions(manifestPath, spawnImpl));
 
     expect(exitCode).toBe(0);
     expect(await readFile(manifestPath, 'utf8')).toBe('{"current":true}\n');
@@ -271,12 +317,15 @@ describe('Rspress build manifest cleanup wrapper', () => {
 
   it('removes a partially generated manifest when the build fails', async () => {
     const manifestPath = await createManifestFixture();
-
-    const exitCode = await runBuildWithManifestCleanup(manifestPath, async () => {
-      await expect(readFile(manifestPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
-      await writeFile(manifestPath, '{"partial":true}\n');
-      return 1;
+    const { spawnImpl } = createFakeBuildSpawn({
+      beforeOutcome: async () => {
+        await expect(readFile(manifestPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+        await writeFile(manifestPath, '{"partial":true}\n');
+      },
+      exitCode: 1,
     });
+
+    const exitCode = await runRspressBuild([], buildRunOptions(manifestPath, spawnImpl));
 
     expect(exitCode).toBe(1);
     await expect(readFile(manifestPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
@@ -284,15 +333,109 @@ describe('Rspress build manifest cleanup wrapper', () => {
 
   it('removes a partially generated manifest when the build throws', async () => {
     const manifestPath = await createManifestFixture();
-
-    await expect(
-      runBuildWithManifestCleanup(manifestPath, async () => {
+    const buildError = new Error('synthetic build failure');
+    const { spawnImpl } = createFakeBuildSpawn({
+      beforeOutcome: async () => {
         await writeFile(manifestPath, '{"partial":true}\n');
-        throw new Error('synthetic build failure');
-      }),
-    ).rejects.toThrow('synthetic build failure');
+      },
+      error: buildError,
+    });
+
+    await expect(runRspressBuild([], buildRunOptions(manifestPath, spawnImpl))).rejects.toThrow(
+      'synthetic build failure',
+    );
 
     await expect(readFile(manifestPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('uses the pnpm CLI through Node when npm_execpath is available on Windows', () => {
+    const { spawnImpl } = createFakeBuildSpawn({});
+
+    spawnRspressBuild(['--output', 'C:\\site output'], {
+      cwd: 'C:\\repo',
+      env: {
+        npm_execpath: 'C:\\pnpm\\pnpm.cjs',
+      },
+      execPath: 'C:\\node\\node.exe',
+      platform: 'win32',
+      spawnImpl,
+    });
+
+    expect(spawnImpl).toHaveBeenCalledWith(
+      'C:\\node\\node.exe',
+      ['C:\\pnpm\\pnpm.cjs', 'exec', 'rspress', 'build', '--output', 'C:\\site output'],
+      expect.objectContaining({
+        cwd: 'C:\\repo',
+        detached: false,
+        env: {
+          npm_execpath: 'C:\\pnpm\\pnpm.cjs',
+        },
+        shell: false,
+      }),
+    );
+  });
+
+  it('uses ComSpec to invoke pnpm.cmd when Windows has no npm_execpath', () => {
+    const { spawnImpl } = createFakeBuildSpawn({});
+
+    spawnRspressBuild(['--output', 'C:\\site output'], {
+      cwd: 'C:\\repo',
+      env: {
+        ComSpec: 'C:\\Windows\\System32\\cmd.exe',
+      },
+      execPath: 'C:\\node\\node.exe',
+      platform: 'win32',
+      spawnImpl,
+    });
+
+    expect(spawnImpl).toHaveBeenCalledWith(
+      'C:\\Windows\\System32\\cmd.exe',
+      ['/d', '/s', '/c', 'pnpm.cmd', 'exec', 'rspress', 'build', '--output', 'C:\\site output'],
+      expect.objectContaining({
+        cwd: 'C:\\repo',
+        detached: false,
+        env: {
+          ComSpec: 'C:\\Windows\\System32\\cmd.exe',
+        },
+        shell: false,
+      }),
+    );
+  });
+
+  it('uses pnpm directly on POSIX when npm_execpath is unavailable', () => {
+    const { spawnImpl } = createFakeBuildSpawn({});
+
+    spawnRspressBuild(['--no-minify'], {
+      cwd: '/repo',
+      env: {},
+      execPath: '/usr/local/bin/node',
+      platform: 'darwin',
+      spawnImpl,
+    });
+
+    expect(spawnImpl).toHaveBeenCalledWith(
+      'pnpm',
+      ['exec', 'rspress', 'build', '--no-minify'],
+      expect.objectContaining({
+        cwd: '/repo',
+        detached: true,
+        env: {},
+        shell: false,
+      }),
+    );
+  });
+
+  it('does not leave the stale manifest visible to the production spawn path', async () => {
+    const manifestPath = await createManifestFixture();
+    const { spawnImpl } = createFakeBuildSpawn({
+      beforeOutcome: async () => {
+        await expect(readFile(manifestPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+      },
+    });
+
+    await runRspressBuild([], buildRunOptions(manifestPath, spawnImpl));
+
+    expect(spawnImpl).toHaveBeenCalledOnce();
   });
 
   it.each([

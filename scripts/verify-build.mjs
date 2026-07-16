@@ -2,7 +2,11 @@ import { access, lstat, readdir, readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
+import remarkFrontmatter from 'remark-frontmatter';
+import remarkParse from 'remark-parse';
 import sharp from 'sharp';
+import { unified } from 'unified';
+import { parseDocument } from 'yaml';
 import { z } from 'zod';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -11,6 +15,7 @@ const buildDir = path.join(repoRoot, 'doc_build');
 const manifestFilename = 'project-registry.json';
 const expectedManifestSchemaVersion = 1;
 const expectedSiteOrigin = 'https://thqllm.com';
+const sitemapNamespace = 'http://www.sitemaps.org/schemas/sitemap/0.9';
 const fixedRequiredOutputs = ['404.html', 'sitemap.xml', 'llms.txt', 'llms-full.txt'];
 const criticalImages = [
   {
@@ -162,21 +167,37 @@ const manifestProjectSchema = z
       }),
     externalUrl: z
       .string()
-      .url()
+      .refine((value) => value === value.trim(), {
+        message: 'Project external URLs must not include surrounding whitespace',
+      })
       .superRefine((value, context) => {
+        if (value !== value.trim()) {
+          return;
+        }
+
         let parsedUrl;
 
         try {
           parsedUrl = new URL(value);
         } catch {
+          context.addIssue({
+            code: 'custom',
+            message: 'Project external URLs must be valid absolute URLs',
+          });
           return;
+        }
+
+        if (parsedUrl.hostname.toLowerCase().replace(/\.$/, '') === 'thqllm.com') {
+          context.addIssue({
+            code: 'custom',
+            message: 'Project external URLs must not use the site hostname',
+          });
         }
 
         if (
           parsedUrl.protocol !== 'https:' ||
           parsedUrl.username ||
           parsedUrl.password ||
-          parsedUrl.origin === expectedSiteOrigin ||
           parsedUrl.href !== value
         ) {
           context.addIssue({
@@ -504,13 +525,37 @@ function verifySitemap(content, manifest) {
       throw new Error(`sitemap.xml is not valid XML. ${parserError.textContent?.trim() ?? ''}`);
     }
 
-    if (document.documentElement.localName !== 'urlset') {
+    const root = document.documentElement;
+
+    if (root.localName !== 'urlset') {
       throw new Error('sitemap.xml must have a urlset root element.');
     }
 
-    const actualRoutes = [...document.getElementsByTagName('loc')]
-      .map((element) => element.textContent?.trim() ?? '')
-      .filter(Boolean);
+    if (root.namespaceURI !== sitemapNamespace) {
+      throw new Error(`sitemap.xml must use namespace ${sitemapNamespace}.`);
+    }
+
+    const actualRoutes = [];
+
+    for (const [index, child] of [...root.children].entries()) {
+      if (child.localName !== 'url' || child.namespaceURI !== sitemapNamespace) {
+        throw new Error(`sitemap.xml urlset direct child ${index + 1} must be a url element.`);
+      }
+
+      const locElements = [...child.children].filter(
+        (element) => element.localName === 'loc' && element.namespaceURI === sitemapNamespace,
+      );
+      const loc = locElements[0]?.textContent?.trim() ?? '';
+
+      if (locElements.length !== 1 || !loc) {
+        throw new Error(
+          `sitemap.xml url element ${index + 1} must contain exactly one direct non-empty loc.`,
+        );
+      }
+
+      actualRoutes.push(loc);
+    }
+
     const expectedRoutes = manifest.routes.map(
       (route) => new URL(route.routePath, `${manifest.siteOrigin}/`).href,
     );
@@ -546,13 +591,28 @@ function normalizeMarkdownRoute(value, manifest, source) {
   return url.pathname;
 }
 
-function parseMarkdownLinkDestinations(content) {
-  const destinations = [];
-  const markdownLinkPattern =
-    /(?<!!)\[[^\]\r\n]*\]\(\s*(?:<([^>\r\n]+)>|([^\s)\r\n]+))(?:\s+[^)\r\n]+)?\s*\)/g;
+const markdownParser = unified().use(remarkParse);
+const llmsFullParser = unified()
+  .use(remarkParse)
+  .use(remarkFrontmatter, [{ type: 'yaml', marker: '-', anywhere: true }]);
 
-  for (const match of content.matchAll(markdownLinkPattern)) {
-    destinations.push(match[1] ?? match[2]);
+function collectMarkdownLinkDestinations(nodes) {
+  const destinations = [];
+
+  function visit(node) {
+    if (node.type === 'link' && typeof node.url === 'string') {
+      destinations.push(node.url);
+    }
+
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) {
+        visit(child);
+      }
+    }
+  }
+
+  for (const node of nodes) {
+    visit(node);
   }
 
   return destinations;
@@ -560,8 +620,9 @@ function parseMarkdownLinkDestinations(content) {
 
 function parseMarkdownLinks(content, manifest) {
   const routes = [];
+  const tree = markdownParser.parse(content);
 
-  for (const href of parseMarkdownLinkDestinations(content)) {
+  for (const href of collectMarkdownLinkDestinations(tree.children)) {
     const route = normalizeMarkdownRoute(href, manifest, 'llms.txt');
 
     if (route !== undefined) {
@@ -572,10 +633,10 @@ function parseMarkdownLinks(content, manifest) {
   return routes;
 }
 
-function parseAbsoluteHttpsMarkdownLinks(content) {
+function parseAbsoluteHttpsMarkdownLinks(nodes) {
   const urls = new Set();
 
-  for (const href of parseMarkdownLinkDestinations(content)) {
+  for (const href of collectMarkdownLinkDestinations(nodes)) {
     let url;
 
     try {
@@ -605,22 +666,46 @@ function verifyLlmsTxt(content, manifest) {
   });
 }
 
-function parseLlmsFullRoutes(content, manifest) {
-  const routes = [];
-  const frontmatterPattern = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?=\r?\n|$)/gm;
+function parseLlmsFullBlocks(content, manifest) {
+  const tree = llmsFullParser.parse(content);
+  const blocks = [];
+  let currentBlock;
   let blockIndex = 0;
 
-  for (const match of content.matchAll(frontmatterPattern)) {
-    blockIndex += 1;
-    const urlLines = match[1].split(/\r?\n/).filter((line) => /^[ \t]*url[ \t]*:/.test(line));
+  for (const node of tree.children) {
+    if (node.type !== 'yaml') {
+      currentBlock?.nodes.push(node);
+      continue;
+    }
 
-    if (urlLines.length !== 1) {
+    if (currentBlock) {
+      blocks.push(currentBlock);
+    }
+
+    blockIndex += 1;
+    const document = parseDocument(node.value, { uniqueKeys: true });
+
+    if (document.errors.length > 0) {
       throw new Error(
-        `llms-full.txt frontmatter block ${blockIndex} must contain exactly one url field.`,
+        `llms-full.txt frontmatter block ${blockIndex} contains invalid YAML: ${document.errors[0].message}`,
       );
     }
 
-    const urlValue = urlLines[0].slice(urlLines[0].indexOf(':') + 1).trim();
+    const frontmatter = document.toJS();
+    const urlValue =
+      frontmatter &&
+      typeof frontmatter === 'object' &&
+      !Array.isArray(frontmatter) &&
+      Object.hasOwn(frontmatter, 'url')
+        ? frontmatter.url
+        : undefined;
+
+    if (typeof urlValue !== 'string') {
+      throw new Error(
+        `llms-full.txt frontmatter block ${blockIndex} must contain exactly one string url.`,
+      );
+    }
+
     const route = normalizeMarkdownRoute(urlValue, manifest, 'llms-full.txt');
 
     if (route === undefined) {
@@ -629,15 +714,22 @@ function parseLlmsFullRoutes(content, manifest) {
       );
     }
 
-    routes.push(route);
+    currentBlock = {
+      nodes: [],
+      route,
+    };
   }
 
-  return routes;
+  if (currentBlock) {
+    blocks.push(currentBlock);
+  }
+
+  return blocks;
 }
 
 function verifyLlmsFullTxt(content, manifest) {
-  const actualRoutes = parseLlmsFullRoutes(content, manifest);
-  const externalUrls = parseAbsoluteHttpsMarkdownLinks(content);
+  const blocks = parseLlmsFullBlocks(content, manifest);
+  const actualRoutes = blocks.map((block) => block.route);
   const expectedRoutes = manifest.routes
     .filter((route) => route.llms.full)
     .map((route) => `/${route.markdownPath}`);
@@ -648,10 +740,28 @@ function verifyLlmsFullTxt(content, manifest) {
     unexpectedDescription: 'llms-full.txt contains unexpected frontmatter route',
   });
 
-  for (const project of manifest.projects) {
-    if (!externalUrls.has(project.externalUrl)) {
+  const projectsBlock = blocks.find((block) => block.route === '/projects/index.md');
+  const projectExternalUrls = new Set(
+    [...parseAbsoluteHttpsMarkdownLinks(projectsBlock?.nodes ?? [])].filter(
+      (url) => new URL(url).origin !== manifest.siteOrigin,
+    ),
+  );
+  const expectedProjectExternalUrls = new Set(
+    manifest.projects.map((project) => project.externalUrl),
+  );
+
+  for (const projectUrl of expectedProjectExternalUrls) {
+    if (!projectExternalUrls.has(projectUrl)) {
       throw new Error(
-        `llms-full.txt is missing registered project external URL: ${project.externalUrl}`,
+        `llms-full.txt projects block is missing registered project external URL: ${projectUrl}`,
+      );
+    }
+  }
+
+  for (const projectUrl of projectExternalUrls) {
+    if (!expectedProjectExternalUrls.has(projectUrl)) {
+      throw new Error(
+        `llms-full.txt projects block contains unexpected external URL: ${projectUrl}`,
       );
     }
   }
@@ -689,40 +799,33 @@ function readProjectCards(document, sourcePath, manifest) {
       throw new Error(`${sourcePath} contains duplicate project card name: ${projectName}`);
     }
 
-    const externalLinks = [...projectCard.querySelectorAll('a[href]')].flatMap((link) => {
-      const href = link.getAttribute('href');
+    const markedExternalLinks = [...projectCard.querySelectorAll('a[data-project-external-link]')];
 
-      if (!href) {
-        return [];
-      }
+    if (markedExternalLinks.length !== 1) {
+      throw new Error(
+        `${sourcePath} project card for ${projectName} must contain exactly one [data-project-external-link].`,
+      );
+    }
 
-      let url;
+    const externalLink = markedExternalLinks[0];
+    const externalHref = externalLink.getAttribute('href');
+    let externalUrl;
 
-      try {
-        url = new URL(href, `${manifest.siteOrigin}/`);
-      } catch {
-        return [];
-      }
+    try {
+      externalUrl = externalHref ? new URL(externalHref, `${manifest.siteOrigin}/`) : undefined;
+    } catch {
+      externalUrl = undefined;
+    }
 
-      if (
-        (url.protocol !== 'http:' && url.protocol !== 'https:') ||
-        url.origin === manifest.siteOrigin
-      ) {
-        return [];
-      }
-
-      return [{ link, url }];
-    });
-    const externalLink = externalLinks[0];
     const relTokens = new Set(
-      (externalLink?.link.getAttribute('rel') ?? '').toLowerCase().split(/\s+/).filter(Boolean),
+      (externalLink.getAttribute('rel') ?? '').toLowerCase().split(/\s+/).filter(Boolean),
     );
     const hasSafeExternalLink =
-      externalLinks.length === 1 &&
-      externalLink.url.protocol === 'https:' &&
-      !externalLink.url.username &&
-      !externalLink.url.password &&
-      externalLink.link.getAttribute('target') === '_blank' &&
+      externalUrl?.protocol === 'https:' &&
+      !externalUrl.username &&
+      !externalUrl.password &&
+      externalUrl.origin !== manifest.siteOrigin &&
+      externalLink.getAttribute('target') === '_blank' &&
       relTokens.has('noreferrer') &&
       relTokens.has('noopener');
 
@@ -732,15 +835,46 @@ function readProjectCards(document, sourcePath, manifest) {
       );
     }
 
-    const externalUrl = externalLink.url.href;
+    for (const link of projectCard.querySelectorAll('a[href]')) {
+      const href = link.getAttribute('href');
+      let url;
 
-    if (externalUrls.has(externalUrl)) {
-      throw new Error(`${sourcePath} contains duplicate project card external URL: ${externalUrl}`);
+      try {
+        url = new URL(href, `${manifest.siteOrigin}/`);
+      } catch {
+        throw new Error(
+          `${sourcePath} project card for ${projectName} contains an invalid link URL: ${href}`,
+        );
+      }
+
+      if (url.protocol !== 'https:') {
+        throw new Error(
+          `${sourcePath} project card for ${projectName} contains unsafe link protocol: ${url.protocol}`,
+        );
+      }
+
+      if (url.username || url.password) {
+        throw new Error(`${sourcePath} project card for ${projectName} contains link credentials.`);
+      }
+
+      if (url.origin !== manifest.siteOrigin && link !== externalLink) {
+        throw new Error(
+          `${sourcePath} project card for ${projectName} must include exactly one safe HTTPS external link.`,
+        );
+      }
+    }
+
+    const normalizedExternalUrl = externalUrl.href;
+
+    if (externalUrls.has(normalizedExternalUrl)) {
+      throw new Error(
+        `${sourcePath} contains duplicate project card external URL: ${normalizedExternalUrl}`,
+      );
     }
 
     names.add(projectName);
-    externalUrls.add(externalUrl);
-    cards.push({ name: projectName, externalUrl });
+    externalUrls.add(normalizedExternalUrl);
+    cards.push({ name: projectName, externalUrl: normalizedExternalUrl });
   }
 
   return cards;

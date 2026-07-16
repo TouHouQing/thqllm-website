@@ -11,23 +11,6 @@ const shutdownGracePeriodMs = 500;
 const shutdownForcePeriodMs = 1_500;
 const shutdownPollIntervalMs = 20;
 
-export async function runBuildWithManifestCleanup(manifestOutputPath, executeBuild) {
-  await rm(manifestOutputPath, { force: true });
-
-  try {
-    const exitCode = await executeBuild();
-
-    if (exitCode !== 0) {
-      await rm(manifestOutputPath, { force: true });
-    }
-
-    return exitCode;
-  } catch (error) {
-    await rm(manifestOutputPath, { force: true });
-    throw error;
-  }
-}
-
 function waitForChildExit(child, timeoutMs) {
   if (child.exitCode !== null || child.signalCode !== null) {
     return Promise.resolve(true);
@@ -116,12 +99,12 @@ function runTaskkill(pid) {
   });
 }
 
-async function stopProcessTree(child) {
+async function stopProcessTree(child, platform = process.platform) {
   if (!child?.pid) {
     return;
   }
 
-  if (process.platform === 'win32') {
+  if (platform === 'win32') {
     if (child.exitCode !== null || child.signalCode !== null) {
       return;
     }
@@ -155,13 +138,49 @@ async function stopProcessTree(child) {
   }
 }
 
-function spawnRspressBuild(args) {
-  const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
-  const child = spawn(pnpmCommand, ['exec', 'rspress', 'build', ...args], {
-    cwd: repoRoot,
-    detached: process.platform !== 'win32',
-    stdio: 'inherit',
-  });
+export function resolvePnpmInvocation({
+  env = process.env,
+  execPath = process.execPath,
+  platform = process.platform,
+} = {}) {
+  if (env.npm_execpath) {
+    return {
+      args: [env.npm_execpath],
+      command: execPath,
+    };
+  }
+
+  if (platform === 'win32') {
+    return {
+      args: ['/d', '/s', '/c', 'pnpm.cmd'],
+      command: env.ComSpec ?? env.COMSPEC ?? 'cmd.exe',
+    };
+  }
+
+  return {
+    args: [],
+    command: 'pnpm',
+  };
+}
+
+export function spawnRspressBuild(args, options = {}) {
+  const cwd = options.cwd ?? repoRoot;
+  const env = options.env ?? process.env;
+  const execPath = options.execPath ?? process.execPath;
+  const platform = options.platform ?? process.platform;
+  const spawnImpl = options.spawnImpl ?? spawn;
+  const invocation = resolvePnpmInvocation({ env, execPath, platform });
+  const child = spawnImpl(
+    invocation.command,
+    [...invocation.args, 'exec', 'rspress', 'build', ...args],
+    {
+      cwd,
+      detached: platform !== 'win32',
+      env,
+      shell: false,
+      stdio: 'inherit',
+    },
+  );
   const completion = new Promise((resolve) => {
     let settled = false;
     const finish = (outcome) => {
@@ -213,7 +232,9 @@ function listenForShutdownSignal() {
   };
 }
 
-async function runRspressBuild(args, manifestOutputPath) {
+export async function runRspressBuild(args, options = {}) {
+  const manifestOutputPath = options.manifestOutputPath ?? manifestPath;
+  const platform = options.platform ?? process.platform;
   const shutdown = listenForShutdownSignal();
 
   try {
@@ -223,14 +244,14 @@ async function runRspressBuild(args, manifestOutputPath) {
       process.exit(shutdown.requestedSignal.exitCode);
     }
 
-    const build = spawnRspressBuild(args);
+    const build = spawnRspressBuild(args, options);
     const outcome = await Promise.race([
       build.completion.then((result) => ({ result, type: 'build' })),
       shutdown.signalPromise.then((signal) => ({ signal, type: 'signal' })),
     ]);
 
     if (outcome.type === 'signal') {
-      await stopProcessTree(build.child);
+      await stopProcessTree(build.child, platform);
       await build.completion;
       await rm(manifestOutputPath, { force: true });
       process.exit(outcome.signal.exitCode);
@@ -253,7 +274,7 @@ async function runRspressBuild(args, manifestOutputPath) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === scriptPath) {
-  const exitCode = await runRspressBuild(process.argv.slice(2), manifestPath);
+  const exitCode = await runRspressBuild(process.argv.slice(2));
 
   process.exitCode = exitCode;
 }

@@ -92,12 +92,28 @@ const crc32Table = Array.from({ length: 256 }, (_, value) => {
 
 let fixtureRoot;
 
-function createProjectCard({ extraLinks = [], name, url }) {
+function createProjectCard({ extraLinks = [], mainLinkMarker = true, name, url }) {
+  const renderedExtraLinks = extraLinks
+    .map((link) => {
+      const linkConfig = typeof link === 'string' ? { href: link } : link;
+      const attributes = [
+        linkConfig.marker ? 'data-project-external-link' : '',
+        linkConfig.hidden ? 'hidden' : '',
+        linkConfig.target ? `target="${linkConfig.target}"` : '',
+        linkConfig.rel ? `rel="${linkConfig.rel}"` : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+
+      return `<a href="${linkConfig.href}"${attributes ? ` ${attributes}` : ''}>附加链接</a>`;
+    })
+    .join('');
+
   return `
     <article data-testid="project-stage">
       <h3>${name}</h3>
-      <a href="${url}" target="_blank" rel="noreferrer noopener">进入项目</a>
-      ${extraLinks.map((href) => `<a href="${href}">附加链接</a>`).join('')}
+      <a href="${url}"${mainLinkMarker ? ' data-project-external-link' : ''} target="_blank" rel="noreferrer noopener">进入项目</a>
+      ${renderedExtraLinks}
       <a href="/docs/example/">使用文档</a>
     </article>
   `;
@@ -152,7 +168,7 @@ function createSyntheticSitemap(manifest) {
     .map((route) => `<url><loc>${routeUrl(route.routePath)}</loc></url>`)
     .join('');
 
-  return `<?xml version="1.0" encoding="UTF-8"?><urlset>${urls}</urlset>`;
+  return `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`;
 }
 
 function createSyntheticLlmsTxt(manifest) {
@@ -176,6 +192,21 @@ function createSyntheticLlmsFullTxt(manifest) {
         `---\nurl: ${markdownUrl(route.markdownPath)}\n---\n\n${externalUrls}\n\nFixture content.\n`,
     )
     .join('\n')}\n`;
+}
+
+function transformLlmsFullBlock(content, markdownRoute, transform) {
+  const frontmatter = `---\nurl: ${markdownRoute}\n---`;
+  const blockStart = content.indexOf(frontmatter);
+
+  if (blockStart === -1) {
+    throw new Error(`Expected llms-full fixture block: ${markdownRoute}`);
+  }
+
+  const blockEndCandidate = content.indexOf('\n---\nurl:', blockStart + frontmatter.length);
+  const blockEnd = blockEndCandidate === -1 ? content.length : blockEndCandidate;
+  const block = content.slice(blockStart, blockEnd);
+
+  return `${content.slice(0, blockStart)}${transform(block)}${content.slice(blockEnd)}`;
 }
 
 async function writeSyntheticManifestFixture(manifest, directoryCards = defaultDirectoryCards) {
@@ -851,6 +882,41 @@ describe('verify-build manifest-driven output validation', () => {
     expect(result.stderr).toContain(`Invalid project build manifest at ${manifestPath}`);
   });
 
+  it.each([
+    ' https://alpha.example.com/',
+    'https://alpha.example.com/ ',
+  ])('rejects surrounding whitespace in a manifest project external URL: %s', async (externalUrl) => {
+    const manifest = structuredClone(defaultManifest);
+    manifest.projects[0].externalUrl = externalUrl;
+    await writeFixtureFile(
+      'doc_build/project-registry.json',
+      `${JSON.stringify(manifest, null, 2)}\n`,
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'Invalid project build manifest at projects.0.externalUrl: Project external URLs must not include surrounding whitespace',
+    );
+  });
+
+  it('rejects the trailing-dot site hostname in a manifest project external URL', async () => {
+    const manifest = structuredClone(defaultManifest);
+    manifest.projects[0].externalUrl = 'https://thqllm.com./';
+    await writeFixtureFile(
+      'doc_build/project-registry.json',
+      `${JSON.stringify(manifest, null, 2)}\n`,
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'Invalid project build manifest at projects.0.externalUrl: Project external URLs must not use the site hostname',
+    );
+  });
+
   it('rejects a docs route with ambiguous llms inclusion flags', async () => {
     const manifest = structuredClone(defaultManifest);
     const docsRoute = manifest.routes.find((route) => route.routePath.startsWith('/docs/'));
@@ -899,6 +965,71 @@ describe('verify-build manifest-driven output validation', () => {
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain(`sitemap.xml is missing route URL: ${siteOrigin}/`);
+  });
+
+  it('rejects a sitemap with the wrong namespace', async () => {
+    await writeFixtureFile(
+      'doc_build/sitemap.xml',
+      createSyntheticSitemap(defaultManifest).replace(
+        'http://www.sitemaps.org/schemas/sitemap/0.9',
+        'https://example.com/not-sitemap',
+      ),
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'sitemap.xml must use namespace http://www.sitemaps.org/schemas/sitemap/0.9.',
+    );
+  });
+
+  it('rejects a non-url direct child under the sitemap urlset', async () => {
+    await writeFixtureFile(
+      'doc_build/sitemap.xml',
+      createSyntheticSitemap(defaultManifest).replace('</urlset>', '<decoy></decoy></urlset>'),
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('sitemap.xml urlset direct child 7 must be a url element.');
+  });
+
+  it('does not count a nested decoy loc for a sitemap url without loc', async () => {
+    const homeUrl = routeUrl('/');
+    await writeFixtureFile(
+      'doc_build/sitemap.xml',
+      createSyntheticSitemap(defaultManifest).replace(
+        `<url><loc>${homeUrl}</loc></url>`,
+        `<url></url><decoy><loc>${homeUrl}</loc></decoy>`,
+      ),
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'sitemap.xml url element 1 must contain exactly one direct non-empty loc.',
+    );
+  });
+
+  it('rejects two direct loc elements in one sitemap url', async () => {
+    const homeUrl = routeUrl('/');
+    await writeFixtureFile(
+      'doc_build/sitemap.xml',
+      createSyntheticSitemap(defaultManifest).replace(
+        `<url><loc>${homeUrl}</loc></url>`,
+        `<url><loc>${homeUrl}</loc><loc>${homeUrl}</loc></url>`,
+      ),
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'sitemap.xml url element 1 must contain exactly one direct non-empty loc.',
+    );
   });
 
   it('rejects duplicate sitemap route URLs', async () => {
@@ -958,6 +1089,43 @@ describe('verify-build manifest-driven output validation', () => {
     );
   });
 
+  it.each([
+    {
+      label: 'fenced code',
+      decoy: (route) => `\n\`\`\`md\n- [decoy](${route})\n\`\`\`\n`,
+    },
+    {
+      label: 'inline code',
+      decoy: (route) => `\n\`[decoy](${route})\`\n`,
+    },
+    {
+      label: 'an HTML comment',
+      decoy: (route) => `\n<!-- [decoy](${route}) -->\n`,
+    },
+  ])('ignores an llms.txt route link inside $label', async ({ decoy }) => {
+    const missingRoute = defaultManifest.routes.find((route) => route.llms.txt);
+
+    if (!missingRoute) {
+      throw new Error('Expected an llms.txt fixture route');
+    }
+
+    const missingMarkdownRoute = markdownUrl(missingRoute.markdownPath);
+    await writeFixtureFile(
+      'doc_build/llms.txt',
+      `${createSyntheticLlmsTxt({
+        ...defaultManifest,
+        routes: defaultManifest.routes.filter(
+          (route) => route.routePath !== missingRoute.routePath,
+        ),
+      })}${decoy(missingMarkdownRoute)}`,
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(`llms.txt is missing Markdown route: ${missingMarkdownRoute}`);
+  });
+
   it('rejects duplicate llms.txt Markdown route links', async () => {
     const duplicateRoute = defaultManifest.routes.find((route) => route.llms.txt);
 
@@ -1015,6 +1183,81 @@ describe('verify-build manifest-driven output validation', () => {
     );
   });
 
+  it('ignores llms-full.txt frontmatter text inside fenced code', async () => {
+    const missingRoute = defaultManifest.routes.find((route) => route.llms.full);
+
+    if (!missingRoute) {
+      throw new Error('Expected an llms-full.txt fixture route');
+    }
+
+    const missingMarkdownRoute = markdownUrl(missingRoute.markdownPath);
+    await writeFixtureFile(
+      'doc_build/llms-full.txt',
+      `${createSyntheticLlmsFullTxt({
+        ...defaultManifest,
+        routes: defaultManifest.routes.filter(
+          (route) => route.routePath !== missingRoute.routePath,
+        ),
+      })}\n\`\`\`md\n---\nurl: ${missingMarkdownRoute}\n---\n\`\`\`\n`,
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `llms-full.txt is missing frontmatter route: ${missingMarkdownRoute}`,
+    );
+  });
+
+  it('rejects duplicate YAML url keys in llms-full.txt frontmatter', async () => {
+    const route = defaultManifest.routes.find((candidate) => candidate.llms.full);
+
+    if (!route) {
+      throw new Error('Expected an llms-full.txt fixture route');
+    }
+
+    const markdownRoute = markdownUrl(route.markdownPath);
+    await writeFixtureFile(
+      'doc_build/llms-full.txt',
+      createSyntheticLlmsFullTxt(defaultManifest).replace(
+        `url: ${markdownRoute}`,
+        `url: ${markdownRoute}\nurl: ${markdownRoute}`,
+      ),
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('llms-full.txt frontmatter block 1 contains invalid YAML');
+  });
+
+  it.each([
+    '42',
+    'true',
+    '[/projects/index.md]',
+  ])('rejects a non-string llms-full.txt frontmatter url: %s', async (urlValue) => {
+    const firstRoute = defaultManifest.routes.find((route) => route.llms.full);
+
+    if (!firstRoute) {
+      throw new Error('Expected an llms-full.txt fixture route');
+    }
+
+    await writeFixtureFile(
+      'doc_build/llms-full.txt',
+      createSyntheticLlmsFullTxt(defaultManifest).replace(
+        `url: ${markdownUrl(firstRoute.markdownPath)}`,
+        `url: ${urlValue}`,
+      ),
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'llms-full.txt frontmatter block 1 must contain exactly one string url.',
+    );
+  });
+
   it('rejects duplicate llms-full.txt frontmatter routes', async () => {
     const duplicateRoute = defaultManifest.routes.find((route) => route.llms.full);
 
@@ -1061,7 +1304,7 @@ describe('verify-build manifest-driven output validation', () => {
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain(
-      `llms-full.txt is missing registered project external URL: ${missingUrl}`,
+      `llms-full.txt projects block is missing registered project external URL: ${missingUrl}`,
     );
   });
 
@@ -1080,7 +1323,75 @@ describe('verify-build manifest-driven output validation', () => {
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain(
-      `llms-full.txt is missing registered project external URL: ${missingProject.externalUrl}`,
+      `llms-full.txt projects block is missing registered project external URL: ${missingProject.externalUrl}`,
+    );
+  });
+
+  it('accepts a balanced-parentheses project Markdown link destination', async () => {
+    const { homepageCards } = await configureSyntheticFixture([
+      {
+        id: 'parentheses',
+        name: 'Parentheses Project',
+        url: 'https://example.com/a(b)',
+        order: 1,
+        featured: true,
+        docsRoutes: [],
+      },
+    ]);
+
+    const result = await runVerifier(homepageCards);
+
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+  });
+
+  it('accepts an angle-bracket project Markdown link destination', async () => {
+    const project = defaultManifest.projects[0];
+    const projectLink = `- [${project.name}](${project.externalUrl})`;
+    await writeFixtureFile(
+      'doc_build/llms-full.txt',
+      createSyntheticLlmsFullTxt(defaultManifest).replaceAll(
+        projectLink,
+        `- [${project.name}](<${project.externalUrl}>)`,
+      ),
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+  });
+
+  it('requires every registered project URL inside the projects llms-full block', async () => {
+    const project = defaultManifest.projects[0];
+    const projectLink = `- [${project.name}](${project.externalUrl})`;
+    const content = transformLlmsFullBlock(
+      createSyntheticLlmsFullTxt(defaultManifest),
+      '/projects/index.md',
+      (block) => block.replace(projectLink, ''),
+    );
+    await writeFixtureFile('doc_build/llms-full.txt', content);
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `llms-full.txt projects block is missing registered project external URL: ${project.externalUrl}`,
+    );
+  });
+
+  it('rejects an unexpected external URL inside the projects llms-full block', async () => {
+    const unexpectedUrl = 'https://unexpected.example.com/';
+    const content = transformLlmsFullBlock(
+      createSyntheticLlmsFullTxt(defaultManifest),
+      '/projects/index.md',
+      (block) => `${block}\n- [Unexpected](${unexpectedUrl})\n`,
+    );
+    await writeFixtureFile('doc_build/llms-full.txt', content);
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `llms-full.txt projects block contains unexpected external URL: ${unexpectedUrl}`,
     );
   });
 
@@ -1138,7 +1449,7 @@ describe('verify-build manifest-driven output validation', () => {
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain(
-      `llms-full.txt is missing registered project external URL: ${shortProject.externalUrl}`,
+      `llms-full.txt projects block is missing registered project external URL: ${shortProject.externalUrl}`,
     );
   });
 });
@@ -2052,6 +2363,89 @@ describe('verify-build homepage project validation', () => {
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain(
       'doc_build/index.html project card for Alpha Project must include exactly one safe HTTPS external link.',
+    );
+  });
+
+  it.each([
+    'javascript:alert(1)',
+    'data:text/html,unsafe',
+    'ftp://files.example.com/',
+  ])('rejects an unsafe project card link protocol: %s', async (href) => {
+    const result = await runVerifier([{ ...defaultCards[0], extraLinks: [href] }]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `doc_build/index.html project card for Alpha Project contains unsafe link protocol: ${new URL(href, `${siteOrigin}/`).protocol}`,
+    );
+  });
+
+  it('rejects a project card without the stable external-link marker', async () => {
+    const result = await runVerifier([{ ...defaultCards[0], mainLinkMarker: false }]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html project card for Alpha Project must contain exactly one [data-project-external-link].',
+    );
+  });
+
+  it('rejects duplicate stable external-link markers', async () => {
+    const result = await runVerifier([
+      {
+        ...defaultCards[0],
+        extraLinks: [{ href: '/docs/example/', marker: true }],
+      },
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html project card for Alpha Project must contain exactly one [data-project-external-link].',
+    );
+  });
+
+  it('rejects a stable external-link marker placed on an internal docs link', async () => {
+    const result = await runVerifier([
+      {
+        ...defaultCards[0],
+        mainLinkMarker: false,
+        extraLinks: [
+          {
+            href: '/docs/example/',
+            marker: true,
+            rel: 'noreferrer noopener',
+            target: '_blank',
+          },
+        ],
+      },
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html project card for Alpha Project must include exactly one safe HTTPS external link.',
+    );
+  });
+
+  it('does not let a hidden safe marker conceal a dangerous primary action', async () => {
+    const project = defaultCards[0];
+    const result = await runVerifier([
+      {
+        ...project,
+        url: 'javascript:alert(1)',
+        mainLinkMarker: false,
+        extraLinks: [
+          {
+            href: project.url,
+            hidden: true,
+            marker: true,
+            rel: 'noreferrer noopener',
+            target: '_blank',
+          },
+        ],
+      },
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html project card for Alpha Project contains unsafe link protocol: javascript:',
     );
   });
 

@@ -76,6 +76,26 @@ describe('project registry', () => {
   });
 
   it.each([
+    ' https://example.com/',
+    'https://example.com/ ',
+  ])('rejects surrounding whitespace in a project external URL: %s', (externalUrl) => {
+    const result = projectListSchema.safeParse([{ ...validProject, externalUrl }]);
+
+    expect(result.success).toBe(false);
+
+    if (result.success) {
+      throw new Error('Expected project URL surrounding whitespace to fail');
+    }
+
+    expect(result.error.issues).toContainEqual(
+      expect.objectContaining({
+        message: 'Project URLs must not include surrounding whitespace',
+        path: [0, 'externalUrl'],
+      }),
+    );
+  });
+
+  it.each([
     'https://user:password@example.com/',
     'https://user@example.com/',
     'https://:password@example.com/',
@@ -99,6 +119,7 @@ describe('project registry', () => {
     'https://thqllm.com/',
     'https://thqllm.com/path',
     'https://THQLLM.COM:443/path',
+    'https://thqllm.com./',
   ])('rejects project URLs on the site origin: %s', (externalUrl) => {
     const result = projectListSchema.safeParse([{ ...validProject, externalUrl }]);
 
@@ -113,6 +134,17 @@ describe('project registry', () => {
         path: [0, 'externalUrl'],
       }),
     );
+  });
+
+  it('allows a subdomain of the site hostname', () => {
+    expect(() =>
+      projectListSchema.parse([
+        {
+          ...validProject,
+          externalUrl: 'https://sub.thqllm.com/',
+        },
+      ]),
+    ).not.toThrow();
   });
 
   it('rejects normalized duplicate project URLs at the second project path', () => {
