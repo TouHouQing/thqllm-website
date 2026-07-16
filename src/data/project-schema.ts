@@ -1,6 +1,13 @@
 import { z } from 'zod';
 
-const nonBlankStringSchema = z.string().trim().min(1);
+const humanReadableStringSchema = z
+  .string()
+  .refine((value) => value.trim().length > 0, {
+    message: 'Human-readable strings must not be blank',
+  })
+  .refine((value) => value === value.trim(), {
+    message: 'Human-readable strings must not include surrounding whitespace',
+  });
 const slugFormatSchema = z
   .string()
   .trim()
@@ -15,31 +22,68 @@ export const slugSchema = z
 
 export const projectDocItemSchema = z
   .object({
-    text: nonBlankStringSchema,
+    text: humanReadableStringSchema,
     slug: slugSchema,
   })
   .strict();
 
 export const projectDocSectionSchema = z
   .object({
-    text: nonBlankStringSchema,
+    text: humanReadableStringSchema,
     items: z.array(projectDocItemSchema).nonempty(),
   })
   .strict();
 
+const externalUrlSchema = z
+  .string()
+  .url()
+  .superRefine((value, context) => {
+    let parsedUrl: URL;
+
+    try {
+      parsedUrl = new URL(value);
+    } catch {
+      return;
+    }
+
+    if (parsedUrl.protocol !== 'https:') {
+      context.addIssue({
+        code: 'custom',
+        message: 'Project URLs must use HTTPS',
+      });
+    }
+
+    if (parsedUrl.username || parsedUrl.password) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Project URLs must not include username or password credentials',
+      });
+    }
+
+    if (parsedUrl.origin === 'https://thqllm.com') {
+      context.addIssue({
+        code: 'custom',
+        message: 'Project URLs must not use the site origin',
+      });
+    }
+  });
+
+function normalizeExternalUrl(value: string): string | undefined {
+  try {
+    return new URL(value).href;
+  } catch {
+    return undefined;
+  }
+}
+
 export const projectSchema = z
   .object({
     id: slugSchema,
-    name: nonBlankStringSchema,
-    stageLabel: nonBlankStringSchema,
-    categoryLabel: nonBlankStringSchema,
-    description: z.string().trim().min(10),
-    externalUrl: z
-      .string()
-      .url()
-      .refine((url) => url.startsWith('https://'), {
-        message: 'Project URLs must use HTTPS',
-      }),
+    name: humanReadableStringSchema,
+    stageLabel: humanReadableStringSchema,
+    categoryLabel: humanReadableStringSchema,
+    description: humanReadableStringSchema.min(10),
+    externalUrl: externalUrlSchema,
     docs: z
       .object({
         basePath: z.string().regex(/^\/docs\/[a-z0-9-]+\/$/),
@@ -48,7 +92,7 @@ export const projectSchema = z
       .strict()
       .optional(),
     accent: z.enum(['vermilion', 'cyan', 'gold', 'sakura']),
-    tags: z.array(nonBlankStringSchema).nonempty(),
+    tags: z.array(humanReadableStringSchema).nonempty(),
     order: z.number().int().nonnegative(),
     featured: z.boolean(),
   })
@@ -104,8 +148,10 @@ export const projectListSchema = z
   .nonempty()
   .superRefine((projects, context) => {
     const ids = new Set<string>();
+    const names = new Set<string>();
     const orders = new Set<number>();
     const docsBasePaths = new Set<string>();
+    const externalUrls = new Set<string>();
 
     projects.forEach((project, index) => {
       if (ids.has(project.id)) {
@@ -113,6 +159,14 @@ export const projectListSchema = z
           code: 'custom',
           message: `Duplicate project id: ${project.id}`,
           path: [index, 'id'],
+        });
+      }
+
+      if (names.has(project.name)) {
+        context.addIssue({
+          code: 'custom',
+          message: `Duplicate project name: ${project.name}`,
+          path: [index, 'name'],
         });
       }
 
@@ -138,8 +192,23 @@ export const projectListSchema = z
         docsBasePaths.add(docsBasePath);
       }
 
+      const normalizedExternalUrl = normalizeExternalUrl(project.externalUrl);
+
+      if (normalizedExternalUrl !== undefined && externalUrls.has(normalizedExternalUrl)) {
+        context.addIssue({
+          code: 'custom',
+          message: `Duplicate project external URL: ${normalizedExternalUrl}`,
+          path: [index, 'externalUrl'],
+        });
+      }
+
       ids.add(project.id);
+      names.add(project.name);
       orders.add(project.order);
+
+      if (normalizedExternalUrl !== undefined) {
+        externalUrls.add(normalizedExternalUrl);
+      }
     });
   });
 

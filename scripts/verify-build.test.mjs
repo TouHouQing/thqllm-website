@@ -24,24 +24,61 @@ const criticalFiles = [
   'favicon.svg',
   'robots.txt',
 ];
-const canonicalCards = [
+const syntheticProjects = [
   {
-    name: 'FluctGraph',
-    url: 'https://graph.tohoqing.com/',
+    id: 'alpha',
+    name: 'Alpha Project',
+    url: 'https://alpha.example.com/',
+    order: 1,
+    featured: true,
+    docsRoutes: ['/docs/alpha/'],
   },
   {
-    name: 'THQ API',
-    url: 'https://sub.thqllm.com/',
-  },
-  {
-    name: 'Toho Image Studio',
-    url: 'https://img.tohoqing.com/',
+    id: 'beta',
+    name: 'Beta Project',
+    url: 'https://beta.example.com/',
+    order: 2,
+    featured: false,
+    docsRoutes: ['/docs/beta/'],
   },
 ];
+const defaultCards = syntheticProjects
+  .filter((project) => project.featured)
+  .map(({ name, url }) => ({ name, url }));
+const defaultDirectoryCards = syntheticProjects.map(({ name, url }) => ({ name, url }));
+const canonicalCards = defaultCards;
 const fourthCard = {
   name: 'Fourth Project',
   url: 'https://fourth.example.com/',
 };
+const siteOrigin = 'https://thqllm.com';
+const fixedManifestRoutes = [
+  {
+    routePath: '/',
+    htmlPath: 'index.html',
+    markdownPath: 'index.md',
+    llms: { txt: false, full: true },
+  },
+  {
+    routePath: '/projects/',
+    htmlPath: 'projects/index.html',
+    markdownPath: 'projects/index.md',
+    llms: { txt: true, full: true },
+  },
+  {
+    routePath: '/notes/',
+    htmlPath: 'notes/index.html',
+    markdownPath: 'notes/index.md',
+    llms: { txt: true, full: true },
+  },
+  {
+    routePath: '/about/',
+    htmlPath: 'about/index.html',
+    markdownPath: 'about/index.md',
+    llms: { txt: true, full: true },
+  },
+];
+const defaultManifest = createSyntheticManifest(syntheticProjects);
 const pngSignature = Buffer.from('89504e470d0a1a0a', 'hex');
 const crc32Table = Array.from({ length: 256 }, (_, value) => {
   let checksum = value;
@@ -64,6 +101,124 @@ function createProjectCard({ extraLinks = [], name, url }) {
       <a href="/docs/example/">使用文档</a>
     </article>
   `;
+}
+
+function outputPathForRoute(routePath, extension) {
+  const relativeRoutePath = routePath.slice(1);
+
+  return routePath.endsWith('/')
+    ? `${relativeRoutePath}index.${extension}`
+    : `${relativeRoutePath}.${extension}`;
+}
+
+function createSyntheticManifest(projects) {
+  return {
+    schemaVersion: 1,
+    siteOrigin,
+    routes: [
+      ...fixedManifestRoutes,
+      ...projects.flatMap((project) =>
+        (project.docsRoutes ?? []).map((routePath) => ({
+          routePath,
+          htmlPath: outputPathForRoute(routePath, 'html'),
+          markdownPath: outputPathForRoute(routePath, 'md'),
+          llms: { txt: true, full: true },
+        })),
+      ),
+    ],
+    projects: projects
+      .toSorted((left, right) => left.order - right.order)
+      .map((project) => ({
+        id: project.id,
+        name: project.name,
+        externalUrl: new URL(project.url).href,
+        order: project.order,
+        featured: project.featured,
+        documented: (project.docsRoutes ?? []).length > 0,
+      })),
+  };
+}
+
+function routeUrl(routePath) {
+  return new URL(routePath, `${siteOrigin}/`).href;
+}
+
+function markdownUrl(markdownPath) {
+  return `/${markdownPath}`;
+}
+
+function createSyntheticSitemap(manifest) {
+  const urls = manifest.routes
+    .map((route) => `<url><loc>${routeUrl(route.routePath)}</loc></url>`)
+    .join('');
+
+  return `<?xml version="1.0" encoding="UTF-8"?><urlset>${urls}</urlset>`;
+}
+
+function createSyntheticLlmsTxt(manifest) {
+  const links = manifest.routes
+    .filter((route) => route.llms.txt)
+    .map((route) => `- [${route.routePath}](${markdownUrl(route.markdownPath)})`)
+    .join('\n');
+
+  return `# Synthetic fixture\n\n## Routes\n\n${links}\n`;
+}
+
+function createSyntheticLlmsFullTxt(manifest) {
+  const externalUrls = manifest.projects.map((project) => project.externalUrl).join('\n');
+
+  return `${manifest.routes
+    .filter((route) => route.llms.full)
+    .map(
+      (route) =>
+        `---\nurl: ${markdownUrl(route.markdownPath)}\n---\n\n${externalUrls}\n\nFixture content.\n`,
+    )
+    .join('\n')}\n`;
+}
+
+async function writeSyntheticManifestFixture(manifest, directoryCards = defaultDirectoryCards) {
+  await writeFixtureFile(
+    'doc_build/project-registry.json',
+    `${JSON.stringify(manifest, null, 2)}\n`,
+  );
+
+  for (const route of manifest.routes) {
+    await writeFixtureFile(
+      `doc_build/${route.htmlPath}`,
+      route.routePath === '/projects/'
+        ? `<html><body><section id="projects">${directoryCards.map(createProjectCard).join('')}</section></body></html>`
+        : '<html><body>Verified output</body></html>',
+    );
+    await writeFixtureFile(`doc_build/${route.markdownPath}`, '# Synthetic fixture\n');
+  }
+
+  await writeFixtureFile('doc_build/sitemap.xml', createSyntheticSitemap(manifest));
+  await writeFixtureFile('doc_build/llms.txt', createSyntheticLlmsTxt(manifest));
+  await writeFixtureFile('doc_build/llms-full.txt', createSyntheticLlmsFullTxt(manifest));
+}
+
+function cardsForProjects(projects, featuredOnly) {
+  return projects
+    .filter((project) => !featuredOnly || project.featured)
+    .toSorted((left, right) => left.order - right.order)
+    .map(({ name, url }) => ({ name, url }));
+}
+
+async function configureSyntheticFixture(projects) {
+  const manifest = createSyntheticManifest(projects);
+  const homepageCards = cardsForProjects(projects, true);
+  const directoryCards = cardsForProjects(projects, false);
+
+  await writeSyntheticManifestFixture(manifest, directoryCards);
+
+  return { directoryCards, homepageCards, manifest };
+}
+
+async function writeProjectDirectory(cards) {
+  await writeFixtureFile(
+    'doc_build/projects/index.html',
+    `<html><body><section id="projects">${cards.map(createProjectCard).join('')}</section></body></html>`,
+  );
 }
 
 function createHomepage(cards, referenceOverrides = {}) {
@@ -442,7 +597,7 @@ async function truncateFixtureImagePreservingMetadata(relativePath) {
   await writeFile(outputPath, truncatedBytes);
 }
 
-async function runVerifier(cards = canonicalCards, referenceOverrides = {}) {
+async function runVerifier(cards = defaultCards, referenceOverrides = {}) {
   await writeFixtureFile('doc_build/index.html', createHomepage(cards, referenceOverrides));
 
   const result = spawnSync(process.execPath, [path.join(fixtureRoot, 'scripts/verify-build.mjs')], {
@@ -486,28 +641,371 @@ beforeEach(async () => {
     await copyPublicAsset(criticalFile);
   }
 
-  for (const output of [
-    '404.html',
-    'projects/index.html',
-    'notes/index.html',
-    'about/index.html',
-    'docs/fluctgraph/index.html',
-    'docs/thq-api/index.html',
-    'docs/toho-image-studio/index.html',
-  ]) {
-    await writeFixtureFile(`doc_build/${output}`, '<html><body>Verified output</body></html>');
-  }
-
-  await writeFixtureFile('doc_build/sitemap.xml', '<urlset></urlset>');
-  await writeFixtureFile('doc_build/llms.txt', 'Verified output');
-  await writeFixtureFile(
-    'doc_build/llms-full.txt',
-    canonicalCards.map((project) => project.url).join('\n'),
-  );
+  await writeFixtureFile('doc_build/404.html', '<html><body>Verified output</body></html>');
+  await writeSyntheticManifestFixture(defaultManifest);
 });
 
 afterEach(async () => {
   await rm(fixtureRoot, { recursive: true, force: true });
+});
+
+describe('verify-build manifest-driven output validation', () => {
+  it('accepts a complete single-project synthetic manifest', async () => {
+    const { homepageCards } = await configureSyntheticFixture([
+      {
+        id: 'solo',
+        name: 'Solo Project',
+        url: 'https://solo.example.com/',
+        order: 1,
+        featured: true,
+        docsRoutes: ['/docs/solo/', '/docs/solo/guide'],
+      },
+    ]);
+
+    const result = await runVerifier(homepageCards);
+
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+  });
+
+  it('accepts a fourth registered project and all of its generated routes', async () => {
+    const projects = [
+      ...syntheticProjects,
+      {
+        id: 'fourth',
+        ...fourthCard,
+        order: 3,
+        featured: true,
+        docsRoutes: ['/docs/fourth/', '/docs/fourth/setup'],
+      },
+    ];
+    const { homepageCards } = await configureSyntheticFixture(projects);
+
+    const result = await runVerifier(homepageCards);
+
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+  });
+
+  it('accepts an undocumented project when llms-full contains its registry URL', async () => {
+    const { homepageCards } = await configureSyntheticFixture([
+      {
+        id: 'undocumented',
+        name: 'Undocumented Project',
+        url: 'https://undocumented.example.com/',
+        order: 1,
+        featured: true,
+        docsRoutes: [],
+      },
+    ]);
+
+    const result = await runVerifier(homepageCards);
+
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+  });
+
+  it.each([
+    'htmlPath',
+    'markdownPath',
+  ])('rejects a missing docs route $field output', async (field) => {
+    const { homepageCards, manifest } = await configureSyntheticFixture([
+      {
+        id: 'documented',
+        name: 'Documented Project',
+        url: 'https://documented.example.com/',
+        order: 1,
+        featured: true,
+        docsRoutes: ['/docs/documented/', '/docs/documented/guide'],
+      },
+    ]);
+    const docsRoute = manifest.routes.find((route) => route.routePath === '/docs/documented/guide');
+
+    if (!docsRoute) {
+      throw new Error('Expected the synthetic docs guide route');
+    }
+
+    await removeFixtureBuildFile(docsRoute[field]);
+
+    const result = await runVerifier(homepageCards);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(`Missing required static output: ${docsRoute[field]}`);
+  });
+
+  it('rejects a missing 404 output in addition to manifest routes', async () => {
+    await removeFixtureBuildFile('404.html');
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('Missing required static output: 404.html');
+  });
+
+  it('rejects a missing project build manifest', async () => {
+    await removeFixtureBuildFile('project-registry.json');
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('Missing project build manifest: project-registry.json');
+  });
+
+  it('rejects a project build manifest that is not a regular file', async () => {
+    await removeFixtureBuildFile('project-registry.json');
+    await mkdir(path.join(fixtureRoot, 'doc_build/project-registry.json'));
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'Project build manifest project-registry.json is not a regular file.',
+    );
+  });
+
+  it('rejects an empty project build manifest', async () => {
+    await writeFixtureFile('doc_build/project-registry.json', '');
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('Project build manifest project-registry.json is empty.');
+  });
+
+  it('rejects invalid project build manifest JSON', async () => {
+    await writeFixtureFile('doc_build/project-registry.json', '{"schemaVersion":');
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'Project build manifest project-registry.json contains invalid JSON.',
+    );
+  });
+
+  it.each([
+    {
+      label: 'schema version',
+      manifest: { ...defaultManifest, schemaVersion: 2 },
+      path: 'schemaVersion',
+    },
+    {
+      label: 'shape',
+      manifest: { ...defaultManifest, routes: 'ambiguous' },
+      path: 'routes',
+    },
+    {
+      label: 'site origin',
+      manifest: { ...defaultManifest, siteOrigin: 'https://example.com' },
+      path: 'siteOrigin',
+    },
+  ])('rejects an invalid manifest $label', async ({ manifest, path: manifestPath }) => {
+    await writeFixtureFile(
+      'doc_build/project-registry.json',
+      `${JSON.stringify(manifest, null, 2)}\n`,
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(`Invalid project build manifest at ${manifestPath}`);
+  });
+
+  it('rejects a docs route with ambiguous llms inclusion flags', async () => {
+    const manifest = structuredClone(defaultManifest);
+    const docsRoute = manifest.routes.find((route) => route.routePath.startsWith('/docs/'));
+
+    if (!docsRoute) {
+      throw new Error('Expected a synthetic docs route');
+    }
+
+    docsRoute.llms.txt = false;
+    await writeFixtureFile(
+      'doc_build/project-registry.json',
+      `${JSON.stringify(manifest, null, 2)}\n`,
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('Invalid project build manifest at routes.');
+    expect(result.stderr).toContain('Docs routes must appear in both llms outputs');
+  });
+
+  it.each([
+    'sitemap.xml',
+    'llms.txt',
+    'llms-full.txt',
+  ])('rejects a whitespace-only generated text file: %s', async (relativePath) => {
+    await writeFixtureFile(`doc_build/${relativePath}`, ' \n\t');
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(`Required static output is empty: ${relativePath}`);
+  });
+
+  it('rejects sitemap.xml when an expected route has no loc', async () => {
+    const sitemapWithoutHomeLoc = createSyntheticSitemap({
+      ...defaultManifest,
+      routes: defaultManifest.routes.filter((route) => route.routePath !== '/'),
+    });
+    await writeFixtureFile(
+      'doc_build/sitemap.xml',
+      sitemapWithoutHomeLoc.replace('<urlset>', '<urlset><url></url>'),
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(`sitemap.xml is missing route URL: ${siteOrigin}/`);
+  });
+
+  it('rejects duplicate sitemap route URLs', async () => {
+    await writeFixtureFile(
+      'doc_build/sitemap.xml',
+      createSyntheticSitemap(defaultManifest).replace(
+        '</urlset>',
+        `<url><loc>${siteOrigin}/</loc></url></urlset>`,
+      ),
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(`sitemap.xml contains duplicate route URL: ${siteOrigin}/`);
+  });
+
+  it('rejects unexpected sitemap route URLs', async () => {
+    await writeFixtureFile(
+      'doc_build/sitemap.xml',
+      createSyntheticSitemap(defaultManifest).replace(
+        '</urlset>',
+        '<url><loc>https://thqllm.com/unregistered/</loc></url></urlset>',
+      ),
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'sitemap.xml contains unexpected route URL: https://thqllm.com/unregistered/',
+    );
+  });
+
+  it('rejects llms.txt when a marked Markdown route link is missing', async () => {
+    const missingRoute = defaultManifest.routes.find((route) => route.llms.txt);
+
+    if (!missingRoute) {
+      throw new Error('Expected an llms.txt fixture route');
+    }
+
+    await writeFixtureFile(
+      'doc_build/llms.txt',
+      createSyntheticLlmsTxt({
+        ...defaultManifest,
+        routes: defaultManifest.routes.filter(
+          (route) => route.routePath !== missingRoute.routePath,
+        ),
+      }),
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `llms.txt is missing Markdown route: ${markdownUrl(missingRoute.markdownPath)}`,
+    );
+  });
+
+  it('rejects duplicate llms.txt Markdown route links', async () => {
+    const duplicateRoute = defaultManifest.routes.find((route) => route.llms.txt);
+
+    if (!duplicateRoute) {
+      throw new Error('Expected an llms.txt fixture route');
+    }
+
+    await writeFixtureFile(
+      'doc_build/llms.txt',
+      `${createSyntheticLlmsTxt(defaultManifest)}\n- [duplicate](${markdownUrl(duplicateRoute.markdownPath)})\n`,
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `llms.txt contains duplicate Markdown route: ${markdownUrl(duplicateRoute.markdownPath)}`,
+    );
+  });
+
+  it('rejects llms.txt when it invents the home entry that Rspress omits', async () => {
+    await writeFixtureFile(
+      'doc_build/llms.txt',
+      `${createSyntheticLlmsTxt(defaultManifest)}\n- [home](/index.md)\n`,
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('llms.txt contains unexpected Markdown route: /index.md');
+  });
+
+  it('rejects llms-full.txt when a marked route frontmatter is missing', async () => {
+    const missingRoute = defaultManifest.routes.find((route) => route.llms.full);
+
+    if (!missingRoute) {
+      throw new Error('Expected an llms-full.txt fixture route');
+    }
+
+    await writeFixtureFile(
+      'doc_build/llms-full.txt',
+      createSyntheticLlmsFullTxt({
+        ...defaultManifest,
+        routes: defaultManifest.routes.filter(
+          (route) => route.routePath !== missingRoute.routePath,
+        ),
+      }),
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `llms-full.txt is missing frontmatter route: ${markdownUrl(missingRoute.markdownPath)}`,
+    );
+  });
+
+  it('rejects duplicate llms-full.txt frontmatter routes', async () => {
+    const duplicateRoute = defaultManifest.routes.find((route) => route.llms.full);
+
+    if (!duplicateRoute) {
+      throw new Error('Expected an llms-full.txt fixture route');
+    }
+
+    await writeFixtureFile(
+      'doc_build/llms-full.txt',
+      `${createSyntheticLlmsFullTxt(defaultManifest)}\n---\nurl: ${markdownUrl(duplicateRoute.markdownPath)}\n---\n`,
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `llms-full.txt contains duplicate frontmatter route: ${markdownUrl(duplicateRoute.markdownPath)}`,
+    );
+  });
+
+  it('rejects llms-full.txt when a registered external URL is missing', async () => {
+    const missingUrl = defaultManifest.projects[0].externalUrl;
+    await writeFixtureFile(
+      'doc_build/llms-full.txt',
+      createSyntheticLlmsFullTxt(defaultManifest).replaceAll(missingUrl, ''),
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `llms-full.txt is missing registered project external URL: ${missingUrl}`,
+    );
+  });
 });
 
 describe('verify-build critical static asset validation', () => {
@@ -515,7 +1013,7 @@ describe('verify-build critical static asset validation', () => {
     const result = await runVerifier();
 
     expect(result.status, result.stderr || result.stdout).toBe(0);
-    expect(result.stdout).toContain('Verified 11 static outputs and site copy.');
+    expect(result.stdout).toContain('project-registry.json');
   });
 
   it.each(criticalFiles)('rejects a missing critical file: %s', async (relativePath) => {
@@ -1395,76 +1893,140 @@ describe('verify-build homepage critical asset references', () => {
 });
 
 describe('verify-build homepage project validation', () => {
-  it('accepts a synthetic fourth project card in any registry order', async () => {
-    const result = await runVerifier([
-      fourthCard,
-      canonicalCards[2],
-      canonicalCards[0],
-      canonicalCards[1],
-    ]);
-
-    expect(result.status, result.stderr || result.stdout).toBe(0);
-  });
-
   it('rejects a project card without a non-empty name', async () => {
-    const result = await runVerifier([...canonicalCards, { ...fourthCard, name: '   ' }]);
-
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain('Project stage 4 must have a non-empty project name.');
-  });
-
-  it('rejects a project card without a safe HTTPS external link', async () => {
-    const result = await runVerifier([
-      ...canonicalCards,
-      { ...fourthCard, url: 'http://fourth.example.com/' },
-    ]);
+    const result = await runVerifier([{ ...defaultCards[0], name: '   ' }]);
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain(
-      'Project stage for Fourth Project must include exactly one HTTPS external link.',
+      'doc_build/index.html project card 1 must have a non-empty project name.',
+    );
+  });
+
+  it('rejects surrounding whitespace in a rendered project card name', async () => {
+    const result = await runVerifier([{ ...defaultCards[0], name: ' Alpha Project ' }]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html project card 1 name must not include surrounding whitespace.',
+    );
+  });
+
+  it('rejects a project card without a safe HTTPS external link', async () => {
+    const result = await runVerifier([{ ...defaultCards[0], url: 'http://alpha.example.com/' }]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html project card for Alpha Project must include exactly one safe HTTPS external link.',
     );
   });
 
   it('rejects an unsafe protocol-relative external link beside the project link', async () => {
-    const result = await runVerifier([
-      ...canonicalCards,
-      { ...fourthCard, extraLinks: ['//evil.example.com/'] },
-    ]);
+    const result = await runVerifier([{ ...defaultCards[0], extraLinks: ['//evil.example.com/'] }]);
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain(
-      'Project stage for Fourth Project must include exactly one HTTPS external link.',
+      'doc_build/index.html project card for Alpha Project must include exactly one safe HTTPS external link.',
     );
   });
 
   it('ignores a same-origin absolute docs link when classifying external links', async () => {
     const result = await runVerifier([
-      ...canonicalCards,
-      { ...fourthCard, extraLinks: ['https://thqllm.com/docs/example/'] },
+      { ...defaultCards[0], extraLinks: ['https://thqllm.com/docs/example/'] },
     ]);
 
     expect(result.status, result.stderr || result.stdout).toBe(0);
   });
 
-  it('rejects duplicate project card names', async () => {
-    const result = await runVerifier([
-      ...canonicalCards,
-      { ...fourthCard, name: canonicalCards[0].name },
-    ]);
+  it('rejects an unregistered extra homepage card', async () => {
+    const result = await runVerifier([...defaultCards, fourthCard]);
 
     expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain('Duplicate project stage name: FluctGraph');
+    expect(result.stderr).toContain(
+      'doc_build/index.html section#projects has unexpected project card: Fourth Project',
+    );
   });
 
-  it('rejects duplicate project card external links', async () => {
+  it('rejects a missing featured homepage card', async () => {
+    const result = await runVerifier([]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html section#projects is missing project card: Alpha Project',
+    );
+  });
+
+  it('rejects a homepage card order change', async () => {
+    const projects = syntheticProjects.map((project) => ({ ...project, featured: true }));
+    const { homepageCards } = await configureSyntheticFixture(projects);
+
+    const result = await runVerifier([...homepageCards].reverse());
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html section#projects project card order does not match the manifest.',
+    );
+  });
+
+  it('rejects duplicate project card names', async () => {
+    const projects = syntheticProjects.map((project) => ({ ...project, featured: true }));
+    const { homepageCards } = await configureSyntheticFixture(projects);
     const result = await runVerifier([
-      ...canonicalCards,
-      { ...fourthCard, url: canonicalCards[0].url },
+      homepageCards[0],
+      { ...homepageCards[1], name: homepageCards[0].name },
     ]);
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain(
-      'Duplicate project stage external link: https://graph.tohoqing.com/',
+      'doc_build/index.html contains duplicate project card name: Alpha Project',
+    );
+  });
+
+  it('rejects duplicate project card external links', async () => {
+    const projects = syntheticProjects.map((project) => ({ ...project, featured: true }));
+    const { homepageCards } = await configureSyntheticFixture(projects);
+    const result = await runVerifier([
+      homepageCards[0],
+      { ...homepageCards[1], url: homepageCards[0].url },
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html contains duplicate project card external URL: https://alpha.example.com/',
+    );
+  });
+});
+
+describe('verify-build full project directory validation', () => {
+  it('rejects an unregistered extra directory card', async () => {
+    await writeProjectDirectory([...defaultDirectoryCards, fourthCard]);
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/projects/index.html section#projects has unexpected project card: Fourth Project',
+    );
+  });
+
+  it('rejects a missing directory card', async () => {
+    await writeProjectDirectory(defaultDirectoryCards.slice(0, 1));
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/projects/index.html section#projects is missing project card: Beta Project',
+    );
+  });
+
+  it('rejects a directory card order change', async () => {
+    await writeProjectDirectory([...defaultDirectoryCards].reverse());
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/projects/index.html section#projects project card order does not match the manifest.',
     );
   });
 });

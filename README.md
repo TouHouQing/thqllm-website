@@ -44,6 +44,14 @@ source without serving or modifying that source directory.
 
 Project counts, homepage summaries, sidebars, and verification expectations are derived from the registry. When a registry or content change intentionally changes rendered pages, regenerate the relevant macOS visual snapshots and manually review the generated PNGs before committing.
 
+`pnpm build` writes the validated, versioned registry manifest to
+`doc_build/project-registry.json` after Rspress finishes rendering. The
+`pnpm verify:build` command strictly reads that build artifact to derive every
+required HTML/Markdown route, the homepage featured cards, the complete project
+directory, sitemap entries, and both llms files; it does not import the
+TypeScript registry directly. The llms build step also adds every normalized
+project URL to the generated project Markdown, including projects without docs.
+
 ## Content boundaries
 
 - Do not add unverified API endpoints, model names, commands, or configuration fields.

@@ -76,6 +76,82 @@ describe('project registry', () => {
   });
 
   it.each([
+    'https://user:password@example.com/',
+    'https://user@example.com/',
+    'https://:password@example.com/',
+  ])('rejects project URL credentials: %s', (externalUrl) => {
+    const result = projectListSchema.safeParse([{ ...validProject, externalUrl }]);
+
+    expect(result.success).toBe(false);
+
+    if (result.success) {
+      throw new Error('Expected project URL credentials to fail');
+    }
+
+    expect(result.error.issues).toContainEqual(
+      expect.objectContaining({
+        path: [0, 'externalUrl'],
+      }),
+    );
+  });
+
+  it.each([
+    'https://thqllm.com/',
+    'https://thqllm.com/path',
+    'https://THQLLM.COM:443/path',
+  ])('rejects project URLs on the site origin: %s', (externalUrl) => {
+    const result = projectListSchema.safeParse([{ ...validProject, externalUrl }]);
+
+    expect(result.success).toBe(false);
+
+    if (result.success) {
+      throw new Error('Expected the site-origin project URL to fail');
+    }
+
+    expect(result.error.issues).toContainEqual(
+      expect.objectContaining({
+        path: [0, 'externalUrl'],
+      }),
+    );
+  });
+
+  it('rejects normalized duplicate project URLs at the second project path', () => {
+    const result = projectListSchema.safeParse([
+      { ...validProject, docs: undefined },
+      {
+        ...validFourthProject,
+        docs: undefined,
+        externalUrl: 'https://EXAMPLE.com:443',
+      },
+    ]);
+
+    expect(result.success).toBe(false);
+
+    if (result.success) {
+      throw new Error('Expected normalized duplicate project URLs to fail');
+    }
+
+    expect(result.error.issues).toContainEqual(
+      expect.objectContaining({
+        message: 'Duplicate project external URL: https://example.com/',
+        path: [1, 'externalUrl'],
+      }),
+    );
+  });
+
+  it('preserves accepted external URL input without silently rewriting it', () => {
+    const externalUrl = 'https://EXAMPLE.com:443/path';
+    const parsed = projectListSchema.parse([
+      {
+        ...validProject,
+        externalUrl,
+      },
+    ]);
+
+    expect(parsed[0].externalUrl).toBe(externalUrl);
+  });
+
+  it.each([
     {
       label: 'project',
       path: [0],
@@ -158,6 +234,29 @@ describe('project registry', () => {
     expect(() =>
       projectListSchema.parse([validProject, { ...validProject, order: validProject.order + 1 }]),
     ).toThrow(/Duplicate project id/);
+  });
+
+  it('rejects duplicate project names at the second project name path', () => {
+    const result = projectListSchema.safeParse([
+      validProject,
+      {
+        ...validFourthProject,
+        name: validProject.name,
+      },
+    ]);
+
+    expect(result.success).toBe(false);
+
+    if (result.success) {
+      throw new Error('Expected duplicate project names to fail');
+    }
+
+    expect(result.error.issues).toContainEqual(
+      expect.objectContaining({
+        message: `Duplicate project name: ${validProject.name}`,
+        path: [1, 'name'],
+      }),
+    );
   });
 
   it('rejects duplicate project orders', () => {
@@ -253,6 +352,87 @@ describe('project registry', () => {
     }
 
     expect(result.error.issues).toContainEqual(expect.objectContaining({ path }));
+  });
+
+  it.each([
+    {
+      label: 'name',
+      path: [0, 'name'],
+      value: 'Sample',
+      setValue: (project: typeof validProject, value: string) => {
+        project.name = value;
+      },
+    },
+    {
+      label: 'stage label',
+      path: [0, 'stageLabel'],
+      value: 'STAGE 09',
+      setValue: (project: typeof validProject, value: string) => {
+        project.stageLabel = value;
+      },
+    },
+    {
+      label: 'category label',
+      path: [0, 'categoryLabel'],
+      value: 'EXPERIMENT',
+      setValue: (project: typeof validProject, value: string) => {
+        project.categoryLabel = value;
+      },
+    },
+    {
+      label: 'description',
+      path: [0, 'description'],
+      value: 'A verified sample project.',
+      setValue: (project: typeof validProject, value: string) => {
+        project.description = value;
+      },
+    },
+    {
+      label: 'docs section text',
+      path: [0, 'docs', 'sections', 0, 'text'],
+      value: '开始',
+      setValue: (project: typeof validProject, value: string) => {
+        project.docs.sections[0].text = value;
+      },
+    },
+    {
+      label: 'docs item text',
+      path: [0, 'docs', 'sections', 0, 'items', 0, 'text'],
+      value: '概览',
+      setValue: (project: typeof validProject, value: string) => {
+        project.docs.sections[0].items[0].text = value;
+      },
+    },
+    {
+      label: 'tag',
+      path: [0, 'tags', 0],
+      value: 'AI',
+      setValue: (project: typeof validProject, value: string) => {
+        project.tags[0] = value;
+      },
+    },
+  ])('rejects leading and trailing whitespace in a human-readable $label', ({
+    path,
+    setValue,
+    value,
+  }) => {
+    for (const [edge, invalidValue] of [
+      ['leading', ` ${value}`],
+      ['trailing', `${value} `],
+    ] as const) {
+      const fixture = structuredClone(validProject);
+      setValue(fixture, invalidValue);
+
+      const result = projectListSchema.safeParse([fixture]);
+
+      expect(result.success).toBe(false);
+
+      if (result.success) {
+        throw new Error(`Expected ${edge} whitespace to fail at ${path.join('.')}`);
+      }
+
+      expect(result.error.issues).toContainEqual(expect.objectContaining({ path }));
+    }
   });
 
   it.each([
