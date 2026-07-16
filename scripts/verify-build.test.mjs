@@ -705,20 +705,39 @@ describe('verify-build manifest-driven output validation', () => {
   });
 
   it('accepts the existing projects plus a fourth undocumented project', async () => {
-    const baselineManifest = createSyntheticManifest(syntheticProjects);
+    const baselineProjects = [
+      ...syntheticProjects,
+      {
+        id: 'gamma',
+        name: 'Gamma Project',
+        url: 'https://gamma.example.com/',
+        order: 3,
+        featured: true,
+        docsRoutes: ['/docs/gamma/'],
+      },
+    ];
+    const baselineManifest = createSyntheticManifest(baselineProjects);
     const fourthProject = {
       id: 'fourth',
       ...fourthCard,
-      order: Math.max(...syntheticProjects.map((project) => project.order)) + 1,
+      order: 4,
       featured: true,
       docsRoutes: [],
     };
-    const projects = [...syntheticProjects, fourthProject];
-    const { homepageCards, manifest } = await configureSyntheticFixture(projects);
+    const projects = [...baselineProjects, fourthProject];
+    const { directoryCards, homepageCards, manifest } = await configureSyntheticFixture(projects);
     const llmsFull = await readFile(path.join(fixtureRoot, 'doc_build/llms-full.txt'), 'utf8');
 
+    expect(manifest.projects).toHaveLength(4);
+    expect(manifest.projects.at(-1)).toMatchObject({
+      id: fourthProject.id,
+      order: 4,
+      documented: false,
+    });
     expect(manifest.routes).toEqual(baselineManifest.routes);
+    expect(manifest.routes.some((route) => route.routePath.startsWith('/docs/fourth'))).toBe(false);
     expect(homepageCards).toEqual(cardsForProjects(projects, true));
+    expect(directoryCards).toEqual(cardsForProjects(projects, false));
     expect(llmsFull).toContain(`](${new URL(fourthProject.url).href})`);
 
     const result = await runVerifier(homepageCards);
