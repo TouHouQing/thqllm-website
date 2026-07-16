@@ -66,7 +66,7 @@ curl "$OPENAI_BASE_URL/chat/completions" \
 
 请求成功后，到控制台核对请求时间、模型和状态。如果客户端使用 Responses，不要用
 Chat Completions 的成功结果推断 Responses 一定可用；还需要按
-[Codex 接入指南](/docs/thq-api/clients/codex/)验证模型和 `/v1/responses`。
+[Codex 接入指南](/docs/thq-api/clients/codex)验证模型和 `/v1/responses`。
 
 ## JSON 配置模板
 
@@ -89,8 +89,8 @@ Chat Completions 的成功结果推断 Responses 一定可用；还需要按
 | Model | `model`、`modelId`、provider 内的 `models` |
 
 字段名通常区分大小写。不要在没有官方依据时把一个客户端的字段名复制到另一个客户端。
-可直接使用的示例见 [OpenCode](/docs/thq-api/clients/opencode/)和
-[OpenClaw](/docs/thq-api/clients/openclaw/)。
+可直接使用的示例见 [OpenCode](/docs/thq-api/clients/opencode)和
+[OpenClaw](/docs/thq-api/clients/openclaw)。
 
 ## Claude Code
 
@@ -105,7 +105,7 @@ export ANTHROPIC_MODEL="CONTROL_PANEL_MODEL_ID"
 
 客户端会追加 `/v1/messages`。不要把 `ANTHROPIC_BASE_URL` 写成
 `https://api.thqllm.com/v1`。完整步骤见
-[Claude Code 接入指南](/docs/thq-api/clients/claude-code/)和
+[Claude Code 接入指南](/docs/thq-api/clients/claude-code)和
 [Claude Code Settings 官方文档](https://code.claude.com/docs/en/settings)。
 
 ## Gemini CLI
@@ -121,7 +121,7 @@ export GEMINI_MODEL="CONTROL_PANEL_MODEL_ID"
 
 组合后的有效根地址是 `https://api.thqllm.com/v1beta`。不要把 `/v1beta` 直接写入
 `GOOGLE_GEMINI_BASE_URL`，也不要用 OpenAI 的 `/v1` 替代它。完整步骤见
-[Gemini CLI 接入指南](/docs/thq-api/clients/gemini-cli/)和
+[Gemini CLI 接入指南](/docs/thq-api/clients/gemini-cli)和
 [Gemini CLI Configuration 官方文档](https://geminicli.com/docs/get-started/configuration/)。
 
 ## 配置保存与重载
@@ -147,4 +147,4 @@ export GEMINI_MODEL="CONTROL_PANEL_MODEL_ID"
 - 模型 ID 来自控制台，且适用于当前协议。
 
 发现凭据泄露时，立即在控制台撤销旧 Key，而不是只删除公开内容。更多排查见
-[常见问题](/docs/thq-api/faq/)和[端点说明](/docs/thq-api/endpoints/)。
+[常见问题](/docs/thq-api/faq)和[端点说明](/docs/thq-api/endpoints)。

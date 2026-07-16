@@ -1,21 +1,46 @@
 import { access, readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
+import remarkParse from 'remark-parse';
+import { unified } from 'unified';
 import { describe, expect, it } from 'vitest';
 import { projects } from '../data/projects';
+import { createProjectDocRoutePath } from './project-doc-routes';
 
 const repoRoot = path.resolve(import.meta.dirname, '../..');
 const docsRoot = path.join(repoRoot, 'site/docs/thq-api');
-const thqApiProject = projects.find((project) => project.id === 'thq-api');
+const thqApiDocs = projects.find((project) => project.id === 'thq-api')?.docs;
 
-if (!thqApiProject?.docs) {
+if (!thqApiDocs) {
   throw new Error('Missing THQ API documentation registry');
 }
 
-const docFiles = thqApiProject.docs.sections.flatMap((section) =>
+const thqApiBasePath = thqApiDocs.basePath;
+const thqApiRootPath = thqApiBasePath.replace(/\/$/, '');
+const docFiles = thqApiDocs.sections.flatMap((section) =>
   section.items.map((item) => `${item.slug}.mdx`),
+);
+const canonicalDocRoutes = new Set(
+  thqApiDocs.sections.flatMap((section) =>
+    section.items.map((item) => createProjectDocRoutePath(thqApiBasePath, item.slug)),
+  ),
 );
 
 type DocFile = string;
+type MarkdownNode = {
+  type?: string;
+  url?: string;
+  identifier?: string;
+  children?: MarkdownNode[];
+  position?: {
+    start?: {
+      line?: number;
+    };
+  };
+};
+type MarkdownLink = {
+  href: string;
+  line: number;
+};
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -173,6 +198,62 @@ function findCredentialViolations(content: string): CredentialViolation[] {
 
 function isMissingFileError(error: unknown) {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT';
+}
+
+function visitMarkdownNodes(node: MarkdownNode, visitor: (node: MarkdownNode) => void) {
+  visitor(node);
+
+  for (const child of node.children ?? []) {
+    visitMarkdownNodes(child, visitor);
+  }
+}
+
+function findThqApiMarkdownLinks(content: string): MarkdownLink[] {
+  const tree = unified().use(remarkParse).parse(content) as MarkdownNode;
+  const definitions = new Map<string, string>();
+
+  visitMarkdownNodes(tree, (node) => {
+    if (node.type === 'definition' && node.identifier && node.url) {
+      const identifier = node.identifier.toLowerCase();
+
+      if (!definitions.has(identifier)) {
+        definitions.set(identifier, node.url);
+      }
+    }
+  });
+
+  const links: MarkdownLink[] = [];
+
+  visitMarkdownNodes(tree, (node) => {
+    const href =
+      node.type === 'link'
+        ? node.url
+        : node.type === 'linkReference' && node.identifier
+          ? definitions.get(node.identifier.toLowerCase())
+          : undefined;
+
+    if (href && isThqApiMarkdownHref(href)) {
+      links.push({
+        href,
+        line: node.position?.start?.line ?? 0,
+      });
+    }
+  });
+
+  return links;
+}
+
+function isThqApiMarkdownHref(href: string) {
+  const url = new URL(href, 'https://thqllm.invalid');
+
+  return (
+    url.origin === 'https://thqllm.invalid' &&
+    (url.pathname === thqApiRootPath || url.pathname.startsWith(thqApiBasePath))
+  );
+}
+
+function stripQueryAndHash(href: string) {
+  return new URL(href, 'https://thqllm.invalid').pathname;
 }
 
 async function collectMdxFiles(directory: string, prefix = ''): Promise<string[]> {
@@ -347,6 +428,38 @@ describe('THQ API endpoint contract matchers', () => {
   });
 });
 
+describe('THQ API Markdown link helpers', () => {
+  it('collects the slashless root without matching similarly prefixed routes', () => {
+    const content = [
+      '[THQ API root](/docs/thq-api)',
+      '[Another project](/docs/thq-api-other)',
+    ].join('\n');
+
+    expect(findThqApiMarkdownLinks(content)).toEqual([
+      {
+        href: '/docs/thq-api',
+        line: 1,
+      },
+    ]);
+  });
+
+  it('uses the first definition for duplicate Markdown references', () => {
+    const content = [
+      '[Quick start][guide]',
+      '',
+      '[guide]: /docs/thq-api/quick-start',
+      '[guide]: /docs/thq-api/faq',
+    ].join('\n');
+
+    expect(findThqApiMarkdownLinks(content)).toEqual([
+      {
+        href: '/docs/thq-api/quick-start',
+        line: 1,
+      },
+    ]);
+  });
+});
+
 describe('THQ API documentation contract', () => {
   it('publishes exactly the pages registered for THQ API', async () => {
     expect(await collectMdxFiles(docsRoot)).toEqual([...docFiles].toSorted());
@@ -384,6 +497,25 @@ describe('THQ API documentation contract', () => {
       .map(({ relativePath }) => relativePath);
 
     expect(violations, `Remote raster image URLs found in: ${violations.join(', ')}`).toEqual([]);
+  });
+
+  it('uses canonical routes for THQ API Markdown links', async () => {
+    const violations = (await readExistingDocs()).flatMap(({ content, relativePath }) =>
+      findThqApiMarkdownLinks(content)
+        .filter(({ href }) => !canonicalDocRoutes.has(stripQueryAndHash(href)))
+        .map(({ href, line }) => ({
+          relativePath,
+          line,
+          href,
+        })),
+    );
+
+    expect(
+      violations,
+      `Non-canonical THQ API Markdown links:\n${violations
+        .map(({ href, line, relativePath }) => `${relativePath}:${line} ${href}`)
+        .join('\n')}`,
+    ).toEqual([]);
   });
 
   it('contains no API keys that resemble real sk- credentials', async () => {

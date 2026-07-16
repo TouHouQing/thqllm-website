@@ -54,7 +54,7 @@ https://api.thqllm.com
 客户端会追加 Anthropic Messages 路径，最终请求为 `/v1/messages`。如果把 Base URL 手动
 写成 `https://api.thqllm.com/v1`，客户端可能再次追加版本和资源路径，形成错误地址。
 
-完整环境变量见 [Claude Code 接入指南](/docs/thq-api/clients/claude-code/)，协议参考见
+完整环境变量见 [Claude Code 接入指南](/docs/thq-api/clients/claude-code)，协议参考见
 [Anthropic Messages API 官方文档](https://docs.anthropic.com/en/api/messages)。
 
 ## Gemini CLI
@@ -73,7 +73,7 @@ https://api.thqllm.com/v1beta
 ```
 
 不要将 `GOOGLE_GEMINI_BASE_URL` 写成带 `/v1beta` 的完整根地址，否则客户端可能再次追加版本。
-完整配置见 [Gemini CLI 接入指南](/docs/thq-api/clients/gemini-cli/)，协议参考见
+完整配置见 [Gemini CLI 接入指南](/docs/thq-api/clients/gemini-cli)，协议参考见
 [Gemini API 官方文档](https://ai.google.dev/api)。
 
 ## 为什么后缀不同
@@ -113,4 +113,4 @@ https://api.thqllm.com/v1beta
 确认它是否支持 Chat Completions、Responses、Anthropic Messages 或 Gemini 原生协议。
 
 继续配置可查看[客户端接入总览](/docs/thq-api/clients/)和
-[手动配置](/docs/thq-api/configuration/)，失败时按[常见问题](/docs/thq-api/faq/)排查。
+[手动配置](/docs/thq-api/configuration)，失败时按[常见问题](/docs/thq-api/faq)排查。

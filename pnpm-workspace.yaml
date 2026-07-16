@@ -1,5 +1,8 @@
 packages:
   - '.'
 
+overrides:
+  style-to-js: 1.1.20
+
 patchedDependencies:
   '@rspress/core@2.0.17': patches/@rspress__core@2.0.17.patch

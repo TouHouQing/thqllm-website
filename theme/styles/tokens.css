@@ -25,3 +25,7 @@
   --rp-c-brand-lighter: #d25661;
   --rp-c-brand-tint: rgb(169 41 53 / 8%);
 }
+
+:where(html:not(.rp-dark)) {
+  --shiki-token-string: #247f4a;
+}

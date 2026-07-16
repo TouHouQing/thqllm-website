@@ -89,6 +89,10 @@ function getProjectHeading(page: Page, projectName: string) {
   });
 }
 
+function normalizeStaticDocPath(pathname: string) {
+  return pathname.replace(/\/index\.html$/, '/').replace(/\.html$/, '');
+}
+
 async function readPanelMetrics(page: Page, panel: Locator) {
   const [menuBox, panelBox] = await Promise.all([
     page.locator('.rp-doc-layout__menu').boundingBox(),
@@ -232,11 +236,15 @@ for (const route of thqApiDocumentationRoutes) {
       }),
     ).toBeVisible();
     const sidebarLink = page
-      .locator('nav[aria-label="文档导航"]')
+      .getByRole('complementary', { name: '文档导航' })
       .getByRole('link', { name: route.sidebarItemText, exact: true });
     await expect(sidebarLink).toHaveCount(1);
     await expect(sidebarLink).toBeVisible();
-    await expect(sidebarLink).toHaveAttribute('href', route.path);
+    const sidebarHref = await sidebarLink.getAttribute('href');
+    expect(sidebarHref).not.toBeNull();
+    expect(normalizeStaticDocPath(new URL(sidebarHref ?? '', page.url()).pathname)).toBe(
+      route.path,
+    );
   });
 }
 

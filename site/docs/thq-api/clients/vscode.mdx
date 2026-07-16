@@ -34,7 +34,7 @@ OpenAI Responses、Anthropic Messages 或其他协议，也可能完全不允许
 模型和服务端必须支持最终的 `/v1/responses` 请求。
 
 这不等同于任意 VS Code 扩展都能使用 Responses。完整配置见
-[Codex 接入指南](/docs/thq-api/clients/codex/)，扩展行为见
+[Codex 接入指南](/docs/thq-api/clients/codex)，扩展行为见
 [OpenAI Codex IDE 官方文档](https://developers.openai.com/codex/ide/)和
 [Codex 配置官方文档](https://developers.openai.com/codex/config-basic/)。
 
@@ -55,8 +55,8 @@ OpenAI Responses、Anthropic Messages 或其他协议，也可能完全不允许
 - 扩展若只支持固定服务或不允许自定义地址，则不能按本节接入。
 
 不要把完整请求路径直接填入只要求 Base URL 的输入框。更多字段模板见
-[手动配置](/docs/thq-api/configuration/)，地址差异见
-[端点说明](/docs/thq-api/endpoints/)。
+[手动配置](/docs/thq-api/configuration)，地址差异见
+[端点说明](/docs/thq-api/endpoints)。
 
 ## Claude Code 扩展
 
@@ -73,7 +73,7 @@ export ANTHROPIC_MODEL="CONTROL_PANEL_MODEL_ID"
 
 如果 VS Code 已经运行，它通常不会自动获得后来新增的 shell 环境变量。可以完全退出 VS Code，
 再从已设置变量的终端启动；也可以按组织的受控环境配置方式注入变量。详细说明见
-[Claude Code 接入指南](/docs/thq-api/clients/claude-code/)和
+[Claude Code 接入指南](/docs/thq-api/clients/claude-code)和
 [Claude Code VS Code 官方文档](https://code.claude.com/docs/en/vs-code)。
 
 ## 保存并重新加载窗口
@@ -126,4 +126,4 @@ export ANTHROPIC_MODEL="CONTROL_PANEL_MODEL_ID"
 根地址；Claude Code 扩展使用不带版本后缀的地址。
 
 更多排查步骤见[客户端接入总览](/docs/thq-api/clients/)和
-[常见问题](/docs/thq-api/faq/)。
+[常见问题](/docs/thq-api/faq)。
