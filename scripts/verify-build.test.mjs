@@ -93,52 +93,98 @@ const crc32Table = Array.from({ length: 256 }, (_, value) => {
 let fixtureRoot;
 
 function createProjectCard({
+  actionsAriaHidden = false,
+  actionsHidden = false,
+  actionsMarker = true,
+  actionsStyle,
   docsHref,
+  docsLinkOutsideActions = false,
+  docsMarker = true,
   documented = false,
+  extraActionsContainer = false,
   extraLinks = [],
   id,
   name,
   mainLinkAriaLabel = `进入 ${name}`,
+  mainLinkAriaHidden = false,
+  mainLinkClass,
+  mainLinkHidden = false,
   mainLinkMarker = true,
+  mainLinkOutsideActions = false,
+  mainLinkStyle,
+  mainLinkTabIndex,
   mainLinkText = '进入项目',
   url,
 }) {
-  const renderedExtraLinks = extraLinks
-    .map((link) => {
-      const linkConfig = typeof link === 'string' ? { href: link } : link;
-      const attributes = [
-        linkConfig.marker ? 'data-project-external-link' : '',
-        linkConfig.hidden ? 'hidden' : '',
-        linkConfig.ariaHidden ? 'aria-hidden="true"' : '',
-        linkConfig.ariaLabel ? `aria-label="${linkConfig.ariaLabel}"` : '',
-        linkConfig.style ? `style="${linkConfig.style}"` : '',
-        linkConfig.target ? `target="${linkConfig.target}"` : '',
-        linkConfig.rel ? `rel="${linkConfig.rel}"` : '',
-      ]
-        .filter(Boolean)
-        .join(' ');
-      const anchor = `<a href="${linkConfig.href}"${attributes ? ` ${attributes}` : ''}>${linkConfig.text ?? '附加链接'}</a>`;
-      const ancestorAttributes = [
-        linkConfig.ancestorHidden ? 'hidden' : '',
-        linkConfig.ancestorAriaHidden ? 'aria-hidden="true"' : '',
-        linkConfig.ancestorStyle ? `style="${linkConfig.ancestorStyle}"` : '',
-      ]
-        .filter(Boolean)
-        .join(' ');
+  const renderedExtraLinks = extraLinks.map((link) => {
+    const linkConfig = typeof link === 'string' ? { href: link } : link;
+    const attributes = [
+      linkConfig.marker ? `data-project-external-link="${id}"` : '',
+      linkConfig.hidden ? 'hidden' : '',
+      linkConfig.ariaHidden ? 'aria-hidden="true"' : '',
+      linkConfig.ariaLabel ? `aria-label="${linkConfig.ariaLabel}"` : '',
+      linkConfig.className ? `class="${linkConfig.className}"` : '',
+      linkConfig.style ? `style="${linkConfig.style}"` : '',
+      linkConfig.tabIndex === undefined ? '' : `tabindex="${linkConfig.tabIndex}"`,
+      linkConfig.target ? `target="${linkConfig.target}"` : '',
+      linkConfig.rel ? `rel="${linkConfig.rel}"` : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    const anchor = `<a href="${linkConfig.href}"${attributes ? ` ${attributes}` : ''}>${linkConfig.text ?? '附加链接'}</a>`;
+    const ancestorAttributes = [
+      linkConfig.ancestorHidden ? 'hidden' : '',
+      linkConfig.ancestorAriaHidden ? 'aria-hidden="true"' : '',
+      linkConfig.ancestorStyle ? `style="${linkConfig.ancestorStyle}"` : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
 
-      return ancestorAttributes ? `<span ${ancestorAttributes}>${anchor}</span>` : anchor;
-    })
-    .join('');
+    return {
+      html: ancestorAttributes ? `<span ${ancestorAttributes}>${anchor}</span>` : anchor,
+      outsideActions: linkConfig.outsideActions === true,
+    };
+  });
+  const mainLinkAttributes = [
+    mainLinkMarker ? `data-project-external-link="${id}"` : '',
+    mainLinkHidden ? 'hidden' : '',
+    mainLinkAriaHidden ? 'aria-hidden="true"' : '',
+    mainLinkClass ? `class="${mainLinkClass}"` : '',
+    mainLinkStyle ? `style="${mainLinkStyle}"` : '',
+    mainLinkTabIndex === undefined ? '' : `tabindex="${mainLinkTabIndex}"`,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const mainLink = `<a href="${url}"${mainLinkAttributes ? ` ${mainLinkAttributes}` : ''} target="_blank" rel="noreferrer noopener" aria-label="${mainLinkAriaLabel}">${mainLinkText}</a>`;
   const docsLink = documented
-    ? `<a href="${docsHref ?? `/docs/${id}/`}" aria-label="阅读 ${name} 文档">使用文档</a>`
+    ? `<a href="${docsHref ?? `/docs/${id}/`}"${docsMarker ? ` data-project-docs-link="${id}"` : ''} aria-label="阅读 ${name} 文档">使用文档</a>`
     : '';
+  const actionsAttributes = [
+    actionsMarker ? 'data-project-actions' : '',
+    actionsHidden ? 'hidden' : '',
+    actionsAriaHidden ? 'aria-hidden="true"' : '',
+    actionsStyle ? `style="${actionsStyle}"` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const insideExtraLinks = renderedExtraLinks
+    .filter((link) => !link.outsideActions)
+    .map((link) => link.html)
+    .join('');
+  const outsideExtraLinks = renderedExtraLinks
+    .filter((link) => link.outsideActions)
+    .map((link) => link.html)
+    .join('');
+  const actions = `<div${actionsAttributes ? ` ${actionsAttributes}` : ''}>${mainLinkOutsideActions ? '' : mainLink}${insideExtraLinks}${documented && !docsLinkOutsideActions ? docsLink : ''}</div>`;
 
   return `
     <article data-testid="project-stage">
       <h3>${name}</h3>
-      <a href="${url}"${mainLinkMarker ? ' data-project-external-link' : ''} target="_blank" rel="noreferrer noopener" aria-label="${mainLinkAriaLabel}">${mainLinkText}</a>
-      ${renderedExtraLinks}
-      ${docsLink}
+      ${mainLinkOutsideActions ? mainLink : ''}
+      ${actions}
+      ${extraActionsContainer ? '<div data-project-actions></div>' : ''}
+      ${outsideExtraLinks}
+      ${documented && docsLinkOutsideActions ? docsLink : ''}
     </article>
   `;
 }
@@ -1207,6 +1253,52 @@ describe('verify-build manifest-driven output validation', () => {
     expect(result.stderr).toContain(`llms.txt is missing Markdown route: ${missingMarkdownRoute}`);
   });
 
+  it('does not count an llms.txt reference link and definition inside fenced code', async () => {
+    const missingRoute = defaultManifest.routes.find((route) => route.llms.txt);
+
+    if (!missingRoute) {
+      throw new Error('Expected an llms.txt fixture route');
+    }
+
+    const missingMarkdownRoute = markdownUrl(missingRoute.markdownPath);
+    await writeFixtureFile(
+      'doc_build/llms.txt',
+      `${createSyntheticLlmsTxt({
+        ...defaultManifest,
+        routes: defaultManifest.routes.filter(
+          (route) => route.routePath !== missingRoute.routePath,
+        ),
+      })}\n\`\`\`md\n- [decoy][missing route]\n\n[missing route]: ${missingMarkdownRoute}\n\`\`\`\n`,
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(`llms.txt is missing Markdown route: ${missingMarkdownRoute}`);
+  });
+
+  it('accepts a CommonMark reference-style llms.txt route using the first definition', async () => {
+    const referenceRoute = defaultManifest.routes.find((route) => route.llms.txt);
+
+    if (!referenceRoute) {
+      throw new Error('Expected an llms.txt fixture route');
+    }
+
+    const referenceMarkdownRoute = markdownUrl(referenceRoute.markdownPath);
+    const directLink = `- [${referenceRoute.routePath}](${referenceMarkdownRoute})`;
+    await writeFixtureFile(
+      'doc_build/llms.txt',
+      createSyntheticLlmsTxt(defaultManifest).replace(
+        directLink,
+        `- [${referenceRoute.routePath}][  RoUtE   LaBeL  ]\n\n[route label]: ${referenceMarkdownRoute}\n[ROUTE LABEL]: /unregistered.md`,
+      ),
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+  });
+
   it('rejects duplicate llms.txt Markdown route links', async () => {
     const duplicateRoute = defaultManifest.routes.find((route) => route.llms.txt);
 
@@ -1474,6 +1566,74 @@ describe('verify-build manifest-driven output validation', () => {
     expect(result.stderr).toContain(
       `llms-full.txt projects block contains unexpected external URL: ${unexpectedUrl}`,
     );
+  });
+
+  it('rejects a reference-style external URL inside the projects llms-full block', async () => {
+    const unexpectedUrl = 'https://reference.example.com/project';
+    const content = transformLlmsFullBlock(
+      createSyntheticLlmsFullTxt(defaultManifest),
+      '/projects/index.md',
+      (block) =>
+        `${block}\n- [Unexpected][  ExTrA   PrOjEcT  ]\n\n[extra project]: ${unexpectedUrl}\n`,
+    );
+    await writeFixtureFile('doc_build/llms-full.txt', content);
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `llms-full.txt projects block contains unexpected external URL: ${unexpectedUrl} at position 3.`,
+    );
+  });
+
+  it('preserves duplicate reference-style project links', async () => {
+    const duplicateProject = defaultManifest.projects[0];
+    const content = transformLlmsFullBlock(
+      createSyntheticLlmsFullTxt(defaultManifest),
+      '/projects/index.md',
+      (block) =>
+        `${block}\n- [Duplicate][duplicate project]\n\n[duplicate project]: ${duplicateProject.externalUrl}\n`,
+    );
+    await writeFixtureFile('doc_build/llms-full.txt', content);
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `llms-full.txt projects block contains unexpected external URL: ${duplicateProject.externalUrl} at position 3.`,
+    );
+  });
+
+  it('rejects a protocol-relative external URL inside the projects llms-full block', async () => {
+    const protocolRelativeUrl = '//evil.example.com/path';
+    const normalizedUrl = 'https://evil.example.com/path';
+    const content = transformLlmsFullBlock(
+      createSyntheticLlmsFullTxt(defaultManifest),
+      '/projects/index.md',
+      (block) => `${block}\n- [Unexpected](${protocolRelativeUrl})\n`,
+    );
+    await writeFixtureFile('doc_build/llms-full.txt', content);
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `llms-full.txt projects block contains unexpected external URL: ${normalizedUrl} at position 3.`,
+    );
+  });
+
+  it('ignores project image references and unused definitions', async () => {
+    const content = transformLlmsFullBlock(
+      createSyntheticLlmsFullTxt(defaultManifest),
+      '/projects/index.md',
+      (block) =>
+        `${block}\n![Decorative project][project image]\n\n[project image]: https://ignored.example.com/\n[unused]: https://unused.example.com/\n`,
+    );
+    await writeFixtureFile('doc_build/llms-full.txt', content);
+
+    const result = await runVerifier();
+
+    expect(result.status, result.stderr || result.stdout).toBe(0);
   });
 
   it('rejects a duplicate external URL inside the projects llms-full block', async () => {
@@ -2632,6 +2792,110 @@ describe('verify-build homepage project validation', () => {
     );
   });
 
+  it.each([
+    ['inline style', { mainLinkStyle: 'opacity: 0' }],
+    ['class', { mainLinkClass: 'visually-hidden' }],
+    ['negative tab order', { mainLinkTabIndex: '-1' }],
+  ])('rejects a marked external link with a forbidden %s', async (_label, override) => {
+    const result = await runVerifier([{ ...defaultCards[0], ...override }]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html project card for Alpha Project marked external link must be visible.',
+    );
+  });
+
+  it('rejects a marked external link outside the project actions container', async () => {
+    const result = await runVerifier([{ ...defaultCards[0], mainLinkOutsideActions: true }]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html project card for Alpha Project anchors must be direct children of [data-project-actions].',
+    );
+  });
+
+  it('rejects inline style on an ancestor between the external link and card', async () => {
+    const result = await runVerifier([{ ...defaultCards[0], actionsStyle: 'opacity: 0' }]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html project card for Alpha Project marked external link must be visible.',
+    );
+  });
+
+  it('rejects a hidden canonical link behind a visible wrong same-origin action', async () => {
+    const project = defaultCards[0];
+    const result = await runVerifier([
+      {
+        ...project,
+        documented: false,
+        url: '/docs/alpha/',
+        mainLinkMarker: false,
+        extraLinks: [
+          {
+            href: project.url,
+            ariaLabel: `进入 ${project.name}`,
+            className: 'visually-hidden',
+            marker: true,
+            rel: 'noreferrer noopener',
+            target: '_blank',
+            text: '进入项目',
+          },
+        ],
+      },
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html project card for Alpha Project marked external link must be visible.',
+    );
+  });
+
+  it('rejects a canonical external marker that is not the first project action', async () => {
+    const project = defaultCards[0];
+    const result = await runVerifier([
+      {
+        ...project,
+        documented: false,
+        url: '/docs/alpha/',
+        mainLinkMarker: false,
+        extraLinks: [
+          {
+            href: project.url,
+            ariaLabel: `进入 ${project.name}`,
+            marker: true,
+            rel: 'noreferrer noopener',
+            target: '_blank',
+            text: '进入项目',
+          },
+        ],
+      },
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html project card for Alpha Project marked external link must be the first direct anchor in [data-project-actions].',
+    );
+  });
+
+  it('requires exactly one stable project actions container', async () => {
+    const missingResult = await runVerifier([{ ...defaultCards[0], actionsMarker: false }]);
+
+    expect(missingResult.status).not.toBe(0);
+    expect(missingResult.stderr).toContain(
+      'doc_build/index.html project card for Alpha Project must contain exactly one [data-project-actions].',
+    );
+
+    const duplicateResult = await runVerifier([
+      { ...defaultCards[0], extraActionsContainer: true },
+    ]);
+
+    expect(duplicateResult.status).not.toBe(0);
+    expect(duplicateResult.stderr).toContain(
+      'doc_build/index.html project card for Alpha Project must contain exactly one [data-project-actions].',
+    );
+  });
+
   it('rejects an unsafe protocol-relative external link beside the project link', async () => {
     const result = await runVerifier([{ ...defaultCards[0], extraLinks: ['//evil.example.com/'] }]);
 
@@ -2641,12 +2905,15 @@ describe('verify-build homepage project validation', () => {
     );
   });
 
-  it('accepts the documented project link as a same-origin absolute URL', async () => {
+  it('rejects an absolute docs href even when it has the canonical same-origin destination', async () => {
     const result = await runVerifier([
       { ...defaultCards[0], docsHref: 'https://thqllm.com/docs/alpha/' },
     ]);
 
-    expect(result.status, result.stderr || result.stdout).toBe(0);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html project card for Alpha Project docs link must target /docs/alpha/.',
+    );
   });
 
   it('rejects an extra same-origin anchor in a project card', async () => {
@@ -2666,6 +2933,24 @@ describe('verify-build homepage project validation', () => {
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain(
       'doc_build/index.html project card for Alpha Project docs link must target /docs/alpha/.',
+    );
+  });
+
+  it('rejects a documented project card without the stable docs marker', async () => {
+    const result = await runVerifier([{ ...defaultCards[0], docsMarker: false }]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html project card for Alpha Project docs link must be the second direct anchor with [data-project-docs-link].',
+    );
+  });
+
+  it('rejects a documented project link outside the project actions container', async () => {
+    const result = await runVerifier([{ ...defaultCards[0], docsLinkOutsideActions: true }]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html project card for Alpha Project anchors must be direct children of [data-project-actions].',
     );
   });
 

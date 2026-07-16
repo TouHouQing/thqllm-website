@@ -61,10 +61,38 @@ describe('ProjectStageGrid', () => {
       }
 
       const external = within(card).getByRole('link', { name: `进入 ${project.name}` });
+      const actions = card.querySelector('[data-project-actions]');
+
+      if (!actions) {
+        throw new Error(`Expected ${project.name} card to have a project actions container`);
+      }
+
+      const actionAnchors = [...actions.querySelectorAll(':scope > a')];
+
       expect(external).toHaveAttribute('href', project.externalUrl);
       expect(external).toHaveAttribute('data-project-external-link', project.id);
       expect(external).toHaveAttribute('target', '_blank');
       expect(external).toHaveAttribute('rel', 'noreferrer noopener');
+      expect(external.parentElement).toBe(actions);
+      expect(actionAnchors[0]).toBe(external);
+      expect(external).not.toHaveAttribute('class');
+      expect(external).not.toHaveAttribute('style');
+      expect(external).not.toHaveAttribute('hidden');
+      expect(external).not.toHaveAttribute('aria-hidden');
+      expect(external).not.toHaveAttribute('tabindex', '-1');
+
+      if (project.docs) {
+        const docs = within(card).getByRole('link', { name: `阅读 ${project.name} 文档` });
+
+        expect(docs).toHaveAttribute('href', project.docs.basePath);
+        expect(docs).toHaveAttribute('data-project-docs-link', project.id);
+        expect(docs.parentElement).toBe(actions);
+        expect(actionAnchors[1]).toBe(docs);
+        expect(actionAnchors).toHaveLength(2);
+      } else {
+        expect(card.querySelector('[data-project-docs-link]')).not.toBeInTheDocument();
+        expect(actionAnchors).toHaveLength(1);
+      }
     }
 
     expect(view.getByRole('link', { name: '阅读 FluctGraph 文档' })).toHaveAttribute(
@@ -90,7 +118,11 @@ describe('ProjectStageGrid', () => {
       </MemoryRouter>,
     );
 
-    expect(within(container).getByText('文档准备中')).toHaveAttribute('aria-disabled', 'true');
+    const view = within(container);
+
+    expect(view.getByText('文档准备中')).toHaveAttribute('aria-disabled', 'true');
+    expect(container.querySelectorAll('[data-project-actions]')).toHaveLength(1);
+    expect(container.querySelector('[data-project-docs-link]')).not.toBeInTheDocument();
   });
 
   it('counts only featured projects that are rendered', () => {

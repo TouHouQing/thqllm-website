@@ -617,12 +617,46 @@ const llmsFullParser = unified()
   .use(remarkParse)
   .use(remarkFrontmatter, [{ type: 'yaml', marker: '-', anywhere: true }]);
 
-function collectMarkdownLinkDestinations(nodes) {
+function collectMarkdownDefinitions(nodes) {
+  const definitions = new Map();
+
+  function visit(node) {
+    if (
+      node.type === 'definition' &&
+      typeof node.identifier === 'string' &&
+      typeof node.url === 'string' &&
+      !definitions.has(node.identifier)
+    ) {
+      definitions.set(node.identifier, node.url);
+    }
+
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) {
+        visit(child);
+      }
+    }
+  }
+
+  for (const node of nodes) {
+    visit(node);
+  }
+
+  return definitions;
+}
+
+function collectMarkdownLinkDestinations(nodes, definitionNodes = nodes) {
+  const definitions = collectMarkdownDefinitions(definitionNodes);
   const destinations = [];
 
   function visit(node) {
     if (node.type === 'link' && typeof node.url === 'string') {
       destinations.push(node.url);
+    } else if (node.type === 'linkReference' && typeof node.identifier === 'string') {
+      const definitionUrl = definitions.get(node.identifier);
+
+      if (definitionUrl !== undefined) {
+        destinations.push(definitionUrl);
+      }
     }
 
     if (Array.isArray(node.children)) {
@@ -654,14 +688,14 @@ function parseMarkdownLinks(content, manifest) {
   return routes;
 }
 
-function parseAbsoluteExternalMarkdownLinks(nodes, manifest) {
+function parseAbsoluteExternalMarkdownLinks(nodes, manifest, definitionNodes = nodes) {
   const urls = [];
 
-  for (const href of collectMarkdownLinkDestinations(nodes)) {
+  for (const href of collectMarkdownLinkDestinations(nodes, definitionNodes)) {
     let url;
 
     try {
-      url = new URL(href);
+      url = new URL(href, `${manifest.siteOrigin}/`);
     } catch {
       continue;
     }
@@ -759,11 +793,14 @@ function parseLlmsFullBlocks(content, manifest) {
     blocks.push(currentBlock);
   }
 
-  return blocks;
+  return {
+    blocks,
+    definitionNodes: tree.children,
+  };
 }
 
 function verifyLlmsFullTxt(content, manifest) {
-  const blocks = parseLlmsFullBlocks(content, manifest);
+  const { blocks, definitionNodes } = parseLlmsFullBlocks(content, manifest);
   const actualRoutes = blocks.map((block) => block.route);
   const expectedRoutes = manifest.routes
     .filter((route) => route.llms.full)
@@ -779,6 +816,7 @@ function verifyLlmsFullTxt(content, manifest) {
   const projectExternalUrls = parseAbsoluteExternalMarkdownLinks(
     projectsBlock?.nodes ?? [],
     manifest,
+    definitionNodes,
   );
   const expectedProjectExternalUrls = manifest.projects.map((project) => project.externalUrl);
   const comparisonLength = Math.max(projectExternalUrls.length, expectedProjectExternalUrls.length);
@@ -826,31 +864,38 @@ function verifyLlmsFullTxt(content, manifest) {
   }
 }
 
-function isHiddenWithinProjectCard(element, projectCard) {
-  let current = element;
+function violatesProjectExternalLinkVisibilityContract(externalLink, projectCard) {
+  const tabIndex = externalLink.getAttribute('tabindex');
 
-  while (current) {
-    const ariaHidden = current.getAttribute('aria-hidden')?.trim().toLowerCase() === 'true';
-    const display = current.style.display.trim().toLowerCase();
-    const visibility = current.style.visibility.trim().toLowerCase();
+  if (
+    externalLink.hasAttribute('class') ||
+    externalLink.hasAttribute('style') ||
+    externalLink.hasAttribute('hidden') ||
+    externalLink.hasAttribute('aria-hidden') ||
+    (tabIndex !== null && Number(tabIndex) === -1)
+  ) {
+    return true;
+  }
 
+  let ancestor = externalLink.parentElement;
+
+  while (ancestor) {
     if (
-      current.hasAttribute('hidden') ||
-      ariaHidden ||
-      display === 'none' ||
-      visibility === 'hidden'
+      ancestor.hasAttribute('style') ||
+      ancestor.hasAttribute('hidden') ||
+      ancestor.hasAttribute('aria-hidden')
     ) {
       return true;
     }
 
-    if (current === projectCard) {
-      break;
+    if (ancestor === projectCard) {
+      return false;
     }
 
-    current = current.parentElement;
+    ancestor = ancestor.parentElement;
   }
 
-  return false;
+  return true;
 }
 
 function readProjectCards(document, sourcePath, manifest) {
@@ -885,6 +930,15 @@ function readProjectCards(document, sourcePath, manifest) {
       throw new Error(`${sourcePath} contains duplicate project card name: ${projectName}`);
     }
 
+    const projectActions = [...projectCard.querySelectorAll('[data-project-actions]')];
+
+    if (projectActions.length !== 1) {
+      throw new Error(
+        `${sourcePath} project card for ${projectName} must contain exactly one [data-project-actions].`,
+      );
+    }
+
+    const actions = projectActions[0];
     const markedExternalLinks = [...projectCard.querySelectorAll('a[data-project-external-link]')];
 
     if (markedExternalLinks.length !== 1) {
@@ -922,7 +976,6 @@ function readProjectCards(document, sourcePath, manifest) {
     }
 
     const links = [...projectCard.querySelectorAll('a')];
-    const parsedLinks = [];
 
     for (const link of links) {
       const href = link.getAttribute('href');
@@ -955,13 +1008,25 @@ function readProjectCards(document, sourcePath, manifest) {
           `${sourcePath} project card for ${projectName} must include exactly one safe HTTPS external link.`,
         );
       }
-
-      parsedLinks.push({ link, url });
     }
 
-    if (isHiddenWithinProjectCard(externalLink, projectCard)) {
+    if (violatesProjectExternalLinkVisibilityContract(externalLink, projectCard)) {
       throw new Error(
         `${sourcePath} project card for ${projectName} marked external link must be visible.`,
+      );
+    }
+
+    if (links.some((link) => link.parentElement !== actions)) {
+      throw new Error(
+        `${sourcePath} project card for ${projectName} anchors must be direct children of [data-project-actions].`,
+      );
+    }
+
+    const actionAnchors = [...actions.children].filter((child) => child.localName === 'a');
+
+    if (actionAnchors[0] !== externalLink) {
+      throw new Error(
+        `${sourcePath} project card for ${projectName} marked external link must be the first direct anchor in [data-project-actions].`,
       );
     }
 
@@ -977,24 +1042,38 @@ function readProjectCards(document, sourcePath, manifest) {
     const registeredProject = manifest.projects.find((project) => project.name === projectName);
     const expectedLinkCount = registeredProject?.documented ? 2 : 1;
 
-    if (links.length !== expectedLinkCount) {
+    if (actionAnchors.length !== expectedLinkCount) {
       const linkLabel = expectedLinkCount === 1 ? 'link' : 'links';
 
       throw new Error(
-        `${sourcePath} project card for ${projectName} must contain exactly ${expectedLinkCount} allowed ${linkLabel}; found ${links.length}.`,
+        `${sourcePath} project card for ${projectName} must contain exactly ${expectedLinkCount} allowed ${linkLabel}; found ${actionAnchors.length}.`,
       );
     }
 
     if (registeredProject?.documented) {
-      const docsLink = parsedLinks.find(({ link }) => link !== externalLink);
+      const docsLink = actionAnchors[1];
+      const markedDocsLinks = [...projectCard.querySelectorAll('a[data-project-docs-link]')];
       const expectedDocsPath = `/docs/${registeredProject.id}/`;
-      const expectedDocsUrl = new URL(expectedDocsPath, `${manifest.siteOrigin}/`).href;
 
-      if (docsLink?.url.href !== expectedDocsUrl) {
+      if (
+        markedDocsLinks.length !== 1 ||
+        markedDocsLinks[0] !== docsLink ||
+        docsLink.getAttribute('data-project-docs-link') !== registeredProject.id
+      ) {
+        throw new Error(
+          `${sourcePath} project card for ${projectName} docs link must be the second direct anchor with [data-project-docs-link].`,
+        );
+      }
+
+      if (docsLink.getAttribute('href') !== expectedDocsPath) {
         throw new Error(
           `${sourcePath} project card for ${projectName} docs link must target ${expectedDocsPath}.`,
         );
       }
+    } else if (projectCard.querySelectorAll('a[data-project-docs-link]').length > 0) {
+      throw new Error(
+        `${sourcePath} project card for ${projectName} must not contain [data-project-docs-link].`,
+      );
     }
 
     const normalizedExternalUrl = externalUrl.href;

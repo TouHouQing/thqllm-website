@@ -42,7 +42,7 @@ export function ProjectStageGrid({ projects, featuredOnly = true }: ProjectStage
                 <li key={tag}>{tag}</li>
               ))}
             </ul>
-            <div className={styles.actions}>
+            <div className={styles.actions} data-project-actions>
               <a
                 href={project.externalUrl}
                 data-project-external-link={project.id}
@@ -54,7 +54,11 @@ export function ProjectStageGrid({ projects, featuredOnly = true }: ProjectStage
                 进入项目
               </a>
               {project.docs ? (
-                <Link href={project.docs.basePath} aria-label={`阅读 ${project.name} 文档`}>
+                <Link
+                  href={project.docs.basePath}
+                  data-project-docs-link={project.id}
+                  aria-label={`阅读 ${project.name} 文档`}
+                >
                   <BookOpen aria-hidden="true" size={16} />
                   使用文档
                 </Link>
