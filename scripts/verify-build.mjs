@@ -8,6 +8,7 @@ import sharp from 'sharp';
 import { unified } from 'unified';
 import { parseDocument } from 'yaml';
 import { z } from 'zod';
+import { readBoundedRegularFile } from './bounded-file.mjs';
 import {
   analyzeRgbaContent,
   meaningfulPixelDeltaThreshold,
@@ -1228,7 +1229,23 @@ async function readCriticalAsset(relativePath) {
     throw new Error(`Critical asset ${relativePath} is empty.`);
   }
 
+  const maximumBytes = relativePath === 'favicon.svg' ? maximumFaviconBytes : undefined;
+
+  if (maximumBytes !== undefined && assetStats.size > maximumBytes) {
+    throw new Error(
+      `Critical asset ${relativePath} exceeds maximum ${maximumBytes} bytes; stat reported ${assetStats.size} bytes.`,
+    );
+  }
+
   try {
+    if (maximumBytes !== undefined) {
+      return await readBoundedRegularFile(assetPath, {
+        description: `Critical asset ${relativePath}`,
+        maxBytes: maximumBytes,
+        stats: assetStats,
+      });
+    }
+
     return await readFile(assetPath);
   } catch (error) {
     throw new Error(`Could not read critical asset ${relativePath}: ${describeError(error)}`);

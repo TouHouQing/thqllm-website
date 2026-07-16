@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const scriptSource = path.join(import.meta.dirname, 'verify-build.mjs');
+const boundedFileSource = path.join(import.meta.dirname, 'bounded-file.mjs');
 const imageContentSource = path.join(import.meta.dirname, 'image-content.mjs');
 const publicAssetsRoot = path.join(repoRoot, 'site/public');
 const verifierTimeoutMs = 20_000;
@@ -817,6 +818,7 @@ beforeEach(async () => {
   }
 
   await copyFile(scriptSource, path.join(fixtureRoot, 'scripts/verify-build.mjs'));
+  await copyFile(boundedFileSource, path.join(fixtureRoot, 'scripts/bounded-file.mjs'));
   await copyFile(imageContentSource, path.join(fixtureRoot, 'scripts/image-content.mjs'));
 
   for (const criticalFile of criticalFiles) {
@@ -2316,8 +2318,7 @@ describe('verify-build critical static asset validation', () => {
     const result = await runVerifier();
 
     expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain('Critical asset favicon.svg violates SVG safety limits:');
-    expect(result.stderr).toContain('bytes exceeds maximum 65536');
+    expect(result.stderr).toContain('Critical asset favicon.svg exceeds maximum 65536 bytes;');
   });
 
   it('rejects an SVG whose element depth exceeds the safety limit', async () => {
