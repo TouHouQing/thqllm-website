@@ -42,14 +42,14 @@ const syntheticProjects = [
     docsRoutes: ['/docs/beta/'],
   },
 ];
-const defaultCards = syntheticProjects
-  .filter((project) => project.featured)
-  .map(({ name, url }) => ({ name, url }));
-const defaultDirectoryCards = syntheticProjects.map(({ name, url }) => ({ name, url }));
+const defaultCards = cardsForProjects(syntheticProjects, true);
+const defaultDirectoryCards = cardsForProjects(syntheticProjects, false);
 const canonicalCards = defaultCards;
 const fourthCard = {
+  id: 'fourth',
   name: 'Fourth Project',
   url: 'https://fourth.example.com/',
+  documented: false,
 };
 const siteOrigin = 'https://thqllm.com';
 const fixedManifestRoutes = [
@@ -92,29 +92,53 @@ const crc32Table = Array.from({ length: 256 }, (_, value) => {
 
 let fixtureRoot;
 
-function createProjectCard({ extraLinks = [], mainLinkMarker = true, name, url }) {
+function createProjectCard({
+  docsHref,
+  documented = false,
+  extraLinks = [],
+  id,
+  name,
+  mainLinkAriaLabel = `进入 ${name}`,
+  mainLinkMarker = true,
+  mainLinkText = '进入项目',
+  url,
+}) {
   const renderedExtraLinks = extraLinks
     .map((link) => {
       const linkConfig = typeof link === 'string' ? { href: link } : link;
       const attributes = [
         linkConfig.marker ? 'data-project-external-link' : '',
         linkConfig.hidden ? 'hidden' : '',
+        linkConfig.ariaHidden ? 'aria-hidden="true"' : '',
+        linkConfig.ariaLabel ? `aria-label="${linkConfig.ariaLabel}"` : '',
+        linkConfig.style ? `style="${linkConfig.style}"` : '',
         linkConfig.target ? `target="${linkConfig.target}"` : '',
         linkConfig.rel ? `rel="${linkConfig.rel}"` : '',
       ]
         .filter(Boolean)
         .join(' ');
+      const anchor = `<a href="${linkConfig.href}"${attributes ? ` ${attributes}` : ''}>${linkConfig.text ?? '附加链接'}</a>`;
+      const ancestorAttributes = [
+        linkConfig.ancestorHidden ? 'hidden' : '',
+        linkConfig.ancestorAriaHidden ? 'aria-hidden="true"' : '',
+        linkConfig.ancestorStyle ? `style="${linkConfig.ancestorStyle}"` : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
 
-      return `<a href="${linkConfig.href}"${attributes ? ` ${attributes}` : ''}>附加链接</a>`;
+      return ancestorAttributes ? `<span ${ancestorAttributes}>${anchor}</span>` : anchor;
     })
     .join('');
+  const docsLink = documented
+    ? `<a href="${docsHref ?? `/docs/${id}/`}" aria-label="阅读 ${name} 文档">使用文档</a>`
+    : '';
 
   return `
     <article data-testid="project-stage">
       <h3>${name}</h3>
-      <a href="${url}"${mainLinkMarker ? ' data-project-external-link' : ''} target="_blank" rel="noreferrer noopener">进入项目</a>
+      <a href="${url}"${mainLinkMarker ? ' data-project-external-link' : ''} target="_blank" rel="noreferrer noopener" aria-label="${mainLinkAriaLabel}">${mainLinkText}</a>
       ${renderedExtraLinks}
-      <a href="/docs/example/">使用文档</a>
+      ${docsLink}
     </article>
   `;
 }
@@ -234,7 +258,12 @@ function cardsForProjects(projects, featuredOnly) {
   return projects
     .filter((project) => !featuredOnly || project.featured)
     .toSorted((left, right) => left.order - right.order)
-    .map(({ name, url }) => ({ name, url }));
+    .map(({ docsRoutes = [], id, name, url }) => ({
+      id,
+      name,
+      url,
+      documented: docsRoutes.length > 0,
+    }));
 }
 
 async function configureSyntheticFixture(projects) {
@@ -1032,6 +1061,58 @@ describe('verify-build manifest-driven output validation', () => {
     );
   });
 
+  it('rejects a nested element beside a valid sitemap loc', async () => {
+    const homeUrl = routeUrl('/');
+    await writeFixtureFile(
+      'doc_build/sitemap.xml',
+      createSyntheticSitemap(defaultManifest).replace(
+        `<url><loc>${homeUrl}</loc></url>`,
+        `<url><loc>${homeUrl}</loc><lastmod><loc>2026-07-16</loc></lastmod></url>`,
+      ),
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'sitemap.xml url element 1 child 2 (lastmod) must not contain nested elements.',
+    );
+  });
+
+  it('rejects a direct sitemap loc in a different namespace', async () => {
+    const homeUrl = routeUrl('/');
+    await writeFixtureFile(
+      'doc_build/sitemap.xml',
+      createSyntheticSitemap(defaultManifest).replace(
+        `<url><loc>${homeUrl}</loc></url>`,
+        `<url><loc>${homeUrl}</loc><loc xmlns="">${homeUrl}</loc></url>`,
+      ),
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'sitemap.xml url element 1 child 2 must use namespace http://www.sitemaps.org/schemas/sitemap/0.9.',
+    );
+  });
+
+  it('rejects an unknown direct sitemap url child', async () => {
+    const homeUrl = routeUrl('/');
+    await writeFixtureFile(
+      'doc_build/sitemap.xml',
+      createSyntheticSitemap(defaultManifest).replace(
+        `<url><loc>${homeUrl}</loc></url>`,
+        `<url><loc>${homeUrl}</loc><decoy>ignored</decoy></url>`,
+      ),
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('sitemap.xml url element 1 child 2 is unsupported: decoy.');
+  });
+
   it('rejects duplicate sitemap route URLs', async () => {
     await writeFixtureFile(
       'doc_build/sitemap.xml',
@@ -1392,6 +1473,62 @@ describe('verify-build manifest-driven output validation', () => {
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain(
       `llms-full.txt projects block contains unexpected external URL: ${unexpectedUrl}`,
+    );
+  });
+
+  it('rejects a duplicate external URL inside the projects llms-full block', async () => {
+    const duplicateProject = defaultManifest.projects[0];
+    const duplicateLink = `- [${duplicateProject.name}](${duplicateProject.externalUrl})`;
+    const content = transformLlmsFullBlock(
+      createSyntheticLlmsFullTxt(defaultManifest),
+      '/projects/index.md',
+      (block) => `${block}\n${duplicateLink}\n`,
+    );
+    await writeFixtureFile('doc_build/llms-full.txt', content);
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `llms-full.txt projects block contains unexpected external URL: ${duplicateProject.externalUrl} at position 3.`,
+    );
+  });
+
+  it('rejects reversed project external URL order inside the projects llms-full block', async () => {
+    const projectLinks = defaultManifest.projects.map(
+      (project) => `- [${project.name}](${project.externalUrl})`,
+    );
+    const content = transformLlmsFullBlock(
+      createSyntheticLlmsFullTxt(defaultManifest),
+      '/projects/index.md',
+      (block) => block.replace(projectLinks.join('\n'), [...projectLinks].reverse().join('\n')),
+    );
+    await writeFixtureFile('doc_build/llms-full.txt', content);
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `llms-full.txt projects block external URL order mismatch at position 1: found ${defaultManifest.projects[1].externalUrl}; expected ${defaultManifest.projects[0].externalUrl}.`,
+    );
+  });
+
+  it.each([
+    'http://evil.example.com/',
+    'custom://evil.example.com/resource',
+  ])('rejects an unsafe absolute link inside the projects llms-full block: %s', async (unsafeUrl) => {
+    const content = transformLlmsFullBlock(
+      createSyntheticLlmsFullTxt(defaultManifest),
+      '/projects/index.md',
+      (block) => `${block}\n- [Unsafe](${unsafeUrl})\n`,
+    );
+    await writeFixtureFile('doc_build/llms-full.txt', content);
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `llms-full.txt projects block contains unsafe external URL: ${unsafeUrl} at position 3.`,
     );
   });
 
@@ -2449,6 +2586,52 @@ describe('verify-build homepage project validation', () => {
     );
   });
 
+  it.each([
+    ['hidden anchor', { hidden: true }],
+    ['aria-hidden anchor', { ariaHidden: true }],
+    ['hidden ancestor', { ancestorHidden: true }],
+    ['aria-hidden ancestor', { ancestorAriaHidden: true }],
+    ['display-none ancestor', { ancestorStyle: 'display: none' }],
+    ['visibility-hidden ancestor', { ancestorStyle: 'visibility: hidden' }],
+  ])('does not let a canonical marker concealed by a %s hide a visible wrong same-origin action', async (_label, hiddenConfig) => {
+    const project = defaultCards[0];
+    const result = await runVerifier([
+      {
+        ...project,
+        url: '/projects/alpha/',
+        mainLinkMarker: false,
+        extraLinks: [
+          {
+            href: project.url,
+            ...hiddenConfig,
+            ariaLabel: `进入 ${project.name}`,
+            marker: true,
+            rel: 'noreferrer noopener',
+            target: '_blank',
+            text: '进入项目',
+          },
+        ],
+      },
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html project card for Alpha Project marked external link must be visible.',
+    );
+  });
+
+  it.each([
+    ['text', { mainLinkText: '打开项目' }],
+    ['aria-label', { mainLinkAriaLabel: '打开 Alpha Project' }],
+  ])('rejects a marked external link with the wrong production %s', async (_label, override) => {
+    const result = await runVerifier([{ ...defaultCards[0], ...override }]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html project card for Alpha Project marked external link must use the production main action.',
+    );
+  });
+
   it('rejects an unsafe protocol-relative external link beside the project link', async () => {
     const result = await runVerifier([{ ...defaultCards[0], extraLinks: ['//evil.example.com/'] }]);
 
@@ -2458,12 +2641,66 @@ describe('verify-build homepage project validation', () => {
     );
   });
 
-  it('ignores a same-origin absolute docs link when classifying external links', async () => {
+  it('accepts the documented project link as a same-origin absolute URL', async () => {
     const result = await runVerifier([
-      { ...defaultCards[0], extraLinks: ['https://thqllm.com/docs/example/'] },
+      { ...defaultCards[0], docsHref: 'https://thqllm.com/docs/alpha/' },
     ]);
 
     expect(result.status, result.stderr || result.stdout).toBe(0);
+  });
+
+  it('rejects an extra same-origin anchor in a project card', async () => {
+    const result = await runVerifier([
+      { ...defaultCards[0], extraLinks: ['/projects/alpha/details/'] },
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html project card for Alpha Project must contain exactly 2 allowed links; found 3.',
+    );
+  });
+
+  it('rejects a documented project card with the wrong docs href', async () => {
+    const result = await runVerifier([{ ...defaultCards[0], docsHref: '/docs/not-alpha/' }]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html project card for Alpha Project docs link must target /docs/alpha/.',
+    );
+  });
+
+  it('rejects a documented project card without its docs anchor', async () => {
+    const result = await runVerifier([{ ...defaultCards[0], documented: false }]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html project card for Alpha Project must contain exactly 2 allowed links; found 1.',
+    );
+  });
+
+  it('rejects a docs anchor on an undocumented project card', async () => {
+    const { homepageCards } = await configureSyntheticFixture([
+      {
+        id: 'undocumented',
+        name: 'Undocumented Project',
+        url: 'https://undocumented.example.com/',
+        order: 1,
+        featured: true,
+        docsRoutes: [],
+      },
+    ]);
+    const result = await runVerifier([
+      {
+        ...homepageCards[0],
+        documented: true,
+        docsHref: '/docs/undocumented/',
+      },
+    ]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html project card for Undocumented Project must contain exactly 1 allowed link; found 2.',
+    );
   });
 
   it('rejects an unregistered extra homepage card', async () => {

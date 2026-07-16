@@ -16,6 +16,7 @@ const manifestFilename = 'project-registry.json';
 const expectedManifestSchemaVersion = 1;
 const expectedSiteOrigin = 'https://thqllm.com';
 const sitemapNamespace = 'http://www.sitemaps.org/schemas/sitemap/0.9';
+const sitemapUrlChildNames = new Set(['loc', 'lastmod', 'changefreq', 'priority']);
 const fixedRequiredOutputs = ['404.html', 'sitemap.xml', 'llms.txt', 'llms-full.txt'];
 const criticalImages = [
   {
@@ -542,9 +543,29 @@ function verifySitemap(content, manifest) {
         throw new Error(`sitemap.xml urlset direct child ${index + 1} must be a url element.`);
       }
 
-      const locElements = [...child.children].filter(
-        (element) => element.localName === 'loc' && element.namespaceURI === sitemapNamespace,
-      );
+      const urlChildren = [...child.children];
+
+      for (const [childIndex, element] of urlChildren.entries()) {
+        if (element.namespaceURI !== sitemapNamespace) {
+          throw new Error(
+            `sitemap.xml url element ${index + 1} child ${childIndex + 1} must use namespace ${sitemapNamespace}.`,
+          );
+        }
+
+        if (!sitemapUrlChildNames.has(element.localName)) {
+          throw new Error(
+            `sitemap.xml url element ${index + 1} child ${childIndex + 1} is unsupported: ${element.localName}.`,
+          );
+        }
+
+        if (element.children.length > 0) {
+          throw new Error(
+            `sitemap.xml url element ${index + 1} child ${childIndex + 1} (${element.localName}) must not contain nested elements.`,
+          );
+        }
+      }
+
+      const locElements = urlChildren.filter((element) => element.localName === 'loc');
       const loc = locElements[0]?.textContent?.trim() ?? '';
 
       if (locElements.length !== 1 || !loc) {
@@ -633,8 +654,8 @@ function parseMarkdownLinks(content, manifest) {
   return routes;
 }
 
-function parseAbsoluteHttpsMarkdownLinks(nodes) {
-  const urls = new Set();
+function parseAbsoluteExternalMarkdownLinks(nodes, manifest) {
+  const urls = [];
 
   for (const href of collectMarkdownLinkDestinations(nodes)) {
     let url;
@@ -645,9 +666,23 @@ function parseAbsoluteHttpsMarkdownLinks(nodes) {
       continue;
     }
 
-    if (url.protocol === 'https:' && !url.username && !url.password) {
-      urls.add(url.href);
+    if (
+      url.protocol === 'https:' &&
+      !url.username &&
+      !url.password &&
+      url.origin === manifest.siteOrigin
+    ) {
+      continue;
     }
+
+    urls.push({
+      href: url.href,
+      safe:
+        url.protocol === 'https:' &&
+        !url.username &&
+        !url.password &&
+        url.origin !== manifest.siteOrigin,
+    });
   }
 
   return urls;
@@ -741,30 +776,81 @@ function verifyLlmsFullTxt(content, manifest) {
   });
 
   const projectsBlock = blocks.find((block) => block.route === '/projects/index.md');
-  const projectExternalUrls = new Set(
-    [...parseAbsoluteHttpsMarkdownLinks(projectsBlock?.nodes ?? [])].filter(
-      (url) => new URL(url).origin !== manifest.siteOrigin,
-    ),
+  const projectExternalUrls = parseAbsoluteExternalMarkdownLinks(
+    projectsBlock?.nodes ?? [],
+    manifest,
   );
-  const expectedProjectExternalUrls = new Set(
-    manifest.projects.map((project) => project.externalUrl),
-  );
+  const expectedProjectExternalUrls = manifest.projects.map((project) => project.externalUrl);
+  const comparisonLength = Math.max(projectExternalUrls.length, expectedProjectExternalUrls.length);
 
-  for (const projectUrl of expectedProjectExternalUrls) {
-    if (!projectExternalUrls.has(projectUrl)) {
+  for (const [index, expectedProjectUrl] of expectedProjectExternalUrls.entries()) {
+    if (
+      !projectExternalUrls.some(
+        (projectUrl) => projectUrl.safe && projectUrl.href === expectedProjectUrl,
+      )
+    ) {
       throw new Error(
-        `llms-full.txt projects block is missing registered project external URL: ${projectUrl}`,
+        `llms-full.txt projects block is missing registered project external URL: ${expectedProjectUrl} at position ${index + 1}.`,
       );
     }
   }
 
-  for (const projectUrl of projectExternalUrls) {
-    if (!expectedProjectExternalUrls.has(projectUrl)) {
+  for (let index = 0; index < comparisonLength; index += 1) {
+    const projectUrl = projectExternalUrls[index];
+    const expectedProjectUrl = expectedProjectExternalUrls[index];
+    const position = index + 1;
+
+    if (!projectUrl) {
       throw new Error(
-        `llms-full.txt projects block contains unexpected external URL: ${projectUrl}`,
+        `llms-full.txt projects block is missing registered project external URL: ${expectedProjectUrl} at position ${position}.`,
+      );
+    }
+
+    if (!projectUrl.safe) {
+      throw new Error(
+        `llms-full.txt projects block contains unsafe external URL: ${projectUrl.href} at position ${position}.`,
+      );
+    }
+
+    if (!expectedProjectUrl) {
+      throw new Error(
+        `llms-full.txt projects block contains unexpected external URL: ${projectUrl.href} at position ${position}.`,
+      );
+    }
+
+    if (projectUrl.href !== expectedProjectUrl) {
+      throw new Error(
+        `llms-full.txt projects block external URL order mismatch at position ${position}: found ${projectUrl.href}; expected ${expectedProjectUrl}.`,
       );
     }
   }
+}
+
+function isHiddenWithinProjectCard(element, projectCard) {
+  let current = element;
+
+  while (current) {
+    const ariaHidden = current.getAttribute('aria-hidden')?.trim().toLowerCase() === 'true';
+    const display = current.style.display.trim().toLowerCase();
+    const visibility = current.style.visibility.trim().toLowerCase();
+
+    if (
+      current.hasAttribute('hidden') ||
+      ariaHidden ||
+      display === 'none' ||
+      visibility === 'hidden'
+    ) {
+      return true;
+    }
+
+    if (current === projectCard) {
+      break;
+    }
+
+    current = current.parentElement;
+  }
+
+  return false;
 }
 
 function readProjectCards(document, sourcePath, manifest) {
@@ -835,13 +921,20 @@ function readProjectCards(document, sourcePath, manifest) {
       );
     }
 
-    for (const link of projectCard.querySelectorAll('a[href]')) {
+    const links = [...projectCard.querySelectorAll('a')];
+    const parsedLinks = [];
+
+    for (const link of links) {
       const href = link.getAttribute('href');
       let url;
 
       try {
-        url = new URL(href, `${manifest.siteOrigin}/`);
+        url = href ? new URL(href, `${manifest.siteOrigin}/`) : undefined;
       } catch {
+        url = undefined;
+      }
+
+      if (!url) {
         throw new Error(
           `${sourcePath} project card for ${projectName} contains an invalid link URL: ${href}`,
         );
@@ -860,6 +953,46 @@ function readProjectCards(document, sourcePath, manifest) {
       if (url.origin !== manifest.siteOrigin && link !== externalLink) {
         throw new Error(
           `${sourcePath} project card for ${projectName} must include exactly one safe HTTPS external link.`,
+        );
+      }
+
+      parsedLinks.push({ link, url });
+    }
+
+    if (isHiddenWithinProjectCard(externalLink, projectCard)) {
+      throw new Error(
+        `${sourcePath} project card for ${projectName} marked external link must be visible.`,
+      );
+    }
+
+    if (
+      externalLink.textContent?.trim() !== '进入项目' ||
+      externalLink.getAttribute('aria-label') !== `进入 ${projectName}`
+    ) {
+      throw new Error(
+        `${sourcePath} project card for ${projectName} marked external link must use the production main action.`,
+      );
+    }
+
+    const registeredProject = manifest.projects.find((project) => project.name === projectName);
+    const expectedLinkCount = registeredProject?.documented ? 2 : 1;
+
+    if (links.length !== expectedLinkCount) {
+      const linkLabel = expectedLinkCount === 1 ? 'link' : 'links';
+
+      throw new Error(
+        `${sourcePath} project card for ${projectName} must contain exactly ${expectedLinkCount} allowed ${linkLabel}; found ${links.length}.`,
+      );
+    }
+
+    if (registeredProject?.documented) {
+      const docsLink = parsedLinks.find(({ link }) => link !== externalLink);
+      const expectedDocsPath = `/docs/${registeredProject.id}/`;
+      const expectedDocsUrl = new URL(expectedDocsPath, `${manifest.siteOrigin}/`).href;
+
+      if (docsLink?.url.href !== expectedDocsUrl) {
+        throw new Error(
+          `${sourcePath} project card for ${projectName} docs link must target ${expectedDocsPath}.`,
         );
       }
     }
