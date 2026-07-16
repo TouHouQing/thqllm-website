@@ -1,19 +1,37 @@
 ---
-title: THQ API 概览
-description: THQ API 是 AI API Gateway 与模型中转服务。
+title: THQ API 使用文档
+description: THQ API 的接入入口、协议地址、使用路径与安全原则。
 ---
 
-# THQ API
+# THQ API 使用文档
 
-THQ API 是统一连接多种模型能力的 AI API Gateway 与中转服务。
+THQ API 提供统一的模型 API 接入入口。本组文档介绍从创建 API Key、验证请求到客户端配置和故障排查的基本流程。
+
+模型 ID、价格、账户额度、速率限制和可用能力会动态调整，请始终以控制台当前显示为准。
 
 <ProjectLink href="https://sub.thqllm.com/">打开 THQ API 控制台</ProjectLink>
 
-项目地址：[https://sub.thqllm.com/](https://sub.thqllm.com/)
+## 地址速查表
 
-## 使用原则
+| 用途 | 地址 | 配置要点 |
+| --- | --- | --- |
+| 控制台 | `https://sub.thqllm.com` | 创建和撤销 API Key，查看模型、额度、价格、限制与使用记录 |
+| OpenAI 兼容接口 | `https://api.thqllm.com/v1` | 作为 OpenAI 兼容客户端的 Base URL，具体请求路径由客户端或调用代码追加 |
+| Gemini 接口 | `https://api.thqllm.com/v1beta` | 使用 Gemini 协议；部分客户端会把主机地址与 API 版本分开配置 |
+| Claude 接口 | `https://api.thqllm.com` | 使用不带版本后缀的基础地址，由兼容客户端追加协议路径 |
 
-- API Key 只保存在可信客户端或服务端环境。
-- Base URL、模型标识和计费信息以控制台当前显示为准。
-- 不在浏览器前端代码、公开仓库或截图中暴露完整密钥。
-- 使用前阅读控制台当前显示的服务条款、适用范围和数据处理说明；不要提交敏感或受监管数据，动态细则以控制台当前显示为准。
+不要在三类接口之间直接复用带版本后缀的 Base URL。客户端要求填写主机地址、Base URL 还是完整请求地址时，应按对应客户端文档配置。
+
+## 从这里开始
+
+- [快速开始](/docs/thq-api/quick-start/)：创建 Key，并用最小请求验证连接。
+- [客户端指南](/docs/thq-api/clients/)：按 Codex、Claude Code、Gemini CLI 等客户端选择配置方式。
+- [端点说明](/docs/thq-api/endpoints/)：区分 OpenAI、Gemini 与 Claude 协议地址。
+- [常见问题](/docs/thq-api/faq/)：按 Base URL、认证、模型和状态码排查。
+
+## 安全原则
+
+- 仅在可信服务端、本地开发环境或受控客户端中保存 API Key。
+- 为不同项目、设备和环境创建独立 Key；不再使用时及时撤销。
+- 不要把完整 Key 写入前端代码、公开仓库、日志、截图或排查消息。
+- 只提交完成任务所需的数据，并在接入前确认控制台显示的条款与适用范围。

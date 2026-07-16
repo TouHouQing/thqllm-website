@@ -1,24 +1,69 @@
 ---
 title: THQ API 快速开始
-description: 获取并安全使用 THQ API 的基本流程。
+description: 从控制台创建 API Key，并完成第一条 OpenAI 兼容请求。
 ---
 
 # 快速开始
 
-开始前先阅读控制台当前显示的服务条款、适用范围和数据处理说明；不要提交敏感或受监管数据。
+下面用一条最小请求验证账户、API Key、模型 ID 和 OpenAI 兼容端点。模型、价格、额度和限制以控制台当前显示为准。
 
 ## 1. 打开控制台
 
-<ProjectLink href="https://sub.thqllm.com/">进入 THQ API</ProjectLink>
+<ProjectLink href="https://sub.thqllm.com/">打开 THQ API 控制台</ProjectLink>
 
-## 2. 登录并创建 API Key
+## 2. 注册或登录并确认条款
 
-在控制台中创建独立密钥。为不同设备或应用使用不同密钥，便于撤销和排查。
+按页面提示注册或登录。继续前，确认控制台当前显示的服务条款、适用范围和数据处理说明符合你的使用场景。
 
-## 3. 读取当前接入参数
+## 3. 确认额度
 
-从控制台复制当前 Base URL、可用模型标识和兼容方式。本站不写死可能变化的地址或模型列表。
+查看账户当前可用额度，并同时确认目标模型的价格、限额和可用状态。不要根据旧文档或他人的账户信息估算本账户可用量。
 
-## 4. 在可信环境发起最小请求
+## 4. 创建 API Key
 
-在可信环境中，使用从当前控制台读取的参数发起最小请求，验证认证、模型名称和响应格式，再集成正式应用。
+在控制台创建 API Key，并使用能说明用途的名称，例如开发环境、个人工作站或某个服务名称。
+
+不同项目、设备和环境使用不同 Key。这样可以单独查看使用情况、控制影响范围，并在泄露或停用时只撤销对应 Key。
+
+## 5. 选择模型与接口
+
+从控制台复制准确的模型 ID，并确认该模型支持的协议和端点。OpenAI、Gemini 与 Claude 兼容接口的地址不同；也不要假设所有模型都支持同一个请求路径。
+
+下面的示例仅适用于控制台标明支持 OpenAI 兼容 Chat Completions 的模型。
+
+## 6. 发起最小 curl 请求
+
+在可信终端中运行：
+
+```bash
+export THQ_API_KEY="YOUR_THQ_API_KEY"
+
+curl https://api.thqllm.com/v1/chat/completions \
+  -H "Authorization: Bearer $THQ_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "CONTROL_PANEL_MODEL_ID",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请回复：THQ API 连接成功"
+      }
+    ]
+  }'
+```
+
+将 `YOUR_THQ_API_KEY` 替换为新建的 Key，将 `CONTROL_PANEL_MODEL_ID` 替换为控制台中的完整模型 ID。不要把替换后的命令提交到仓库或发送到公开频道。
+
+请求成功后，再把相同的 Base URL、Key、模型 ID 和协议配置迁移到目标客户端。若失败，先保留 HTTP 状态码和脱敏后的错误内容。
+
+## 7. 查看使用记录
+
+回到控制台查看这次请求是否出现在使用记录中，并核对请求时间、模型 ID、状态和用量。控制台记录可帮助判断请求是否到达服务端，也便于发现客户端重复请求。
+
+## 下一步
+
+- [客户端指南](/docs/thq-api/clients/)：为常用客户端填写正确的 Base URL 和环境变量。
+- [手动配置](/docs/thq-api/configuration/)：理解配置字段与覆盖顺序。
+- [端点说明](/docs/thq-api/endpoints/)：确认当前协议应使用的地址后缀。
+- [账户与用量](/docs/thq-api/account/)：查看扣费、控制成本和管理 Key。
+- [常见问题](/docs/thq-api/faq/)：按状态码继续排查失败请求。
