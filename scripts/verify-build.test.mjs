@@ -331,9 +331,11 @@ async function writeProjectDirectory(cards) {
 
 function createHomepage(cards, referenceOverrides = {}) {
   const structure = {
+    bodyAttributes: '',
     bodyDecoys: '',
     desktopHeroSizes: null,
     desktopHeroSrcset: null,
+    extraProjectSections: [],
     extraHeadFavicons: [],
     extraHeadOgImages: [],
     extraHeroImages: [],
@@ -341,7 +343,11 @@ function createHomepage(cards, referenceOverrides = {}) {
     heroPictureCount: 1,
     heroSectionCount: 1,
     heroSectionExtras: '',
+    htmlAttributes: '',
     mobileHeroType: null,
+    projectsSectionAncestorAttributes: '',
+    projectsSectionAttributes: '',
+    rogueProjectCards: [],
     sourceAfterImage: false,
     ...expectedHomepageReferences,
     ...referenceOverrides,
@@ -392,17 +398,25 @@ function createHomepage(cards, referenceOverrides = {}) {
   const heroSections = Array.from({ length: structure.heroSectionCount }, () => heroSection).join(
     '',
   );
+  const projectsSection = `<section id="projects"${structure.projectsSectionAttributes ? ` ${structure.projectsSectionAttributes}` : ''}>${cards.map(createProjectCard).join('')}</section>`;
+  const wrappedProjectsSection = structure.projectsSectionAncestorAttributes
+    ? `<div ${structure.projectsSectionAncestorAttributes}>${projectsSection}</div>`
+    : projectsSection;
+  const extraProjectSections = structure.extraProjectSections.join('');
+  const rogueProjectCards = structure.rogueProjectCards.map(createProjectCard).join('');
 
   return `
-    <html>
+    <html${structure.htmlAttributes ? ` ${structure.htmlAttributes}` : ''}>
       <head>
         ${ogImages}
         ${favicons}
       </head>
-      <body>
+      <body${structure.bodyAttributes ? ` ${structure.bodyAttributes}` : ''}>
         ${heroSections}
         ${structure.bodyDecoys}
-        <section id="projects">${cards.map(createProjectCard).join('')}</section>
+        ${wrappedProjectsSection}
+        ${extraProjectSections}
+        ${rogueProjectCards}
       </body>
     </html>
   `;
@@ -2636,6 +2650,79 @@ describe('verify-build homepage critical asset references', () => {
 });
 
 describe('verify-build homepage project validation', () => {
+  it('rejects a hidden canonical project section beside a visible malicious duplicate', async () => {
+    const maliciousCard = createProjectCard({
+      ...defaultCards[0],
+      url: 'javascript:alert(1)',
+    });
+    const result = await runVerifier(defaultCards, {
+      extraProjectSections: [`<section id="projects">${maliciousCard}</section>`],
+      projectsSectionAttributes: 'hidden',
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html must contain exactly one section#projects; found 2.',
+    );
+  });
+
+  it('rejects two normal project sections', async () => {
+    const duplicateCards = defaultCards.map(createProjectCard).join('');
+    const result = await runVerifier(defaultCards, {
+      extraProjectSections: [`<section id="projects">${duplicateCards}</section>`],
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html must contain exactly one section#projects; found 2.',
+    );
+  });
+
+  it.each([
+    ['hidden', 'hidden'],
+    ['aria-hidden', 'aria-hidden="true"'],
+    ['inline style', 'style="opacity: 0"'],
+  ])('rejects a unique project section with %s', async (_label, projectsSectionAttributes) => {
+    const result = await runVerifier(defaultCards, { projectsSectionAttributes });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html section#projects and its ancestors must be visible without inline style.',
+    );
+  });
+
+  it.each([
+    ['wrapper inline style', { projectsSectionAncestorAttributes: 'style="opacity: 0"' }],
+    ['body inline style', { bodyAttributes: 'style="clip-path: inset(100%)"' }],
+    ['html aria-hidden', { htmlAttributes: 'aria-hidden="true"' }],
+  ])('rejects a project section with a hidden or styled %s ancestor', async (_label, override) => {
+    const result = await runVerifier(defaultCards, override);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html section#projects and its ancestors must be visible without inline style.',
+    );
+  });
+
+  it('rejects a project card outside the unique project section', async () => {
+    const result = await runVerifier(defaultCards, {
+      rogueProjectCards: [
+        {
+          ...defaultCards[0],
+          documented: false,
+          id: 'rogue',
+          name: 'Rogue Project',
+          url: 'javascript:alert(1)',
+        },
+      ],
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      'doc_build/index.html contains project card outside section#projects.',
+    );
+  });
+
   it('rejects a project card without a non-empty name', async () => {
     const result = await runVerifier([{ ...defaultCards[0], name: '   ' }]);
 
@@ -2795,7 +2882,8 @@ describe('verify-build homepage project validation', () => {
   it.each([
     ['inline style', { mainLinkStyle: 'opacity: 0' }],
     ['class', { mainLinkClass: 'visually-hidden' }],
-    ['negative tab order', { mainLinkTabIndex: '-1' }],
+    ['negative tab order -1', { mainLinkTabIndex: '-1' }],
+    ['negative tab order -2', { mainLinkTabIndex: '-2' }],
   ])('rejects a marked external link with a forbidden %s', async (_label, override) => {
     const result = await runVerifier([{ ...defaultCards[0], ...override }]);
 

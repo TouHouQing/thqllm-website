@@ -864,20 +864,25 @@ function verifyLlmsFullTxt(content, manifest) {
   }
 }
 
-function violatesProjectExternalLinkVisibilityContract(externalLink, projectCard) {
-  const tabIndex = externalLink.getAttribute('tabindex');
-
+function violatesProjectExternalLinkVisibilityContract(
+  externalLink,
+  projectCard,
+  projectsSection,
+  documentElement,
+) {
   if (
     externalLink.hasAttribute('class') ||
     externalLink.hasAttribute('style') ||
     externalLink.hasAttribute('hidden') ||
     externalLink.hasAttribute('aria-hidden') ||
-    (tabIndex !== null && Number(tabIndex) === -1)
+    externalLink.hasAttribute('tabindex')
   ) {
     return true;
   }
 
   let ancestor = externalLink.parentElement;
+  let foundProjectCard = false;
+  let foundProjectsSection = false;
 
   while (ancestor) {
     if (
@@ -889,7 +894,15 @@ function violatesProjectExternalLinkVisibilityContract(externalLink, projectCard
     }
 
     if (ancestor === projectCard) {
-      return false;
+      foundProjectCard = true;
+    }
+
+    if (ancestor === projectsSection) {
+      foundProjectsSection = true;
+    }
+
+    if (ancestor === documentElement) {
+      return !foundProjectCard || !foundProjectsSection;
     }
 
     ancestor = ancestor.parentElement;
@@ -898,14 +911,53 @@ function violatesProjectExternalLinkVisibilityContract(externalLink, projectCard
   return true;
 }
 
-function readProjectCards(document, sourcePath, manifest) {
-  const projectsSection = document.querySelector('section#projects');
+function violatesProjectsSectionVisibilityContract(projectsSection, documentElement) {
+  let element = projectsSection;
 
-  if (!projectsSection) {
+  while (element) {
+    const ariaHidden = element.getAttribute('aria-hidden')?.trim().toLowerCase() === 'true';
+
+    if (element.hasAttribute('style') || element.hasAttribute('hidden') || ariaHidden) {
+      return true;
+    }
+
+    if (element === documentElement) {
+      return false;
+    }
+
+    element = element.parentElement;
+  }
+
+  return true;
+}
+
+function readProjectCards(document, sourcePath, manifest) {
+  const projectsSections = [...document.querySelectorAll('section#projects')];
+
+  if (projectsSections.length === 0) {
     throw new Error(`${sourcePath} is missing section#projects.`);
   }
 
-  const projectCards = [...projectsSection.querySelectorAll('[data-testid="project-stage"]')];
+  if (projectsSections.length !== 1) {
+    throw new Error(
+      `${sourcePath} must contain exactly one section#projects; found ${projectsSections.length}.`,
+    );
+  }
+
+  const projectsSection = projectsSections[0];
+
+  if (violatesProjectsSectionVisibilityContract(projectsSection, document.documentElement)) {
+    throw new Error(
+      `${sourcePath} section#projects and its ancestors must be visible without inline style.`,
+    );
+  }
+
+  const projectCards = [...document.querySelectorAll('[data-testid="project-stage"]')];
+
+  if (projectCards.some((projectCard) => !projectsSection.contains(projectCard))) {
+    throw new Error(`${sourcePath} contains project card outside section#projects.`);
+  }
+
   const cards = [];
   const names = new Set();
   const externalUrls = new Set();
@@ -1010,7 +1062,14 @@ function readProjectCards(document, sourcePath, manifest) {
       }
     }
 
-    if (violatesProjectExternalLinkVisibilityContract(externalLink, projectCard)) {
+    if (
+      violatesProjectExternalLinkVisibilityContract(
+        externalLink,
+        projectCard,
+        projectsSection,
+        document.documentElement,
+      )
+    ) {
       throw new Error(
         `${sourcePath} project card for ${projectName} marked external link must be visible.`,
       );
