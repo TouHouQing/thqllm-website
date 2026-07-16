@@ -26,6 +26,7 @@ const cleanupTotalTimeoutMs = 15_000;
 const forceCleanupResourceTimeoutMs = 500;
 const forceCleanupTotalTimeoutMs = 1_250;
 const signalForceExitTimeoutMs = 1_500;
+const browserLaunchTimeoutMs = 30_000;
 const markerPrefix = '__thqllm-capture-marker-';
 const previewRootPrefix = 'thqllm-capture-preview-';
 const previewConfigPrefix = 'thqllm-capture-config-';
@@ -256,6 +257,32 @@ function runTaskkill(pid) {
   });
 }
 
+async function stopWindowsProcessTree(child, dependencies = {}) {
+  const runTaskkillImpl = dependencies.runTaskkill ?? runTaskkill;
+  const waitForExitImpl = dependencies.waitForExit ?? waitForExit;
+  const timeoutMs = dependencies.timeoutMs ?? shutdownTimeoutMs;
+
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+
+  try {
+    await runTaskkillImpl(child.pid);
+  } catch (error) {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      return;
+    }
+    throw error;
+  }
+
+  if (!(await waitForExitImpl(child, timeoutMs))) {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      return;
+    }
+    throw new Error(`Process tree ${child.pid} did not exit after taskkill`);
+  }
+}
+
 const processTreeStops = new WeakMap();
 
 function stopProcessTree(child) {
@@ -270,13 +297,7 @@ function stopProcessTree(child) {
 
   const stopPromise = (async () => {
     if (process.platform === 'win32') {
-      if (child.exitCode !== null || child.signalCode !== null) {
-        return;
-      }
-      await runTaskkill(child.pid);
-      if (!(await waitForExit(child, shutdownTimeoutMs))) {
-        throw new Error(`Process tree ${child.pid} did not exit after taskkill`);
-      }
+      await stopWindowsProcessTree(child);
       return;
     }
 
@@ -308,13 +329,7 @@ async function forceStopProcessTree(child, timeoutMs = forceCleanupResourceTimeo
   }
 
   if (process.platform === 'win32') {
-    try {
-      await runTaskkill(child.pid);
-    } catch (error) {
-      if (child.exitCode === null && child.signalCode === null) {
-        throw error;
-      }
-    }
+    await stopWindowsProcessTree(child, { timeoutMs });
   } else {
     try {
       process.kill(-child.pid, 'SIGKILL');
@@ -512,6 +527,7 @@ function createResourceTracker(options = {}) {
           resource.forceTimeoutMs,
           `${resource.label} forced cleanup`,
         );
+        resource.state = 'completed';
       } catch (error) {
         const failure = normalizeError(error);
         failures.push(new Error(`${resource.label}: ${failure.message}`, { cause: failure }));
@@ -570,21 +586,47 @@ function createResourceTracker(options = {}) {
     },
     trackBrowser(browserPromise) {
       const browserStepTimeoutMs = resourceTimeoutMs;
+      let cleanupRequested = false;
+      let closePromise;
+      let resolveCleanupRequest;
+      const cleanupRequestPromise = new Promise((resolve) => {
+        resolveCleanupRequest = resolve;
+      });
+      const resolvedBrowserPromise = Promise.resolve(browserPromise).then(
+        (browser) => browser,
+        () => undefined,
+      );
+      const closeAfterCleanupRequestPromise = Promise.all([
+        resolvedBrowserPromise,
+        cleanupRequestPromise,
+      ]).then(([browser]) => {
+        if (!browser) {
+          return;
+        }
+        closePromise ??= Promise.resolve().then(() => browser.close());
+        return closePromise;
+      });
+      const requestBrowserCleanup = () => {
+        if (!cleanupRequested) {
+          cleanupRequested = true;
+          resolveCleanupRequest();
+        }
+        return closeAfterCleanupRequestPromise;
+      };
+
       addCleanup(
-        async () => {
-          const browser = await withTimeout(
-            browserPromise.catch(() => undefined),
+        () =>
+          withTimeout(
+            requestBrowserCleanup(),
             browserStepTimeoutMs,
-            'Chromium browser launch',
-          );
-          if (browser) {
-            await withTimeout(browser.close(), browserStepTimeoutMs, 'Chromium browser close');
-          }
-        },
+            'Chromium browser close after launch',
+          ),
         {
+          blocksFilesystemOnFailure: true,
+          forceCleanup: requestBrowserCleanup,
           label: 'Chromium browser',
           phase: 'runtime',
-          timeoutMs: browserStepTimeoutMs * 2 + 100,
+          timeoutMs: browserStepTimeoutMs + 100,
         },
       );
     },
@@ -1222,7 +1264,10 @@ async function capture(options, tracker, hooks = {}) {
     await new Promise(() => {});
   }
 
-  const browserPromise = chromium.launch({ headless: true });
+  const browserPromise = chromium.launch({
+    headless: true,
+    timeout: browserLaunchTimeoutMs,
+  });
   tracker.trackBrowser(browserPromise);
   const browser = await browserPromise;
   tracker.assertActive();
@@ -1342,6 +1387,7 @@ export {
   createIsolatedPreview,
   createResourceTracker,
   startPreviewWithRetry,
+  stopWindowsProcessTree,
   validatePreviewReady,
   waitForPageAssets,
 };

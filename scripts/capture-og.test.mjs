@@ -611,6 +611,8 @@ describe('capture-og', () => {
   it('bounds cleanup while a browser launch promise remains unresolved', async () => {
     const tracker = captureOg.createResourceTracker({
       cleanupTimeoutMs: 200,
+      forceCleanupTimeoutMs: 80,
+      forceResourceTimeoutMs: 50,
       resourceTimeoutMs: 100,
     });
     tracker.trackBrowser(new Promise(() => {}));
@@ -624,6 +626,155 @@ describe('capture-og', () => {
     ]);
 
     expect(outcome).toMatch(/^rejected:.*timed out/i);
+  });
+
+  it('force-closes a browser that resolves after the normal deadline before filesystem cleanup', async () => {
+    const tracker = captureOg.createResourceTracker({
+      cleanupTimeoutMs: 500,
+      forceCleanupTimeoutMs: 400,
+      forceResourceTimeoutMs: 300,
+      resourceTimeoutMs: 30,
+    });
+    const listener = await startServer(0, (_request, response) => {
+      response.end('late browser handle');
+    });
+    const cleanupOrder = [];
+    let browserResolved = false;
+    let closeCount = 0;
+    let resolveBrowser;
+    const browserPromise = new Promise((resolve) => {
+      resolveBrowser = resolve;
+    });
+    const browser = {
+      close: async () => {
+        closeCount += 1;
+        cleanupOrder.push('browser:close:start');
+        await closeServer(listener.server);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        cleanupOrder.push('browser:close:end');
+      },
+    };
+    const resolveLateBrowser = () => {
+      if (browserResolved) {
+        return;
+      }
+      browserResolved = true;
+      resolveBrowser(browser);
+    };
+    const lateResolutionTimer = setTimeout(resolveLateBrowser, 80);
+    const cleanupFilesystem = async () => {
+      cleanupOrder.push('filesystem:start');
+      cleanupOrder.push('filesystem:end');
+    };
+
+    tracker.addCleanup(cleanupFilesystem, {
+      forceCleanup: cleanupFilesystem,
+      label: 'preview root',
+      phase: 'filesystem',
+    });
+    tracker.trackBrowser(browserPromise);
+
+    try {
+      const cleanupOutcomePromise = tracker.cleanup().then(
+        () => ({ status: 'resolved' }),
+        (error) => ({ status: 'rejected', error }),
+      );
+      const settledBeforeBrowser = await Promise.race([
+        cleanupOutcomePromise.then(() => true),
+        new Promise((resolve) => setTimeout(() => resolve(false), 50)),
+      ]);
+      const cleanupOutcome = await cleanupOutcomePromise;
+
+      expect.soft(settledBeforeBrowser).toBe(false);
+      expect(cleanupOutcome.status).toBe('rejected');
+      expect(cleanupOutcome.error.message).toMatch(/browser.*timed out/i);
+      expect(closeCount).toBe(1);
+      expect(cleanupOrder).toEqual([
+        'browser:close:start',
+        'browser:close:end',
+        'filesystem:start',
+        'filesystem:end',
+      ]);
+      expect(await isPortListening(listener.port)).toBe(false);
+    } finally {
+      clearTimeout(lateResolutionTimer);
+      resolveLateBrowser();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      await closeServer(listener.server);
+    }
+  });
+
+  it('retains filesystem roots when forced browser cleanup times out and closes on later resolve', async () => {
+    const tracker = captureOg.createResourceTracker({
+      cleanupTimeoutMs: 200,
+      forceCleanupTimeoutMs: 80,
+      forceResourceTimeoutMs: 30,
+      resourceTimeoutMs: 20,
+    });
+    let closeCount = 0;
+    let filesystemCleanupStarted = false;
+    let resolveBrowser;
+    const browserPromise = new Promise((resolve) => {
+      resolveBrowser = resolve;
+    });
+    const cleanupFilesystem = async () => {
+      filesystemCleanupStarted = true;
+    };
+
+    tracker.addCleanup(cleanupFilesystem, {
+      forceCleanup: cleanupFilesystem,
+      label: 'preview root',
+      phase: 'filesystem',
+    });
+    tracker.trackBrowser(browserPromise);
+
+    const cleanupOutcome = await tracker.cleanup().then(
+      () => ({ status: 'resolved' }),
+      (error) => ({ status: 'rejected', error }),
+    );
+    resolveBrowser({
+      close: async () => {
+        closeCount += 1;
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(cleanupOutcome.status).toBe('rejected');
+    expect(cleanupOutcome.error.message).toMatch(/forced.*browser|browser.*forced/i);
+    expect(filesystemCleanupStarted).toBe(false);
+    expect(closeCount).toBe(1);
+  });
+
+  it('ignores a taskkill race only when the child has exited naturally', async () => {
+    const taskkillError = new Error('taskkill race');
+    const exitedChild = {
+      exitCode: null,
+      pid: 42,
+      signalCode: null,
+    };
+    const activeChild = {
+      exitCode: null,
+      pid: 43,
+      signalCode: null,
+    };
+
+    await expect(
+      captureOg.stopWindowsProcessTree(exitedChild, {
+        runTaskkill: async () => {
+          exitedChild.exitCode = 0;
+          throw taskkillError;
+        },
+        waitForExit: async () => true,
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      captureOg.stopWindowsProcessTree(activeChild, {
+        runTaskkill: async () => {
+          throw taskkillError;
+        },
+        waitForExit: async () => true,
+      }),
+    ).rejects.toBe(taskkillError);
   });
 
   it('waits for a delayed cleanup registered after cleanup has started', async () => {
@@ -903,10 +1054,7 @@ describe('capture-og', () => {
         await expect(stat(previewRootMatch[1].trim())).rejects.toMatchObject({ code: 'ENOENT' });
         await expect(stat(configRootMatch[1].trim())).rejects.toMatchObject({ code: 'ENOENT' });
       } finally {
-        if (processHandle.child.exitCode === null && processHandle.child.signalCode === null) {
-          processHandle.child.kill('SIGKILL');
-          await waitForExit(processHandle.child).catch(() => undefined);
-        }
+        await terminateCapture(processHandle.child);
         await rm(fixtureRoot, { force: true, recursive: true });
       }
     },
@@ -948,10 +1096,7 @@ describe('capture-og', () => {
         await expect(stat(isolatedRoot)).rejects.toMatchObject({ code: 'ENOENT' });
         await waitForPortState(requestedPort, false);
       } finally {
-        if (processHandle.child.exitCode === null && processHandle.child.signalCode === null) {
-          processHandle.child.kill('SIGKILL');
-          await waitForExit(processHandle.child).catch(() => undefined);
-        }
+        await terminateCapture(processHandle.child);
         await rm(fixtureRoot, { force: true, recursive: true });
       }
     },
