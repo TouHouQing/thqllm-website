@@ -1,4 +1,5 @@
 import type { ProjectDefinition } from '../data/project-schema';
+import { createProjectDocRoutePath } from './project-doc-routes';
 
 export const PROJECT_BUILD_MANIFEST_SCHEMA_VERSION = 1 as const;
 export const PROJECT_BUILD_SITE_ORIGIN = 'https://thqllm.com' as const;
@@ -78,7 +79,7 @@ function createDocsRoutes(project: ProjectDefinition): ProjectBuildManifestRoute
 
   return docs.sections.flatMap((section) =>
     section.items.map((item) => {
-      const routePath = item.slug === 'index' ? docs.basePath : `${docs.basePath}${item.slug}`;
+      const routePath = createProjectDocRoutePath(docs.basePath, item.slug);
 
       return {
         routePath,

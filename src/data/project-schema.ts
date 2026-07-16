@@ -12,6 +12,10 @@ const slugFormatSchema = z
   .string()
   .trim()
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+const projectDocSlugFormatSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/);
 
 export const slugSchema = z
   .string()
@@ -20,10 +24,17 @@ export const slugSchema = z
   })
   .pipe(slugFormatSchema);
 
+export const projectDocSlugSchema = z
+  .string()
+  .refine((value) => value === value.trim(), {
+    message: 'Slugs must not include surrounding whitespace',
+  })
+  .pipe(projectDocSlugFormatSchema);
+
 export const projectDocItemSchema = z
   .object({
     text: humanReadableStringSchema,
-    slug: slugSchema,
+    slug: projectDocSlugSchema,
   })
   .strict();
 

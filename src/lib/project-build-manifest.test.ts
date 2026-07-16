@@ -25,7 +25,11 @@ const documentedProject = {
       },
       {
         text: '参考',
-        items: [{ text: '常见问题', slug: 'faq' }],
+        items: [
+          { text: '常见问题', slug: 'faq' },
+          { text: '客户端概览', slug: 'clients/index' },
+          { text: 'Codex', slug: 'clients/codex' },
+        ],
       },
     ],
   },
@@ -97,6 +101,18 @@ describe('project build manifest', () => {
         routePath: '/docs/documented/faq',
         htmlPath: 'docs/documented/faq.html',
         markdownPath: 'docs/documented/faq.md',
+        llms: { txt: true, full: true },
+      },
+      {
+        routePath: '/docs/documented/clients/',
+        htmlPath: 'docs/documented/clients/index.html',
+        markdownPath: 'docs/documented/clients/index.md',
+        llms: { txt: true, full: true },
+      },
+      {
+        routePath: '/docs/documented/clients/codex',
+        htmlPath: 'docs/documented/clients/codex.html',
+        markdownPath: 'docs/documented/clients/codex.md',
         llms: { txt: true, full: true },
       },
     ]);

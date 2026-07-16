@@ -1,5 +1,6 @@
 import type { ProjectDefinition } from '../data/project-schema';
 import { projects } from '../data/projects';
+import { createProjectDocRoutePath } from './project-doc-routes';
 
 export interface SidebarItem {
   text: string;
@@ -41,7 +42,7 @@ export function createSidebarConfig(items: readonly ProjectDefinition[]): Sideba
             text: section.text,
             items: section.items.map((item) => ({
               text: item.text,
-              link: item.slug === 'index' ? docs.basePath : `${docs.basePath}${item.slug}`,
+              link: createProjectDocRoutePath(docs.basePath, item.slug),
             })),
           })),
         ],

@@ -16,6 +16,11 @@ function getProject(projectId: string) {
 const fluctgraph = getProject('fluctgraph');
 const thqApi = getProject('thq-api');
 const tohoImageStudio = getProject('toho-image-studio');
+const fluctgraphDocs = fluctgraph.docs;
+
+if (!fluctgraphDocs) {
+  throw new Error('Expected the FluctGraph fixture to include documentation');
+}
 
 describe('project navigation helpers', () => {
   it('filters and sorts featured projects without mutating the input', () => {
@@ -68,5 +73,36 @@ describe('project navigation helpers', () => {
       text: '快速开始',
       link: '/docs/fluctgraph/quick-start',
     });
+  });
+
+  it('creates sidebar links for nested docs routes', () => {
+    const fixture = [
+      {
+        ...fluctgraph,
+        docs: {
+          ...fluctgraphDocs,
+          sections: [
+            {
+              text: '客户端',
+              items: [
+                { text: '客户端概览', slug: 'clients/index' },
+                { text: 'Codex', slug: 'clients/codex' },
+              ],
+            },
+          ],
+        },
+      },
+    ];
+
+    expect(createSidebarConfig(fixture)['/docs/fluctgraph/'][0].items).toEqual([
+      {
+        text: '客户端概览',
+        link: '/docs/fluctgraph/clients/',
+      },
+      {
+        text: 'Codex',
+        link: '/docs/fluctgraph/clients/codex',
+      },
+    ]);
   });
 });

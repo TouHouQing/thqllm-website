@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { projectListSchema } from './project-schema';
+import { projectDocItemSchema, projectListSchema } from './project-schema';
 import { projects } from './projects';
 
 const validProject = {
@@ -41,6 +41,39 @@ const validFourthProject = {
 };
 
 describe('project registry', () => {
+  it.each([
+    'clients/codex',
+    'clients/claude-code',
+    'clients/index',
+  ])('accepts a safe nested docs item slug: %s', (slug) => {
+    expect(
+      projectDocItemSchema.parse({
+        text: '客户端',
+        slug,
+      }),
+    ).toEqual({
+      text: '客户端',
+      slug,
+    });
+  });
+
+  it.each([
+    '/clients/codex',
+    'clients/',
+    'clients//codex',
+    'clients/../codex',
+    '../clients/codex',
+    'clients/Codex',
+    'clients/codex.md',
+  ])('rejects an unsafe nested docs item slug: %s', (slug) => {
+    expect(
+      projectDocItemSchema.safeParse({
+        text: '客户端',
+        slug,
+      }).success,
+    ).toBe(false);
+  });
+
   it('keeps the canonical projects and external URLs in the registry', () => {
     expect(projects).toEqual(
       expect.arrayContaining([
