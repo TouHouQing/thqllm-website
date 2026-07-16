@@ -33,7 +33,12 @@ const georgiaFallbackBoundaryWidths = [641, 768, 900, 901] as const;
 const georgiaFallbackScales = [125, 150, 175, 200] as const;
 const MOBILE_DANMAKU_BULLET_COUNT = 16;
 const MOBILE_DANMAKU_ORBIT_SAMPLES = 1440;
-const responsivePaths = ['/', '/projects/', '/docs/fluctgraph/'] as const;
+const responsivePaths = [
+  '/',
+  '/projects/',
+  '/docs/fluctgraph/',
+  '/docs/thq-api/clients/codex',
+] as const;
 const topLevelRoutes = [
   { path: '/projects/', heading: '项目' },
   { path: '/notes/', heading: '开发札记' },
@@ -281,6 +286,20 @@ for (const route of topLevelRoutes) {
     expect(results.violations).toEqual([]);
   });
 }
+
+test('THQ API Codex guide has no detectable accessibility violations', async ({ page }) => {
+  await page.goto('/docs/thq-api/clients/codex');
+  await expect(
+    page.getByRole('heading', {
+      exact: true,
+      level: 1,
+      name: 'Codex 接入 THQ API',
+    }),
+  ).toBeVisible();
+
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations).toEqual([]);
+});
 
 test('home canvas honors reduced motion', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });

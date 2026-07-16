@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 import { projects } from '../../src/data/projects';
+import { createProjectDocRoutePath } from '../../src/lib/project-doc-routes';
 
 const documentationRoots = projects
   .flatMap((project) =>
@@ -16,6 +17,26 @@ const documentationRoots = projects
   )
   .toSorted((left, right) => left.order - right.order)
   .map(({ path, projectName }) => ({ path, projectName }));
+const thqApiProject = projects.find((project) => project.id === 'thq-api');
+
+if (!thqApiProject?.docs) {
+  throw new Error('Missing THQ API documentation registry');
+}
+
+const thqApiDocs = thqApiProject.docs;
+const thqApiDocumentationRoutes = thqApiDocs.sections.flatMap((section) =>
+  section.items.map((item) => ({
+    path: createProjectDocRoutePath(thqApiDocs.basePath, item.slug),
+    sidebarItemText: item.text,
+  })),
+);
+
+if (thqApiDocumentationRoutes.length !== 15) {
+  throw new Error(
+    `Expected 15 THQ API documentation routes, found ${thqApiDocumentationRoutes.length}`,
+  );
+}
+
 const docPanelTopProperty = '--thq-doc-panel-top';
 const docPanelFocusableSelector = [
   'a[href]',
@@ -171,6 +192,22 @@ for (const documentationRoot of documentationRoots) {
   });
 }
 
+for (const route of thqApiDocumentationRoutes) {
+  test(`THQ API route ${route.path} is published and linked`, async ({ page, isMobile }) => {
+    test.skip(Boolean(isMobile), 'THQ API route coverage only needs one browser project');
+
+    await page.goto(route.path);
+
+    await expect(page.locator('main h1')).toBeVisible();
+    const sidebarLink = page
+      .locator('nav[aria-label="文档导航"]')
+      .getByRole('link', { name: route.sidebarItemText, exact: true });
+    await expect(sidebarLink).toHaveCount(1);
+    await expect(sidebarLink).toBeVisible();
+    await expect(sidebarLink).toHaveAttribute('href', route.path);
+  });
+}
+
 test('documentation project names treat regex punctuation as literal text', async ({ page }) => {
   await page.setContent('<h1>C++ Tools</h1><h1>C++ Tools Extra</h1>');
 
@@ -186,6 +223,61 @@ test('FluctGraph full-text search finds the Toho Image Studio overview', async (
   await searchInput.fill('Toho Image Studio');
 
   await expect(page.getByText(/Toho Image Studio 概览/).first()).toBeVisible();
+});
+
+test('THQ API endpoint reference distinguishes all protocols', async ({ page }) => {
+  await page.goto('/docs/thq-api/endpoints');
+
+  const main = page.locator('main');
+  for (const address of [
+    'https://api.thqllm.com/v1',
+    'https://api.thqllm.com',
+    'https://api.thqllm.com/v1beta',
+  ]) {
+    await expect(main.getByText(address, { exact: true }).first()).toBeVisible();
+  }
+
+  const correctionTable = main.getByRole('table').filter({ hasText: '错误配置' });
+  const correctionRows = [
+    {
+      incorrect: 'Claude Code 使用 https://api.thqllm.com/v1',
+      correct: '使用 https://api.thqllm.com',
+    },
+    {
+      incorrect: 'Gemini CLI 使用 https://api.thqllm.com/v1',
+      correct: '分别配置主机 https://api.thqllm.com 与版本 v1beta',
+    },
+    {
+      incorrect: 'OpenAI 兼容客户端只填 https://api.thqllm.com',
+      correct: '使用 https://api.thqllm.com/v1',
+    },
+  ] as const;
+
+  for (const correction of correctionRows) {
+    const row = correctionTable.getByRole('row').filter({ hasText: correction.incorrect });
+    await expect(row).toHaveCount(1);
+    await expect(row).toContainText(correction.correct);
+  }
+});
+
+test('documentation search finds the Claude Code guide', async ({ page, isMobile }) => {
+  await page.goto('/docs/thq-api/');
+
+  const searchButton = isMobile
+    ? page.getByRole('button', { name: '搜索', exact: true })
+    : page.getByRole('button', { name: /^搜索(?:\s|$)/ });
+  await searchButton.click();
+
+  const searchInput = page.getByLabel('SearchPanelInput');
+  await expect(searchInput).toBeVisible();
+  await searchInput.fill('Claude Code 接入');
+
+  const claudeCodeResult = page
+    .locator('.rp-suggest-item__link')
+    .filter({ hasText: 'Claude Code 接入' })
+    .first();
+  await expect(claudeCodeResult).toBeVisible();
+  await expect(claudeCodeResult).toHaveAttribute('href', '/docs/thq-api/clients/claude-code');
 });
 
 test('SearchPanel keeps Enter safe without breaking keyboard navigation', async ({
