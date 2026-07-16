@@ -1,0 +1,139 @@
+---
+title: OpenClaw 接入 THQ API
+description: 在 OpenClaw 中配置 THQ OpenAI Chat Completions 提供商与默认模型。
+---
+
+# OpenClaw 接入 THQ API
+
+OpenClaw 可以在全局 JSON5 配置中添加自定义模型 provider。本页配置使用 OpenAI Chat
+Completions 协议，不声明或依赖 Responses 支持。
+
+## 配置前准备
+
+- 在 [THQ API 控制台](https://sub.thqllm.com)创建 API Key。
+- 从控制台复制一个支持 OpenAI 兼容 Chat Completions 的完整模型 ID。
+- 确认能够编辑 `~/.openclaw/openclaw.json`。
+- 如文件中已有模型 provider 或 agent 设置，保留不相关配置并合并本页字段。
+
+模型 ID 和可用能力会动态调整，以控制台当前显示为准。配置概念见
+[OpenClaw Model Providers 官方文档](https://docs.openclaw.ai/concepts/model-providers)。
+
+## 添加 OpenAI 兼容提供商
+
+可以在启动 OpenClaw 的终端中设置 Key：
+
+```bash
+export THQ_API_KEY="YOUR_THQ_API_KEY"
+```
+
+也可以写入 OpenClaw 的全局环境文件 `~/.openclaw/.env`：
+
+```dotenv
+THQ_API_KEY=YOUR_THQ_API_KEY
+```
+
+两种方式任选一种。不要在 `.env` 中写 `export`，也不要把包含真实 Key 的文件提交到仓库。
+环境变量加载规则见
+[OpenClaw Environment 官方文档](https://docs.openclaw.ai/help/environment)。
+
+编辑 `~/.openclaw/openclaw.json`，将所有 `CONTROL_PANEL_MODEL_ID` 替换为同一个控制台模型
+ID：
+
+```json5 title="推荐配置"
+{
+  models: {
+    mode: "merge",
+    providers: {
+      thq: {
+        baseUrl: "https://api.thqllm.com/v1",
+        apiKey: "${THQ_API_KEY}",
+        api: "openai-completions",
+        models: [
+          {
+            id: "CONTROL_PANEL_MODEL_ID",
+            name: "CONTROL_PANEL_MODEL_ID",
+          },
+        ],
+      },
+    },
+  },
+  agents: {
+    defaults: {
+      model: {
+        primary: "thq/CONTROL_PANEL_MODEL_ID",
+      },
+    },
+  },
+}
+```
+
+`models.mode: "merge"` 会把自定义 provider 与现有模型配置合并。`api` 必须保持
+`openai-completions`；本页不要改成 Responses 配置。
+
+## 配置模型
+
+provider 内的 `models` 是模型定义数组：
+
+- `id` 必须是控制台中的完整模型 ID。
+- `name` 是 OpenClaw 中显示的名称，可以与 `id` 保持一致。
+- `agents.defaults.model.primary` 使用 `thq/模型ID` 格式选择默认模型。
+
+添加多个模型时，继续向数组添加对象。不要把展示名称当成 `id`，也不要假设所有控制台模型都
+支持 Chat Completions。
+
+## 验证
+
+保存后依次检查配置和模型状态：
+
+```bash
+openclaw doctor
+openclaw models status
+openclaw models list
+openclaw models set thq/CONTROL_PANEL_MODEL_ID
+openclaw models status
+```
+
+`doctor` 用于发现配置和环境问题；`models list` 应显示 THQ 模型；`models set` 会选择指定
+模型。随后启动一个新会话并发送最小提示词，再到控制台核对请求记录。
+
+命令详情见 [OpenClaw Doctor 官方文档](https://docs.openclaw.ai/cli/doctor)和
+[OpenClaw Models 官方文档](https://docs.openclaw.ai/cli/models)。
+
+## 常见问题
+
+### `openclaw doctor` 报告配置无效
+
+确认文件是合法 JSON5，字段名为 `baseUrl`，并检查逗号、花括号和数组结构。不要把 OpenCode
+使用的 `baseURL` 字段名复制到 OpenClaw。
+
+### 模型列表中没有 THQ
+
+确认 `models.mode` 是 `"merge"`，provider 位于 `models.providers.thq`，并且 `models`
+数组至少包含一个完整模型 ID。保存后重新运行 `openclaw doctor` 和
+`openclaw models list`。
+
+### 返回 401 或提示缺少 Key
+
+确认 `THQ_API_KEY` 已被启动 OpenClaw 的进程读取，或保存在 `~/.openclaw/.env`。修改环境
+后完全退出相关进程再启动。
+
+### 返回 404
+
+确认 `baseUrl` 为 `https://api.thqllm.com/v1`，`api` 为 `openai-completions`。不要填
+控制台地址、Claude 的无后缀地址或 Gemini 的 `/v1beta`。
+
+### 请求走了其他模型
+
+运行 `openclaw models status` 查看当前默认模型，并用
+`openclaw models set thq/CONTROL_PANEL_MODEL_ID` 重新选择。确认 agent 层没有其他覆盖。
+
+更多地址说明见[端点说明](/docs/thq-api/endpoints/)，通用排查见
+[常见问题](/docs/thq-api/faq/)。
+
+## 密钥安全
+
+- 配置文件中只保留 `"${THQ_API_KEY}"`，不要直接写入真实 Key。
+- 限制 `~/.openclaw/.env` 的读取权限，不要把它复制到项目仓库。
+- 不要在日志、截图、会话导出或问题描述中公开完整 Key。
+- 为不同设备和自动化用途使用不同 Key，不再使用时在控制台撤销。
+- 怀疑泄露时轮换 Key，并重启所有仍持有旧环境变量的 OpenClaw 进程。

@@ -1,0 +1,95 @@
+---
+title: Cherry Studio 接入 THQ API
+description: 在 Cherry Studio 中添加 THQ 自定义 OpenAI 提供商并验证模型连接。
+---
+
+# Cherry Studio 接入 THQ API
+
+Cherry Studio 可以通过自定义 OpenAI 提供商连接 THQ API。不同版本的菜单名称和控件位置可能
+变化，请以当前客户端界面为准；本页不依赖特定版本截图。
+
+模型 ID 和可用能力会动态调整，请从
+[THQ API 控制台](https://sub.thqllm.com)复制当前可用的完整模型 ID。
+
+## 添加自定义提供商
+
+1. 打开 Cherry Studio 设置。
+2. 进入“模型服务”。
+3. 选择“添加”或当前版本中的新增提供商入口。
+4. 添加自定义 OpenAI 提供商，并将名称设为容易识别的 `THQ API`。
+
+不要选择仅适用于 Anthropic 或 Gemini 原生协议的提供商类型。操作概念见
+[Cherry Studio 自定义提供商官方文档](https://docs.cherry-ai.com/advanced-basic/providers)。
+
+## 填写连接信息
+
+按当前界面填写：
+
+| 字段 | 值 |
+| --- | --- |
+| 提供商类型 | 自定义 OpenAI |
+| API 地址 | `https://api.thqllm.com/v1` |
+| API Key | `YOUR_THQ_API_KEY` |
+
+API 地址只填写 OpenAI 兼容根地址，不要添加 `/chat/completions`，也不要使用控制台地址
+`https://sub.thqllm.com`。
+
+## 添加模型
+
+在该提供商的模型管理区域添加：
+
+```text
+CONTROL_PANEL_MODEL_ID
+```
+
+将占位符替换为控制台中的完整模型 ID。模型 ID 必须逐字符一致，不要使用展示名称、自行添加的
+前缀或其他协议页面中的模型值。
+
+如果版本支持模型列表同步，也要核对同步结果是否与控制台当前可用模型一致。文档不固定列出
+模型清单，动态模型以控制台为准。
+
+## 连接检查
+
+1. 保存提供商与模型设置。
+2. 使用当前版本提供的“检查连接”“测试”或等价操作。
+3. 新建聊天，明确选择刚添加的 THQ provider 和模型。
+4. 发送“请只回复：Cherry Studio 已连接 THQ API”。
+5. 回到控制台核对请求时间、模型和状态。
+
+连接检查成功后仍应完成一次真实聊天验证，因为检查操作和聊天请求可能使用不同路径或模型。
+
+## 常见问题
+
+### 找不到“添加自定义 OpenAI 提供商”
+
+Cherry Studio 的 UI 会随版本变化。先更新到受支持版本，再在“设置”和“模型服务”中查找新增
+提供商入口，并参考官方文档中的当前界面。
+
+### 连接检查返回 404
+
+确认 API 地址是 `https://api.thqllm.com/v1`，没有漏写 `/v1`，也没有手动添加
+`/chat/completions`。
+
+### 检查连接成功，但聊天失败
+
+确认聊天中实际选择的是 THQ provider 和刚添加的模型。重新复制控制台模型 ID，并检查客户端
+是否在聊天级别覆盖了 provider、模型或代理设置。
+
+### 提示模型不存在
+
+模型 ID 必须与控制台完全一致，并支持 OpenAI 兼容接口。不要根据展示名称猜测模型 ID。
+
+### 修改设置后仍使用旧配置
+
+保存后关闭旧聊天并新建会话。若客户端仍缓存旧 provider，完全退出 Cherry Studio 后重新启动。
+
+更多地址说明见[端点说明](/docs/thq-api/endpoints/)，通用排查见
+[常见问题](/docs/thq-api/faq/)。
+
+## 密钥安全
+
+- 只在可信设备上的 Cherry Studio 中填写 Key。
+- 不要在截图、配置导出、日志、聊天记录或问题描述中公开完整 Key。
+- 不要把同一个 Key 分发给所有设备和项目。
+- 导出或同步客户端配置前，先确认其中是否包含凭据。
+- 怀疑泄露时立即在控制台撤销旧 Key，并更新本地提供商设置。

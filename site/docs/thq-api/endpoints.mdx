@@ -1,0 +1,116 @@
+---
+title: THQ API 端点说明
+description: 区分 OpenAI 兼容、Claude Code 与 Gemini CLI 的 Base URL 和请求路径。
+---
+
+# 端点说明
+
+THQ API 为不同协议提供不同的地址规则。客户端要求填写的可能是主机、API 根地址或完整请求
+路径，这三者不能互换。
+
+## 地址速查
+
+| 用途 | 应填写的地址 | 说明 |
+| --- | --- | --- |
+| 控制台 | `https://sub.thqllm.com` | 创建 Key、查看模型和请求记录，不是 API 地址 |
+| OpenAI 兼容 | `https://api.thqllm.com/v1` | Chat Completions 与 Responses 的共同 API 根地址 |
+| Claude Code | `https://api.thqllm.com` | 不带版本后缀，由客户端追加 Anthropic 路径 |
+| Gemini CLI 主机 | `https://api.thqllm.com` | 与 API 版本分开配置 |
+| Gemini CLI 版本 | `v1beta` | 与主机组合后为 `https://api.thqllm.com/v1beta` |
+
+模型 ID 和协议能力会动态调整，请以
+[THQ API 控制台](https://sub.thqllm.com)当前显示为准。
+
+## OpenAI 兼容接口
+
+OpenAI 兼容客户端的 Base URL 是：
+
+```text
+https://api.thqllm.com/v1
+```
+
+同一个 `/v1` 根地址下有不同具体请求路径：
+
+| 能力 | 完整路径 |
+| --- | --- |
+| Chat Completions | `https://api.thqllm.com/v1/chat/completions` |
+| Responses | `https://api.thqllm.com/v1/responses` |
+
+通用聊天客户端通常配置 `/v1` 后由客户端追加 `/chat/completions`。官方 Codex 自定义 provider
+也配置 `/v1`，但会请求 `/v1/responses`，因此服务端和所选模型必须支持 Responses。不能因为
+Chat Completions 请求成功，就假设 Codex Responses 一定可用。
+
+协议参考见 [OpenAI Chat API 官方文档](https://platform.openai.com/docs/api-reference/chat)和
+[OpenAI Responses API 官方文档](https://platform.openai.com/docs/api-reference/responses)。
+
+## Claude Code
+
+Claude Code 的 `ANTHROPIC_BASE_URL` 使用不带版本后缀的地址：
+
+```text
+https://api.thqllm.com
+```
+
+客户端会追加 Anthropic Messages 路径，最终请求为 `/v1/messages`。如果把 Base URL 手动
+写成 `https://api.thqllm.com/v1`，客户端可能再次追加版本和资源路径，形成错误地址。
+
+完整环境变量见 [Claude Code 接入指南](/docs/thq-api/clients/claude-code/)，协议参考见
+[Anthropic Messages API 官方文档](https://docs.anthropic.com/en/api/messages)。
+
+## Gemini CLI
+
+Gemini CLI 分别配置主机和 API 版本：
+
+```bash title="推荐配置"
+export GOOGLE_GEMINI_BASE_URL="https://api.thqllm.com"
+export GOOGLE_GENAI_API_VERSION="v1beta"
+```
+
+两项组合后的有效根地址是：
+
+```text
+https://api.thqllm.com/v1beta
+```
+
+不要将 `GOOGLE_GEMINI_BASE_URL` 写成带 `/v1beta` 的完整根地址，否则客户端可能再次追加版本。
+完整配置见 [Gemini CLI 接入指南](/docs/thq-api/clients/gemini-cli/)，协议参考见
+[Gemini API 官方文档](https://ai.google.dev/api)。
+
+## 为什么后缀不同
+
+后缀由客户端协议和路径拼接方式决定：
+
+- OpenAI 兼容客户端通常要求直接填写版本化 API 根地址 `/v1`。
+- Claude Code 要求填写主机，由客户端构造 Anthropic `/v1/messages`。
+- Gemini CLI 把主机和 `v1beta` 版本拆成两个配置项。
+
+判断地址时不要只看“兼容”或“自定义 API”字样，应查看客户端最终发送的协议和它是否自动追加
+路径。Base URL、API 版本和完整资源路径重复填写，是 404 的常见原因。
+
+## 常见填写错误
+
+| 错误配置 | 正确配置 |
+| --- | --- |
+| Claude Code 使用 `https://api.thqllm.com/v1` | 使用 `https://api.thqllm.com` |
+| Gemini CLI 使用 `https://api.thqllm.com/v1` | 分别配置主机 `https://api.thqllm.com` 与版本 `v1beta`，有效根地址为 `https://api.thqllm.com/v1beta` |
+| OpenAI 兼容客户端只填 `https://api.thqllm.com` | 使用 `https://api.thqllm.com/v1` |
+| 把控制台地址 `https://sub.thqllm.com` 当作 API Base URL | 使用当前协议对应的 `https://api.thqllm.com` 地址 |
+| Codex provider 只验证 `/v1/chat/completions` | 还要确认 `/v1/responses` 和所选模型支持 Responses |
+| 在 OpenAI Base URL 后添加 `/chat/completions` | Base URL 只填 `https://api.thqllm.com/v1`，由客户端追加资源路径 |
+
+发现 404 时，记录客户端最终请求地址，再检查是否漏写、重复或混用了 `/v1`、`/v1beta` 和资源
+路径。
+
+## 如何确认模型
+
+1. 打开控制台并复制完整模型 ID。
+2. 确认模型当前支持目标客户端所用协议。
+3. 将模型 ID 原样填入配置，不使用展示名称或自行缩写。
+4. 重启客户端并创建新会话。
+5. 发送最小请求，到控制台核对请求时间、模型和状态。
+
+模型列表和能力是动态信息，本文档不固定列出。即使同一模型 ID 出现在多个客户端中，也要分别
+确认它是否支持 Chat Completions、Responses、Anthropic Messages 或 Gemini 原生协议。
+
+继续配置可查看[客户端接入总览](/docs/thq-api/clients/)和
+[手动配置](/docs/thq-api/configuration/)，失败时按[常见问题](/docs/thq-api/faq/)排查。

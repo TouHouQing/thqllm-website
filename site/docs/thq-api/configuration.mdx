@@ -1,0 +1,150 @@
+---
+title: THQ API 手动配置
+description: 使用环境变量、curl 与 JSON 模板配置 OpenAI、Claude 和 Gemini 客户端。
+---
+
+# 手动配置
+
+不同客户端可能使用不同字段名，但配置始终围绕协议、Base URL、API Key 和模型 ID。先确认
+客户端协议，再选择本页对应模板。
+
+模型 ID 和可用能力会动态调整，请从
+[THQ API 控制台](https://sub.thqllm.com)复制当前可用的完整模型 ID。
+
+## 通用 OpenAI 兼容参数
+
+适用于明确支持自定义 OpenAI 兼容端点的客户端：
+
+| 参数 | 推荐值 | 说明 |
+| --- | --- | --- |
+| Base URL | `https://api.thqllm.com/v1` | OpenAI 兼容 API 根地址 |
+| API Key | `YOUR_THQ_API_KEY` 或环境引用 | 在控制台创建 |
+| Model | `CONTROL_PANEL_MODEL_ID` | 从控制台复制完整 ID |
+
+OpenAI 兼容根地址下可以有不同具体路径：
+
+- Chat Completions：`/v1/chat/completions`
+- Responses：`/v1/responses`
+
+客户端支持 OpenAI 兼容接口，不代表它同时支持两种路径。官方 Codex 当前自定义 provider 使用
+Responses；OpenCode、OpenClaw 和本页通用 `curl` 示例使用 Chat Completions。
+
+## 环境变量
+
+通用 OpenAI 兼容客户端常见的环境变量写法：
+
+```bash title="推荐配置"
+export OPENAI_API_KEY="YOUR_THQ_API_KEY"
+export OPENAI_BASE_URL="https://api.thqllm.com/v1"
+export OPENAI_MODEL="CONTROL_PANEL_MODEL_ID"
+```
+
+并非所有客户端都会读取这三个变量。有的使用 `THQ_API_KEY`，有的要求在 JSON、TOML 或 UI
+中填写，也有的使用不同模型变量名。字段名称和覆盖顺序必须以具体客户端官方文档为准。
+
+## curl 验证
+
+先选择控制台中支持 OpenAI 兼容 Chat Completions 的模型，然后运行：
+
+```bash
+export OPENAI_API_KEY="YOUR_THQ_API_KEY"
+export OPENAI_BASE_URL="https://api.thqllm.com/v1"
+
+curl "$OPENAI_BASE_URL/chat/completions" \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "CONTROL_PANEL_MODEL_ID",
+    "messages": [
+      {
+        "role": "user",
+        "content": "请只回复：THQ API 手动配置成功"
+      }
+    ]
+  }'
+```
+
+请求成功后，到控制台核对请求时间、模型和状态。如果客户端使用 Responses，不要用
+Chat Completions 的成功结果推断 Responses 一定可用；还需要按
+[Codex 接入指南](/docs/thq-api/clients/codex/)验证模型和 `/v1/responses`。
+
+## JSON 配置模板
+
+通用 JSON 表达可以写成：
+
+```json title="通用模板"
+{
+  "baseURL": "https://api.thqllm.com/v1",
+  "apiKey": "YOUR_THQ_API_KEY",
+  "model": "CONTROL_PANEL_MODEL_ID"
+}
+```
+
+这只是字段语义模板，不是所有客户端都能直接读取的完整文件。常见差异包括：
+
+| 语义 | 可能的字段名 |
+| --- | --- |
+| Base URL | `baseURL`、`baseUrl`、`base_url` |
+| API Key | `apiKey`、`api_key`、环境变量引用 |
+| Model | `model`、`modelId`、provider 内的 `models` |
+
+字段名通常区分大小写。不要在没有官方依据时把一个客户端的字段名复制到另一个客户端。
+可直接使用的示例见 [OpenCode](/docs/thq-api/clients/opencode/)和
+[OpenClaw](/docs/thq-api/clients/openclaw/)。
+
+## Claude Code
+
+Claude Code 使用 Anthropic Messages 网关。主机地址不带 `/v1`，Key 使用
+`ANTHROPIC_AUTH_TOKEN`：
+
+```bash title="Claude Code 推荐配置"
+export ANTHROPIC_BASE_URL="https://api.thqllm.com"
+export ANTHROPIC_AUTH_TOKEN="YOUR_THQ_API_KEY"
+export ANTHROPIC_MODEL="CONTROL_PANEL_MODEL_ID"
+```
+
+客户端会追加 `/v1/messages`。不要把 `ANTHROPIC_BASE_URL` 写成
+`https://api.thqllm.com/v1`。完整步骤见
+[Claude Code 接入指南](/docs/thq-api/clients/claude-code/)和
+[Claude Code Settings 官方文档](https://code.claude.com/docs/en/settings)。
+
+## Gemini CLI
+
+Gemini CLI 将 API 主机与版本分开配置：
+
+```bash title="Gemini CLI 推荐配置"
+export GEMINI_API_KEY="YOUR_THQ_API_KEY"
+export GOOGLE_GEMINI_BASE_URL="https://api.thqllm.com"
+export GOOGLE_GENAI_API_VERSION="v1beta"
+export GEMINI_MODEL="CONTROL_PANEL_MODEL_ID"
+```
+
+组合后的有效根地址是 `https://api.thqllm.com/v1beta`。不要把 `/v1beta` 直接写入
+`GOOGLE_GEMINI_BASE_URL`，也不要用 OpenAI 的 `/v1` 替代它。完整步骤见
+[Gemini CLI 接入指南](/docs/thq-api/clients/gemini-cli/)和
+[Gemini CLI Configuration 官方文档](https://geminicli.com/docs/get-started/configuration/)。
+
+## 配置保存与重载
+
+1. 确认修改的是客户端实际读取的用户级或项目级配置。
+2. 保存文件后检查 JSON、JSON5 或 TOML 语法。
+3. 完全退出客户端、扩展宿主和相关后台进程。
+4. 从能够读取新环境变量的终端或启动器重新打开客户端。
+5. 创建新会话，不要继续复用加载旧模型和 provider 的会话。
+6. 使用状态命令、模型列表或最小请求确认最终生效值。
+
+如果用户配置、项目配置、环境变量和启动参数同时存在，排查时只保留一个明确来源，再逐项恢复。
+
+## 安全检查
+
+提交、分享或导出配置前检查：
+
+- 代码和配置中只出现 `YOUR_THQ_API_KEY` 或受支持的环境变量引用。
+- `.env`、shell 配置和本地凭据文件未被版本控制跟踪。
+- 日志、命令历史、截图和错误信息中没有完整 Key。
+- 不同设备、项目和自动化用途使用可单独撤销的 Key。
+- Base URL 是 `api.thqllm.com`，没有误用控制台地址。
+- 模型 ID 来自控制台，且适用于当前协议。
+
+发现凭据泄露时，立即在控制台撤销旧 Key，而不是只删除公开内容。更多排查见
+[常见问题](/docs/thq-api/faq/)和[端点说明](/docs/thq-api/endpoints/)。

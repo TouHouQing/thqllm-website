@@ -1,0 +1,127 @@
+---
+title: OpenCode 接入 THQ API
+description: 为 OpenCode 添加 THQ OpenAI 兼容提供商、模型与环境变量。
+---
+
+# OpenCode 接入 THQ API
+
+OpenCode 支持通过 AI SDK 的 OpenAI 兼容适配器添加自定义 provider。本页使用全局配置
+`~/.config/opencode/opencode.json`，并通过环境变量保存 THQ API Key。
+
+## 配置前准备
+
+- 在 [THQ API 控制台](https://sub.thqllm.com)创建 API Key。
+- 从控制台复制一个支持 OpenAI 兼容 Chat Completions 的完整模型 ID。
+- 确认已安装 OpenCode，并可在终端运行 `opencode --version`。
+- 如已有全局配置，先保留其中不相关的 provider、插件和权限设置。
+
+模型 ID 和可用能力以控制台当前显示为准。OpenCode 的安装与更新方式见
+[OpenCode 官方文档](https://opencode.ai/docs/)。
+
+## 添加 OpenAI 兼容提供商
+
+先在启动 OpenCode 的终端中设置 Key：
+
+```bash
+export THQ_API_KEY="YOUR_THQ_API_KEY"
+```
+
+编辑 `~/.config/opencode/opencode.json`，加入下面的完整配置。将所有
+`CONTROL_PANEL_MODEL_ID` 替换为同一个控制台模型 ID：
+
+```json title="推荐配置"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "thq": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "THQ API",
+      "options": {
+        "baseURL": "https://api.thqllm.com/v1",
+        "apiKey": "{env:THQ_API_KEY}"
+      },
+      "models": {
+        "CONTROL_PANEL_MODEL_ID": {
+          "name": "CONTROL_PANEL_MODEL_ID"
+        }
+      }
+    }
+  },
+  "model": "thq/CONTROL_PANEL_MODEL_ID"
+}
+```
+
+`baseURL` 中的 `URL` 必须大写；不要改成 `baseUrl`。`apiKey` 只引用环境变量，不在 JSON
+中保存真实 Key。字段说明见
+[OpenCode Providers 官方文档](https://opencode.ai/docs/providers/)和
+[OpenCode Config 官方文档](https://opencode.ai/docs/config/)。
+
+## 配置模型
+
+`models` 对象的键是客户端发送给 THQ 的模型 ID，顶层 `model` 使用
+`provider/model` 格式：
+
+```text
+thq/CONTROL_PANEL_MODEL_ID
+```
+
+添加多个模型时，为每个控制台模型 ID 增加一项，并按需修改顶层默认模型。不要使用展示名称、
+自行缩写的别名或其他协议页面中的模型值。
+
+如果项目目录中还有 `opencode.json`，它可能与全局配置合并或覆盖部分字段。排查时确认实际加载
+的是预期 provider 与模型。
+
+## 验证
+
+先确认 OpenCode 能发现 THQ provider 的模型：
+
+```bash
+opencode models thq
+```
+
+列表中应出现配置的完整模型 ID。然后运行一次最小请求：
+
+```bash
+opencode run "请只回复：OpenCode 已连接 THQ API"
+```
+
+请求成功后，到控制台核对请求时间、模型和状态。命令用法见
+[OpenCode CLI 官方文档](https://opencode.ai/docs/cli/)。
+
+## 常见问题
+
+### `opencode models thq` 没有显示模型
+
+检查配置文件路径、JSON 语法、provider 名称和 `models` 对象。确认文件名为
+`opencode.json`，并检查项目级配置是否覆盖了全局设置。
+
+### 提示找不到 provider 或适配器
+
+确认 `npm` 的值是 `@ai-sdk/openai-compatible`，provider ID 是 `thq`。更新 OpenCode 后重新
+启动，不要把其他 SDK 包名替换进示例。
+
+### 返回 401
+
+确认运行 OpenCode 的进程能读取 `THQ_API_KEY`。如果 OpenCode 已经在另一个终端或后台进程中
+运行，完全退出后从已导出变量的终端重新启动。
+
+### 返回 404 或请求地址异常
+
+确认 `baseURL` 是 `https://api.thqllm.com/v1`，不要填控制台地址，也不要把
+`/chat/completions` 直接写入 Base URL。
+
+### 默认模型没有生效
+
+顶层 `model` 必须写成 `thq/CONTROL_PANEL_MODEL_ID`，并与 `models` 中的键完全一致。修改后
+重启 OpenCode，再运行 `opencode models thq` 验证。
+
+更多地址说明见[端点说明](/docs/thq-api/endpoints/)，通用排查见
+[常见问题](/docs/thq-api/faq/)。
+
+## 密钥安全
+
+- 不要把真实 Key 写入 `opencode.json`；保留 `{env:THQ_API_KEY}`。
+- 不要提交包含真实 Key 的 shell 配置、项目 `.env`、日志或诊断输出。
+- 为不同设备和项目使用不同 Key，便于单独撤销。
+- 怀疑泄露时立即在控制台撤销旧 Key，并重启所有仍可能持有旧环境变量的进程。
+- 分享配置时保留变量名和占位符，删除完整 Key 与敏感提示内容。
