@@ -546,13 +546,22 @@ function normalizeMarkdownRoute(value, manifest, source) {
   return url.pathname;
 }
 
-function parseMarkdownLinks(content, manifest) {
-  const routes = [];
+function parseMarkdownLinkDestinations(content) {
+  const destinations = [];
   const markdownLinkPattern =
     /(?<!!)\[[^\]\r\n]*\]\(\s*(?:<([^>\r\n]+)>|([^\s)\r\n]+))(?:\s+[^)\r\n]+)?\s*\)/g;
 
   for (const match of content.matchAll(markdownLinkPattern)) {
-    const href = match[1] ?? match[2];
+    destinations.push(match[1] ?? match[2]);
+  }
+
+  return destinations;
+}
+
+function parseMarkdownLinks(content, manifest) {
+  const routes = [];
+
+  for (const href of parseMarkdownLinkDestinations(content)) {
     const route = normalizeMarkdownRoute(href, manifest, 'llms.txt');
 
     if (route !== undefined) {
@@ -561,6 +570,26 @@ function parseMarkdownLinks(content, manifest) {
   }
 
   return routes;
+}
+
+function parseAbsoluteHttpsMarkdownLinks(content) {
+  const urls = new Set();
+
+  for (const href of parseMarkdownLinkDestinations(content)) {
+    let url;
+
+    try {
+      url = new URL(href);
+    } catch {
+      continue;
+    }
+
+    if (url.protocol === 'https:' && !url.username && !url.password) {
+      urls.add(url.href);
+    }
+  }
+
+  return urls;
 }
 
 function verifyLlmsTxt(content, manifest) {
@@ -608,6 +637,7 @@ function parseLlmsFullRoutes(content, manifest) {
 
 function verifyLlmsFullTxt(content, manifest) {
   const actualRoutes = parseLlmsFullRoutes(content, manifest);
+  const externalUrls = parseAbsoluteHttpsMarkdownLinks(content);
   const expectedRoutes = manifest.routes
     .filter((route) => route.llms.full)
     .map((route) => `/${route.markdownPath}`);
@@ -619,7 +649,7 @@ function verifyLlmsFullTxt(content, manifest) {
   });
 
   for (const project of manifest.projects) {
-    if (!content.includes(project.externalUrl)) {
+    if (!externalUrls.has(project.externalUrl)) {
       throw new Error(
         `llms-full.txt is missing registered project external URL: ${project.externalUrl}`,
       );

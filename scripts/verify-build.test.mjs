@@ -165,7 +165,9 @@ function createSyntheticLlmsTxt(manifest) {
 }
 
 function createSyntheticLlmsFullTxt(manifest) {
-  const externalUrls = manifest.projects.map((project) => project.externalUrl).join('\n');
+  const externalUrls = manifest.projects
+    .map((project) => `- [${project.name}](${project.externalUrl})`)
+    .join('\n');
 
   return `${manifest.routes
     .filter((route) => route.llms.full)
@@ -702,6 +704,28 @@ describe('verify-build manifest-driven output validation', () => {
     expect(result.status, result.stderr || result.stdout).toBe(0);
   });
 
+  it('accepts the existing projects plus a fourth undocumented project', async () => {
+    const baselineManifest = createSyntheticManifest(syntheticProjects);
+    const fourthProject = {
+      id: 'fourth',
+      ...fourthCard,
+      order: Math.max(...syntheticProjects.map((project) => project.order)) + 1,
+      featured: true,
+      docsRoutes: [],
+    };
+    const projects = [...syntheticProjects, fourthProject];
+    const { homepageCards, manifest } = await configureSyntheticFixture(projects);
+    const llmsFull = await readFile(path.join(fixtureRoot, 'doc_build/llms-full.txt'), 'utf8');
+
+    expect(manifest.routes).toEqual(baselineManifest.routes);
+    expect(homepageCards).toEqual(cardsForProjects(projects, true));
+    expect(llmsFull).toContain(`](${new URL(fourthProject.url).href})`);
+
+    const result = await runVerifier(homepageCards);
+
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+  });
+
   it.each([
     'htmlPath',
     'markdownPath',
@@ -992,6 +1016,21 @@ describe('verify-build manifest-driven output validation', () => {
     );
   });
 
+  it('rejects an unexpected llms-full.txt frontmatter route', async () => {
+    const unexpectedRoute = '/unregistered.md';
+    await writeFixtureFile(
+      'doc_build/llms-full.txt',
+      `${createSyntheticLlmsFullTxt(defaultManifest)}\n---\nurl: ${unexpectedRoute}\n---\n`,
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `llms-full.txt contains unexpected frontmatter route: ${unexpectedRoute}`,
+    );
+  });
+
   it('rejects llms-full.txt when a registered external URL is missing', async () => {
     const missingUrl = defaultManifest.projects[0].externalUrl;
     await writeFixtureFile(
@@ -1004,6 +1043,83 @@ describe('verify-build manifest-driven output validation', () => {
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain(
       `llms-full.txt is missing registered project external URL: ${missingUrl}`,
+    );
+  });
+
+  it('does not count a plain-text llms-full.txt project URL as a Markdown link', async () => {
+    const missingProject = defaultManifest.projects[0];
+    const projectLink = `- [${missingProject.name}](${missingProject.externalUrl})`;
+    await writeFixtureFile(
+      'doc_build/llms-full.txt',
+      createSyntheticLlmsFullTxt(defaultManifest).replaceAll(
+        projectLink,
+        missingProject.externalUrl,
+      ),
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `llms-full.txt is missing registered project external URL: ${missingProject.externalUrl}`,
+    );
+  });
+
+  it('normalizes absolute HTTPS Markdown destinations before matching project URLs', async () => {
+    const project = defaultManifest.projects[0];
+    const projectLink = `- [${project.name}](${project.externalUrl})`;
+    const projectUrl = new URL(project.externalUrl);
+    const nonCanonicalUrl = `https://${projectUrl.hostname.toUpperCase()}:443${projectUrl.pathname}${projectUrl.search}${projectUrl.hash}`;
+    await writeFixtureFile(
+      'doc_build/llms-full.txt',
+      createSyntheticLlmsFullTxt(defaultManifest).replaceAll(
+        projectLink,
+        `- [${project.name}](${nonCanonicalUrl})`,
+      ),
+    );
+
+    const result = await runVerifier();
+
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+  });
+
+  it('matches llms-full.txt project URLs by complete Markdown link destination', async () => {
+    const projects = [
+      {
+        id: 'prefix',
+        name: 'Prefix Project',
+        url: 'https://prefix.example.com/a/',
+        order: 1,
+        featured: true,
+        docsRoutes: [],
+      },
+      {
+        id: 'prefix-child',
+        name: 'Prefix Child Project',
+        url: 'https://prefix.example.com/a/b',
+        order: 2,
+        featured: false,
+        docsRoutes: [],
+      },
+    ];
+    const { homepageCards, manifest } = await configureSyntheticFixture(projects);
+    const shortProject = manifest.projects.find((project) => project.id === 'prefix');
+
+    if (!shortProject) {
+      throw new Error('Expected the short prefix project');
+    }
+
+    const shortProjectLink = `- [${shortProject.name}](${shortProject.externalUrl})`;
+    await writeFixtureFile(
+      'doc_build/llms-full.txt',
+      createSyntheticLlmsFullTxt(manifest).replaceAll(shortProjectLink, ''),
+    );
+
+    const result = await runVerifier(homepageCards);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `llms-full.txt is missing registered project external URL: ${shortProject.externalUrl}`,
     );
   });
 });
