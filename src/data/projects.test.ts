@@ -96,6 +96,48 @@ describe('project registry', () => {
     );
   });
 
+  it('registers the complete THQ API documentation sections', () => {
+    const thqApi = projects.find((project) => project.id === 'thq-api');
+
+    expect(thqApi?.docs?.sections).toEqual([
+      {
+        text: '开始接入',
+        items: [
+          { text: '概览', slug: 'index' },
+          { text: '快速开始', slug: 'quick-start' },
+        ],
+      },
+      {
+        text: '客户端',
+        items: [
+          { text: '客户端总览', slug: 'clients/index' },
+          { text: 'Codex', slug: 'clients/codex' },
+          { text: 'Claude Code', slug: 'clients/claude-code' },
+          { text: 'Gemini CLI', slug: 'clients/gemini-cli' },
+          { text: 'VS Code', slug: 'clients/vscode' },
+          { text: 'OpenCode', slug: 'clients/opencode' },
+          { text: 'OpenClaw', slug: 'clients/openclaw' },
+          { text: 'Cherry Studio', slug: 'clients/cherry-studio' },
+        ],
+      },
+      {
+        text: '配置与端点',
+        items: [
+          { text: '手动配置', slug: 'configuration' },
+          { text: '端点说明', slug: 'endpoints' },
+        ],
+      },
+      {
+        text: '账户与排错',
+        items: [
+          { text: '账户与用量', slug: 'account' },
+          { text: '常见问题', slug: 'faq' },
+          { text: '更新记录', slug: 'changelog' },
+        ],
+      },
+    ]);
+  });
+
   it('accepts an additional valid project without a registered-project count change', () => {
     expect(projectListSchema.parse([...projects, validFourthProject])).toContainEqual(
       validFourthProject,
