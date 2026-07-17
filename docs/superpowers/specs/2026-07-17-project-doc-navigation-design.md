@@ -27,4 +27,3 @@ the top project bar.
 - Use complete project names and visible keyboard focus states.
 - Keep the horizontal scrolling inside the switcher so the page itself never overflows.
 - Respect the existing reduced-motion behavior.
-

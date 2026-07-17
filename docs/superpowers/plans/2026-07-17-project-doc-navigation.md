@@ -100,4 +100,3 @@ by the focused Playwright documentation tests.
 - [ ] **Step 4: Commit and push**
 
 Commit the implementation and push `HEAD:main` so Cloudflare can deploy the updated navigation.
-
