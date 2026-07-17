@@ -25,27 +25,63 @@ export function ProjectDocSwitcher() {
       return;
     }
 
-    const tabStart = currentTab.offsetLeft;
-    const tabEnd = tabStart + currentTab.offsetWidth;
-    const visibleStart = tabs.scrollLeft;
-    const visibleEnd = visibleStart + tabs.clientWidth;
+    const alignCurrentTab = () => {
+      const tabStart = currentTab.offsetLeft;
+      const tabEnd = tabStart + currentTab.offsetWidth;
+      const visibleStart = tabs.scrollLeft;
+      const visibleEnd = visibleStart + tabs.clientWidth;
 
-    if (tabStart >= visibleStart && tabEnd <= visibleEnd) {
-      return;
-    }
+      if (tabStart >= visibleStart && tabEnd <= visibleEnd) {
+        return;
+      }
 
-    const centeredLeft = tabStart + currentTab.offsetWidth / 2 - tabs.clientWidth / 2;
-    const maxScrollLeft = Math.max(0, tabs.scrollWidth - tabs.clientWidth);
-    const left = Math.min(Math.max(0, centeredLeft), maxScrollLeft);
+      const centeredLeft = tabStart + currentTab.offsetWidth / 2 - tabs.clientWidth / 2;
+      const maxScrollLeft = Math.max(0, tabs.scrollWidth - tabs.clientWidth);
+      const left = Math.min(Math.max(0, centeredLeft), maxScrollLeft);
 
-    if (typeof tabs.scrollTo === 'function') {
-      tabs.scrollTo({
-        behavior: 'auto',
-        left,
+      if (typeof tabs.scrollTo === 'function') {
+        tabs.scrollTo({
+          behavior: 'auto',
+          left,
+        });
+      } else {
+        tabs.scrollLeft = left;
+      }
+    };
+    let frameId: number | undefined;
+    const scheduleAlignment = () => {
+      if (frameId !== undefined) {
+        cancelAnimationFrame(frameId);
+      }
+
+      frameId = requestAnimationFrame(() => {
+        frameId = undefined;
+        alignCurrentTab();
       });
-    } else {
-      tabs.scrollLeft = left;
+    };
+
+    alignCurrentTab();
+
+    if (typeof ResizeObserver === 'function') {
+      const resizeObserver = new ResizeObserver(scheduleAlignment);
+      resizeObserver.observe(tabs);
+      resizeObserver.observe(currentTab);
+
+      return () => {
+        resizeObserver.disconnect();
+        if (frameId !== undefined) {
+          cancelAnimationFrame(frameId);
+        }
+      };
     }
+
+    window.addEventListener('resize', scheduleAlignment);
+    return () => {
+      window.removeEventListener('resize', scheduleAlignment);
+      if (frameId !== undefined) {
+        cancelAnimationFrame(frameId);
+      }
+    };
   }, [pathname, current]);
 
   if (!current) {

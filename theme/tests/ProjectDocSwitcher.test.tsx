@@ -1,5 +1,5 @@
 import { MemoryRouter } from '@rspress/core/runtime';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import type { ComponentProps, PropsWithChildren } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { projects } from '../../src/data/projects';
@@ -20,6 +20,17 @@ const originalPrototypeDescriptors = new Map(
   prototypeProperties.map((property) => [
     property,
     Object.getOwnPropertyDescriptor(HTMLElement.prototype, property),
+  ]),
+);
+const globalProperties = [
+  'ResizeObserver',
+  'requestAnimationFrame',
+  'cancelAnimationFrame',
+] as const;
+const originalGlobalDescriptors = new Map(
+  globalProperties.map((property) => [
+    property,
+    Object.getOwnPropertyDescriptor(globalThis, property),
   ]),
 );
 const scrollIntoView = vi.fn();
@@ -52,6 +63,14 @@ afterEach(() => {
       Object.defineProperty(HTMLElement.prototype, property, descriptor);
     } else {
       Reflect.deleteProperty(HTMLElement.prototype, property);
+    }
+  }
+
+  for (const [property, descriptor] of originalGlobalDescriptors) {
+    if (descriptor) {
+      Object.defineProperty(globalThis, property, descriptor);
+    } else {
+      Reflect.deleteProperty(globalThis, property);
     }
   }
 });
@@ -151,25 +170,199 @@ describe('ProjectDocSwitcher', () => {
     expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
-  it('keeps working when container scrolling is unavailable in the test environment', () => {
-    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
-      configurable: true,
-      value: undefined,
+  it('realigns the active tab after the tab strip becomes narrower', () => {
+    let clientWidth = 400;
+    let resizeCallback: ResizeObserverCallback | undefined;
+    let frameCallback: FrameRequestCallback | undefined;
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    const requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      frameCallback = callback;
+      return 17;
+    });
+    const cancelAnimationFrame = vi.fn();
+
+    class ResizeObserverMock {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallback = callback;
+      }
+
+      disconnect = disconnect;
+      observe = observe;
+      unobserve = vi.fn();
+    }
+
+    Object.defineProperties(globalThis, {
+      ResizeObserver: {
+        configurable: true,
+        value: ResizeObserverMock,
+      },
+      cancelAnimationFrame: {
+        configurable: true,
+        value: cancelAnimationFrame,
+      },
+      requestAnimationFrame: {
+        configurable: true,
+        value: requestAnimationFrame,
+      },
+    });
+    Object.defineProperties(HTMLElement.prototype, {
+      clientWidth: {
+        configurable: true,
+        get: () => clientWidth,
+      },
+      offsetLeft: {
+        configurable: true,
+        get() {
+          return (this as HTMLElement).getAttribute('aria-current') === 'page' ? 280 : 0;
+        },
+      },
+      offsetWidth: {
+        configurable: true,
+        get: () => 100,
+      },
+      scrollLeft: {
+        configurable: true,
+        get: () => 0,
+      },
+      scrollTo: {
+        configurable: true,
+        value: scrollTo,
+      },
+      scrollWidth: {
+        configurable: true,
+        get: () => 500,
+      },
     });
 
-    expect(() =>
-      render(
-        <MemoryRouter initialEntries={['/docs/fluctgraph/']}>
-          <ProjectDocSwitcher />
-        </MemoryRouter>,
-      ),
-    ).not.toThrow();
+    render(
+      <MemoryRouter initialEntries={['/docs/toho-image-studio/']}>
+        <ProjectDocSwitcher />
+      </MemoryRouter>,
+    );
 
-    expect(
-      screen.getByText('FluctGraph', {
-        selector: '[aria-current="page"]',
-      }),
-    ).toBeInTheDocument();
+    const activeTab = screen.getByText('Toho Image Studio', {
+      selector: '[aria-current="page"]',
+    });
+    const tabContainer = activeTab.parentElement;
+
+    expect(tabContainer).not.toBeNull();
+    expect(scrollTo).not.toHaveBeenCalled();
+    expect(observe).toHaveBeenCalledWith(tabContainer);
+    expect(observe).toHaveBeenCalledWith(activeTab);
+
+    clientWidth = 120;
+    act(() => {
+      resizeCallback?.([], {} as ResizeObserver);
+    });
+
+    expect(requestAnimationFrame).toHaveBeenCalledOnce();
+    expect(frameCallback).toBeTypeOf('function');
+
+    act(() => {
+      frameCallback?.(0);
+    });
+
+    expect(scrollTo).toHaveBeenCalledOnce();
+    expect(scrollTo.mock.instances[0]).toBe(tabContainer);
+    expect(scrollTo).toHaveBeenCalledWith({
+      behavior: 'auto',
+      left: 270,
+    });
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('disconnects resize observation and cancels a pending alignment frame on cleanup', () => {
+    let resizeCallback: ResizeObserverCallback | undefined;
+    const disconnect = vi.fn();
+    const cancelAnimationFrame = vi.fn();
+
+    class ResizeObserverMock {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallback = callback;
+      }
+
+      disconnect = disconnect;
+      observe = vi.fn();
+      unobserve = vi.fn();
+    }
+
+    Object.defineProperties(globalThis, {
+      ResizeObserver: {
+        configurable: true,
+        value: ResizeObserverMock,
+      },
+      cancelAnimationFrame: {
+        configurable: true,
+        value: cancelAnimationFrame,
+      },
+      requestAnimationFrame: {
+        configurable: true,
+        value: vi.fn(() => 23),
+      },
+    });
+
+    const { unmount } = render(
+      <MemoryRouter initialEntries={['/docs/fluctgraph/']}>
+        <ProjectDocSwitcher />
+      </MemoryRouter>,
+    );
+
+    act(() => {
+      resizeCallback?.([], {} as ResizeObserver);
+    });
+    unmount();
+
+    expect(disconnect).toHaveBeenCalledOnce();
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(23);
+  });
+
+  it('falls back to assigning a clamped scrollLeft when scrollTo is unavailable', () => {
+    let assignedScrollLeft = 0;
+    const setScrollLeft = vi.fn((value: number) => {
+      assignedScrollLeft = value;
+    });
+
+    Object.defineProperties(HTMLElement.prototype, {
+      clientWidth: {
+        configurable: true,
+        get: () => 100,
+      },
+      offsetLeft: {
+        configurable: true,
+        get() {
+          return (this as HTMLElement).getAttribute('aria-current') === 'page' ? 280 : 0;
+        },
+      },
+      offsetWidth: {
+        configurable: true,
+        get: () => 100,
+      },
+      scrollLeft: {
+        configurable: true,
+        get: () => assignedScrollLeft,
+        set: setScrollLeft,
+      },
+      scrollTo: {
+        configurable: true,
+        value: undefined,
+      },
+      scrollWidth: {
+        configurable: true,
+        get: () => 320,
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/docs/fluctgraph/']}>
+        <ProjectDocSwitcher />
+      </MemoryRouter>,
+    );
+
+    expect(setScrollLeft).toHaveBeenCalledOnce();
+    expect(setScrollLeft).toHaveBeenCalledWith(220);
+    expect(assignedScrollLeft).toBe(220);
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
   it('uses complete project names for every tab', () => {

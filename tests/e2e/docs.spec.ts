@@ -1831,12 +1831,12 @@ test('project switcher loads the selected documentation root', async ({ page }) 
   expect(results.violations).toEqual([]);
 });
 
-test('project switcher contains horizontal scrolling without extra vertical tab scrolling', async ({
+test('project switcher keeps the active tab visible after client navigation and resize', async ({
   page,
   isMobile,
 }) => {
   test.skip(Boolean(isMobile), 'Custom 320px viewport only needs one browser project');
-  await page.setViewportSize({ width: 320, height: 360 });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.addInitScript(() => {
     const trackedWindow = window as Window & { projectTabScrollIntoViewCalls?: number };
     const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
@@ -1854,21 +1854,45 @@ test('project switcher contains horizontal scrolling without extra vertical tab 
 
   const target = page.getByRole('link', { name: 'Toho Image Studio 文档' });
   await page.evaluate(() => {
-    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-    window.scrollTo(0, Math.min(100, maxScroll));
-  });
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(100);
-  const scrollYBeforeNavigation = await page.evaluate(() => window.scrollY);
-  await page.evaluate(() => {
+    const marker = document.createComment('project-switcher-client-route');
     (
       window as Window & {
-        projectTabScrollIntoViewCalls?: number;
+        projectSwitcherDocumentMarker?: Node;
       }
-    ).projectTabScrollIntoViewCalls = 0;
+    ).projectSwitcherDocumentMarker = marker;
+    (
+      document as Document & {
+        projectSwitcherDocumentMarker?: Node;
+      }
+    ).projectSwitcherDocumentMarker = marker;
   });
 
-  await target.evaluate((element) => (element as HTMLElement).click());
+  await target.click();
   await expect(page).toHaveURL(/\/docs\/toho-image-studio\/$/);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const windowMarker = (
+          window as Window & {
+            projectSwitcherDocumentMarker?: Node;
+          }
+        ).projectSwitcherDocumentMarker;
+        const documentMarker = (
+          document as Document & {
+            projectSwitcherDocumentMarker?: Node;
+          }
+        ).projectSwitcherDocumentMarker;
+
+        return Boolean(
+          windowMarker &&
+            windowMarker === documentMarker &&
+            windowMarker.ownerDocument === document,
+        );
+      }),
+    )
+    .toBe(true);
+
+  await page.setViewportSize({ width: 320, height: 360 });
 
   const switcher = page.getByRole('navigation', { name: '切换项目文档' });
   const activeTab = switcher.locator('[aria-current="page"]');
@@ -1892,8 +1916,6 @@ test('project switcher contains horizontal scrolling without extra vertical tab 
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth))
     .toBeLessThanOrEqual(0);
-  expect(scrollYBeforeNavigation).toBeGreaterThan(0);
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await expect
     .poll(() =>
       page.evaluate(
