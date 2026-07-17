@@ -1831,6 +1831,83 @@ test('project switcher loads the selected documentation root', async ({ page }) 
   expect(results.violations).toEqual([]);
 });
 
+test('project switcher contains horizontal scrolling without extra vertical tab scrolling', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(Boolean(isMobile), 'Custom 320px viewport only needs one browser project');
+  await page.setViewportSize({ width: 320, height: 360 });
+  await page.addInitScript(() => {
+    const trackedWindow = window as Window & { projectTabScrollIntoViewCalls?: number };
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    trackedWindow.projectTabScrollIntoViewCalls = 0;
+    HTMLElement.prototype.scrollIntoView = function (options?: boolean | ScrollIntoViewOptions) {
+      if (this.closest('nav[aria-label="切换项目文档"]')) {
+        trackedWindow.projectTabScrollIntoViewCalls =
+          (trackedWindow.projectTabScrollIntoViewCalls ?? 0) + 1;
+      }
+
+      originalScrollIntoView.call(this, options);
+    };
+  });
+  await page.goto('/docs/fluctgraph/quick-start/');
+
+  const target = page.getByRole('link', { name: 'Toho Image Studio 文档' });
+  await page.evaluate(() => {
+    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+    window.scrollTo(0, Math.min(100, maxScroll));
+  });
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(100);
+  const scrollYBeforeNavigation = await page.evaluate(() => window.scrollY);
+  await page.evaluate(() => {
+    (
+      window as Window & {
+        projectTabScrollIntoViewCalls?: number;
+      }
+    ).projectTabScrollIntoViewCalls = 0;
+  });
+
+  await target.evaluate((element) => (element as HTMLElement).click());
+  await expect(page).toHaveURL(/\/docs\/toho-image-studio\/$/);
+
+  const switcher = page.getByRole('navigation', { name: '切换项目文档' });
+  const activeTab = switcher.locator('[aria-current="page"]');
+  const tabs = activeTab.locator('..');
+  await expect(activeTab).toHaveText('Toho Image Studio');
+  await expect
+    .poll(() =>
+      tabs.evaluate((element) => {
+        const containerRect = element.getBoundingClientRect();
+        const activeRect = element.querySelector('[aria-current="page"]')?.getBoundingClientRect();
+
+        return Boolean(
+          activeRect &&
+            activeRect.left >= containerRect.left - 1 &&
+            activeRect.right <= containerRect.right + 1,
+        );
+      }),
+    )
+    .toBe(true);
+  await expect.poll(() => tabs.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth))
+    .toBeLessThanOrEqual(0);
+  expect(scrollYBeforeNavigation).toBeGreaterThan(0);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as Window & {
+              projectTabScrollIntoViewCalls?: number;
+            }
+          ).projectTabScrollIntoViewCalls ?? 0,
+      ),
+    )
+    .toBe(0);
+});
+
 test('FluctGraph documentation desktop visual regression', async ({ page, isMobile }) => {
   test.skip(Boolean(isMobile), 'Desktop snapshot only');
   test.skip(process.platform !== 'darwin', 'Visual snapshots are reviewed on macOS only');

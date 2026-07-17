@@ -7,7 +7,23 @@ import { DocProjectHeader } from '../components/DocProjectHeader';
 import { ProjectDocSwitcher } from '../components/ProjectDocSwitcher';
 
 const documentedProjects = projects.filter((project) => project.docs);
+const prototypeProperties = [
+  'clientWidth',
+  'offsetLeft',
+  'offsetWidth',
+  'scrollIntoView',
+  'scrollLeft',
+  'scrollTo',
+  'scrollWidth',
+] as const;
+const originalPrototypeDescriptors = new Map(
+  prototypeProperties.map((property) => [
+    property,
+    Object.getOwnPropertyDescriptor(HTMLElement.prototype, property),
+  ]),
+);
 const scrollIntoView = vi.fn();
+const scrollTo = vi.fn();
 const runtimeState = vi.hoisted(() => ({
   pathname: '/',
 }));
@@ -28,11 +44,22 @@ vi.mock('@rspress/core/theme-original', () => ({
   Link: (props: ComponentProps<'a'>) => <a {...props} />,
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+
+  for (const [property, descriptor] of originalPrototypeDescriptors) {
+    if (descriptor) {
+      Object.defineProperty(HTMLElement.prototype, property, descriptor);
+    } else {
+      Reflect.deleteProperty(HTMLElement.prototype, property);
+    }
+  }
+});
 
 describe('ProjectDocSwitcher', () => {
   beforeEach(() => {
     scrollIntoView.mockReset();
+    scrollTo.mockReset();
     Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
       configurable: true,
       value: scrollIntoView,
@@ -71,15 +98,61 @@ describe('ProjectDocSwitcher', () => {
     expect(
       within(switcher).queryByRole('combobox', { name: '切换当前项目文档' }),
     ).not.toBeInTheDocument();
-    expect(scrollIntoView).toHaveBeenCalledWith({
-      behavior: 'auto',
-      block: 'nearest',
-      inline: 'center',
-    });
   });
 
-  it('keeps working when scrollIntoView is unavailable in the test environment', () => {
-    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+  it('scrolls only the tab container to a clamped centered position', () => {
+    Object.defineProperties(HTMLElement.prototype, {
+      clientWidth: {
+        configurable: true,
+        get: () => 120,
+      },
+      offsetLeft: {
+        configurable: true,
+        get() {
+          return (this as HTMLElement).getAttribute('aria-current') === 'page' ? 280 : 0;
+        },
+      },
+      offsetWidth: {
+        configurable: true,
+        get: () => 100,
+      },
+      scrollLeft: {
+        configurable: true,
+        get: () => 0,
+      },
+      scrollTo: {
+        configurable: true,
+        value: scrollTo,
+      },
+      scrollWidth: {
+        configurable: true,
+        get: () => 320,
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/docs/toho-image-studio/']}>
+        <ProjectDocSwitcher />
+      </MemoryRouter>,
+    );
+
+    const activeTab = screen.getByText('Toho Image Studio', {
+      selector: '[aria-current="page"]',
+    });
+    const tabContainer = activeTab.parentElement;
+
+    expect(tabContainer).not.toBeNull();
+    expect(scrollTo).toHaveBeenCalledOnce();
+    expect(scrollTo.mock.instances[0]).toBe(tabContainer);
+    expect(scrollTo).toHaveBeenCalledWith({
+      behavior: 'auto',
+      left: 200,
+    });
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('keeps working when container scrolling is unavailable in the test environment', () => {
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
       configurable: true,
       value: undefined,
     });

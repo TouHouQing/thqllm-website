@@ -33,6 +33,7 @@
 }
 
 .switcherTabs {
+  position: relative;
   display: flex;
   min-width: 0;
   flex: 1 1 auto;

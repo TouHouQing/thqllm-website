@@ -10,6 +10,7 @@ const documentedProjects = projects.filter((project) => project.docs);
 export function ProjectDocSwitcher() {
   const { pathname } = useLocation();
   const current = getProjectByPathname(pathname);
+  const tabsRef = useRef<HTMLDivElement>(null);
   const currentTabRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
@@ -17,14 +18,33 @@ export function ProjectDocSwitcher() {
       return;
     }
 
+    const tabs = tabsRef.current;
     const currentTab = currentTabRef.current;
 
-    if (typeof currentTab?.scrollIntoView === 'function') {
-      currentTab.scrollIntoView({
+    if (!tabs || !currentTab) {
+      return;
+    }
+
+    const tabStart = currentTab.offsetLeft;
+    const tabEnd = tabStart + currentTab.offsetWidth;
+    const visibleStart = tabs.scrollLeft;
+    const visibleEnd = visibleStart + tabs.clientWidth;
+
+    if (tabStart >= visibleStart && tabEnd <= visibleEnd) {
+      return;
+    }
+
+    const centeredLeft = tabStart + currentTab.offsetWidth / 2 - tabs.clientWidth / 2;
+    const maxScrollLeft = Math.max(0, tabs.scrollWidth - tabs.clientWidth);
+    const left = Math.min(Math.max(0, centeredLeft), maxScrollLeft);
+
+    if (typeof tabs.scrollTo === 'function') {
+      tabs.scrollTo({
         behavior: 'auto',
-        block: 'nearest',
-        inline: 'center',
+        left,
       });
+    } else {
+      tabs.scrollLeft = left;
     }
   }, [pathname, current]);
 
@@ -36,7 +56,7 @@ export function ProjectDocSwitcher() {
     <nav className={styles.switcher} aria-label="切换项目文档">
       <div className={styles.switcherInner}>
         <span className={styles.switcherLabel}>PROJECT DOCS</span>
-        <div className={styles.switcherTabs}>
+        <div ref={tabsRef} className={styles.switcherTabs}>
           {documentedProjects.map((project) =>
             project.id === current.id ? (
               <span
