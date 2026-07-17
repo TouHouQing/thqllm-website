@@ -1073,12 +1073,10 @@ test('outline closes for project, history, and document pathname navigation', as
 
   await outlineButton.click();
   await expect(outline).toHaveClass(/rp-doc-layout__outline--open/);
-  await page.getByRole('link', { name: 'THQ API 文档' }).focus();
-  await page.locator('select[aria-label="切换当前项目文档"]').evaluate((element) => {
-    const select = element as HTMLSelectElement;
-    select.value = 'thq-api';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-  });
+  const projectSwitcher = page.getByRole('navigation', { name: '切换项目文档' });
+  const thqApiLink = projectSwitcher.getByRole('link', { name: 'THQ API 文档' });
+  await thqApiLink.focus();
+  await thqApiLink.click();
   await expect(page).toHaveURL(/\/docs\/thq-api\/$/);
   await expectOutlineClosedAfterNavigation();
 
@@ -1663,8 +1661,10 @@ test('documentation panels follow live menu reflow without leaking into desktop 
     } else {
       await page
         .getByRole('navigation', { name: '切换项目文档' })
-        .locator('strong')
+        .locator('[aria-current="page"]')
         .evaluate((element) => {
+          element.style.width = '160px';
+          element.style.whiteSpace = 'normal';
           element.textContent = 'FluctGraph knowledge graph workspace '.repeat(12);
         });
     }
