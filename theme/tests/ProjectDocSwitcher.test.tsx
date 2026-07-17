@@ -170,8 +170,8 @@ describe('ProjectDocSwitcher', () => {
     expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
-  it('realigns the active tab after the tab strip becomes narrower', () => {
-    let clientWidth = 400;
+  it('observes every project tab and realigns after a preceding tab changes width', () => {
+    let activeOffsetLeft = 280;
     let resizeCallback: ResizeObserverCallback | undefined;
     let frameCallback: FrameRequestCallback | undefined;
     const observe = vi.fn();
@@ -209,12 +209,14 @@ describe('ProjectDocSwitcher', () => {
     Object.defineProperties(HTMLElement.prototype, {
       clientWidth: {
         configurable: true,
-        get: () => clientWidth,
+        get: () => 400,
       },
       offsetLeft: {
         configurable: true,
         get() {
-          return (this as HTMLElement).getAttribute('aria-current') === 'page' ? 280 : 0;
+          return (this as HTMLElement).getAttribute('aria-current') === 'page'
+            ? activeOffsetLeft
+            : 0;
         },
       },
       offsetWidth: {
@@ -231,7 +233,7 @@ describe('ProjectDocSwitcher', () => {
       },
       scrollWidth: {
         configurable: true,
-        get: () => 500,
+        get: () => 600,
       },
     });
 
@@ -245,15 +247,17 @@ describe('ProjectDocSwitcher', () => {
       selector: '[aria-current="page"]',
     });
     const tabContainer = activeTab.parentElement;
+    const projectTabs = Array.from(tabContainer?.children ?? []);
+    const precedingTab = projectTabs[0];
 
     expect(tabContainer).not.toBeNull();
+    expect(precedingTab).toBeInstanceOf(HTMLElement);
     expect(scrollTo).not.toHaveBeenCalled();
-    expect(observe).toHaveBeenCalledWith(tabContainer);
-    expect(observe).toHaveBeenCalledWith(activeTab);
+    expect(observe.mock.calls.map(([element]) => element)).toEqual([tabContainer, ...projectTabs]);
 
-    clientWidth = 120;
+    activeOffsetLeft = 380;
     act(() => {
-      resizeCallback?.([], {} as ResizeObserver);
+      resizeCallback?.([{ target: precedingTab } as ResizeObserverEntry], {} as ResizeObserver);
     });
 
     expect(requestAnimationFrame).toHaveBeenCalledOnce();
@@ -267,7 +271,7 @@ describe('ProjectDocSwitcher', () => {
     expect(scrollTo.mock.instances[0]).toBe(tabContainer);
     expect(scrollTo).toHaveBeenCalledWith({
       behavior: 'auto',
-      left: 270,
+      left: 200,
     });
     expect(scrollIntoView).not.toHaveBeenCalled();
   });

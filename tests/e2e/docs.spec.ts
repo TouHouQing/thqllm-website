@@ -1913,6 +1913,30 @@ test('project switcher keeps the active tab visible after client navigation and 
     )
     .toBe(true);
   await expect.poll(() => tabs.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+
+  const scrollLeftBeforeReflow = await tabs.evaluate((element) => element.scrollLeft);
+  const fluctGraphTab = switcher.getByRole('link', { name: 'FluctGraph 文档' });
+  await fluctGraphTab.evaluate((element) => {
+    element.style.minWidth = `${element.getBoundingClientRect().width + 160}px`;
+  });
+
+  await expect
+    .poll(() =>
+      tabs.evaluate((element) => {
+        const containerRect = element.getBoundingClientRect();
+        const activeRect = element.querySelector('[aria-current="page"]')?.getBoundingClientRect();
+
+        return Boolean(
+          activeRect &&
+            activeRect.left >= containerRect.left - 1 &&
+            activeRect.right <= containerRect.right + 1,
+        );
+      }),
+    )
+    .toBe(true);
+  await expect
+    .poll(() => tabs.evaluate((element) => element.scrollLeft))
+    .toBeGreaterThan(scrollLeftBeforeReflow);
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth))
     .toBeLessThanOrEqual(0);

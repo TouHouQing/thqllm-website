@@ -65,7 +65,11 @@ export function ProjectDocSwitcher() {
     if (typeof ResizeObserver === 'function') {
       const resizeObserver = new ResizeObserver(scheduleAlignment);
       resizeObserver.observe(tabs);
-      resizeObserver.observe(currentTab);
+      for (const tab of tabs.children) {
+        if (tab instanceof HTMLElement) {
+          resizeObserver.observe(tab);
+        }
+      }
 
       return () => {
         resizeObserver.disconnect();
