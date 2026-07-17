@@ -178,7 +178,7 @@ function findCredentialViolations(content: string): CredentialViolation[] {
         new RegExp(`^\\s*(?:export\\s+)?(${credentialVariablePattern})\\s*=\\s*(.+?)\\s*$`),
       );
       const fieldAssignment = line.match(
-        /^\s*(?:[{,]\s*)?["']?(apiKey|api_key)["']?\s*[:=]\s*(.+?)\s*(?:[,}]\s*)?$/,
+        /^\s*(?:[{,]\s*)?["']?(apiKey|api_key|OPENAI_API_KEY)["']?\s*[:=]\s*(.+?)\s*(?:[,}]\s*)?$/,
       );
       const assignment = shellAssignment ?? fieldAssignment;
 
@@ -567,6 +567,70 @@ describe('THQ API documentation contract', () => {
         );
       }),
     ).toBe(true);
+  });
+
+  it('documents the recommended Codex config and auth files on macOS, Linux, and Windows', async () => {
+    const content = await readDocIfPresent('clients/codex.mdx');
+
+    if (content === undefined) {
+      return;
+    }
+
+    expect(content).toContain('~/.codex/config.toml');
+    expect(content).toContain('~/.codex/auth.json');
+    expect(content).toContain('%USERPROFILE%\\.codex\\config.toml');
+    expect(content).toContain('%USERPROFILE%\\.codex\\auth.json');
+
+    const recommendedConfig = findFencedCodeBlock(content, 'toml title="推荐配置"');
+
+    expect(recommendedConfig).toBeDefined();
+    expect(hasExactConfigLine(recommendedConfig?.content ?? '', 'model_provider = "thq"')).toBe(
+      true,
+    );
+    expect(
+      hasExactConfigLine(recommendedConfig?.content ?? '', 'cli_auth_credentials_store = "file"'),
+    ).toBe(true);
+    expect(recommendedConfig?.content).toContain('[model_providers.thq]');
+    expect(recommendedConfig?.content).not.toMatch(/\[model_providers\.openai\]/i);
+    expect(
+      hasExactConfigLine(
+        recommendedConfig?.content ?? '',
+        'base_url = "https://api.thqllm.com/v1"',
+      ),
+    ).toBe(true);
+    expect(hasExactConfigLine(recommendedConfig?.content ?? '', 'wire_api = "responses"')).toBe(
+      true,
+    );
+    expect(
+      hasExactConfigLine(recommendedConfig?.content ?? '', 'requires_openai_auth = true'),
+    ).toBe(true);
+    expect(recommendedConfig?.content).not.toMatch(/^\s*env_key\s*=/m);
+
+    const authConfig = findFencedCodeBlock(content, 'json title="auth.json"');
+
+    expect(authConfig).toBeDefined();
+    expect(JSON.parse(authConfig?.content ?? '{}')).toEqual({
+      OPENAI_API_KEY: 'YOUR_THQ_API_KEY',
+    });
+
+    const environmentConfig = findFencedCodeBlock(content, 'toml title="环境变量备选"');
+
+    expect(environmentConfig).toBeDefined();
+    expect(hasExactConfigLine(environmentConfig?.content ?? '', 'model_provider = "thq"')).toBe(
+      true,
+    );
+    expect(environmentConfig?.content).toContain('[model_providers.thq]');
+    expect(environmentConfig?.content).not.toMatch(/\[model_providers\.openai\]/i);
+    expect(hasExactConfigLine(environmentConfig?.content ?? '', 'env_key = "THQ_API_KEY"')).toBe(
+      true,
+    );
+    expect(hasExactConfigLine(environmentConfig?.content ?? '', 'wire_api = "responses"')).toBe(
+      true,
+    );
+    expect(
+      hasExactConfigLine(environmentConfig?.content ?? '', 'requires_openai_auth = false'),
+    ).toBe(true);
+    expect(environmentConfig?.content).not.toMatch(/^\s*requires_openai_auth\s*=\s*true\s*$/m);
   });
 
   it('uses the Gemini v1beta endpoint in the Gemini CLI guide', async () => {
