@@ -251,6 +251,15 @@ for (const documentationRoot of documentationRoots) {
   });
 }
 
+test('documentation omits the project information header while keeping the project switcher', async ({
+  page,
+}) => {
+  await page.goto('/docs/fluctgraph/');
+
+  await expect(page.getByRole('region', { name: 'FluctGraph 项目信息' })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: '切换项目文档' })).toBeVisible();
+});
+
 for (const route of thqApiDocumentationRoutes) {
   test(`THQ API route ${route.path} is published and linked`, async ({ page, isMobile }) => {
     test.skip(Boolean(isMobile), 'THQ API route coverage only needs one browser project');
@@ -598,7 +607,7 @@ test('mobile closed documentation panels stay out of the Tab order', async ({ pa
     name: '页内目录',
     includeHidden: true,
   });
-  const projectLink = page.getByLabel('打开 FluctGraph');
+  const projectLink = page.getByRole('link', { name: '打开 FluctGraph', exact: true });
 
   await expect(sidebar).not.toHaveClass(/rp-doc-layout__sidebar--open/);
   await expect(outline).not.toHaveClass(/rp-doc-layout__outline--open/);
@@ -1134,9 +1143,12 @@ test('outline overlay closes without focus theft when resizing from 1279px to de
   await expect(outlineButton).not.toBeFocused();
   await expect(outline).toHaveCSS('position', 'sticky');
 
-  const projectLink = page.getByLabel('打开 FluctGraph');
+  const projectSwitcherLink = page
+    .getByRole('navigation', { name: '切换项目文档' })
+    .getByRole('link')
+    .last();
   const firstSidebarLink = sidebar.getByRole('link').first();
-  await projectLink.focus();
+  await projectSwitcherLink.focus();
   await page.keyboard.press('Tab');
   await expect(firstSidebarLink).toBeFocused();
 });

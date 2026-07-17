@@ -3,7 +3,6 @@ import { act, cleanup, render, screen, within } from '@testing-library/react';
 import type { ComponentProps, PropsWithChildren } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { projects } from '../../src/data/projects';
-import { DocProjectHeader } from '../components/DocProjectHeader';
 import { ProjectDocSwitcher } from '../components/ProjectDocSwitcher';
 
 const documentedProjects = projects.filter((project) => project.docs);
@@ -390,23 +389,5 @@ describe('ProjectDocSwitcher', () => {
     );
 
     expect(container).toBeEmptyDOMElement();
-  });
-});
-
-describe('DocProjectHeader', () => {
-  it('shows project identity and a safe external link on docs routes', () => {
-    render(
-      <MemoryRouter initialEntries={['/docs/fluctgraph/quick-start']}>
-        <DocProjectHeader />
-      </MemoryRouter>,
-    );
-
-    expect(screen.getByText('STAGE 01 · KNOWLEDGE GRAPH')).toBeInTheDocument();
-    expect(screen.getByText('FluctGraph', { selector: 'strong' })).toBeInTheDocument();
-    expect(screen.getByText('打开项目')).toBeInTheDocument();
-    const link = screen.getByRole('link', { name: '打开 FluctGraph' });
-    expect(link).toHaveAttribute('href', 'https://graph.tohoqing.com/');
-    expect(link).toHaveAttribute('target', '_blank');
-    expect(link).toHaveAttribute('rel', 'noreferrer noopener');
   });
 });

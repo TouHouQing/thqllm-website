@@ -1,5 +1,4 @@
 import { Layout as BasicLayout, type LayoutProps } from '@rspress/core/theme-original';
-import { DocProjectHeader } from './components/DocProjectHeader';
 import { AccessibleTable } from './components/mdx/AccessibleTable';
 import { ApiEndpoint } from './components/mdx/ApiEndpoint';
 import { ParameterTable } from './components/mdx/ParameterTable';
@@ -34,7 +33,6 @@ export function Layout() {
           <ProjectDocSwitcher />
         </>
       }
-      beforeDoc={<DocProjectHeader />}
       components={mdxComponents}
     />
   );
