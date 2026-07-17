@@ -584,26 +584,25 @@ describe('THQ API documentation contract', () => {
     const recommendedConfig = findFencedCodeBlock(content, 'toml title="推荐配置"');
 
     expect(recommendedConfig).toBeDefined();
-    expect(hasExactConfigLine(recommendedConfig?.content ?? '', 'model_provider = "thq"')).toBe(
-      true,
-    );
-    expect(
-      hasExactConfigLine(recommendedConfig?.content ?? '', 'cli_auth_credentials_store = "file"'),
-    ).toBe(true);
-    expect(recommendedConfig?.content).toContain('[model_providers.thq]');
-    expect(recommendedConfig?.content).not.toMatch(/\[model_providers\.openai\]/i);
-    expect(
-      hasExactConfigLine(
-        recommendedConfig?.content ?? '',
-        'base_url = "https://api.thqllm.com/v1"',
-      ),
-    ).toBe(true);
-    expect(hasExactConfigLine(recommendedConfig?.content ?? '', 'wire_api = "responses"')).toBe(
-      true,
-    );
-    expect(
-      hasExactConfigLine(recommendedConfig?.content ?? '', 'requires_openai_auth = true'),
-    ).toBe(true);
+    expect(recommendedConfig?.content.trim()).toBe(`model_provider = "OpenAI"
+model = "gpt-5.5"
+review_model = "gpt-5.5"
+model_reasoning_effort = "xhigh"
+disable_response_storage = true
+network_access = "enabled"
+windows_wsl_setup_acknowledged = true
+
+[model_providers.OpenAI]
+name = "OpenAI"
+base_url = "https://api.thqllm.com/v1"
+wire_api = "responses"
+requires_openai_auth = true
+
+[features]
+goals = true`);
+    expect(recommendedConfig?.content).not.toContain('cli_auth_credentials_store');
+    expect(recommendedConfig?.content).not.toContain('CONTROL_PANEL_MODEL_ID');
+    expect(recommendedConfig?.content).not.toMatch(/\[model_providers\.thq\]/i);
     expect(recommendedConfig?.content).not.toMatch(/^\s*env_key\s*=/m);
 
     const authConfig = findFencedCodeBlock(content, 'json title="auth.json"');

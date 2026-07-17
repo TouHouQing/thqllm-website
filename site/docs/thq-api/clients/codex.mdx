@@ -1,21 +1,19 @@
 ---
 title: Codex 接入 THQ API
-description: 使用 config.toml 与 auth.json 为 Codex 配置 THQ Responses provider。
+description: 使用 config.toml 与 auth.json 为 Codex 配置 THQ Responses API。
 ---
 
 # Codex 接入 THQ API
 
-Codex 的自定义 provider 使用 OpenAI Responses API。THQ 侧所选模型必须支持
-Responses；仅支持 Chat Completions 的模型不能直接用于这套配置。
+Codex 通过 OpenAI Responses API 接入 THQ。THQ 侧所选模型必须支持 Responses；仅支持
+Chat Completions 的模型不能直接用于这套配置。
 
 ## 准备
 
 - 在 [THQ API 控制台](https://sub.thqllm.com)创建 API Key。
-- 从控制台复制一个支持 Responses 的完整模型 ID。
 - 确认当前用户可以创建或修改 Codex 配置目录。
 
-模型 ID 和可用能力以控制台当前显示为准。下文统一使用
-`CONTROL_PANEL_MODEL_ID` 和 `YOUR_THQ_API_KEY` 作为占位符。
+模型和可用能力以控制台当前显示为准。下文使用 `YOUR_THQ_API_KEY` 作为密钥占位符。
 
 ## 安装
 
@@ -43,23 +41,26 @@ Windows 可以在文件资源管理器地址栏输入 `%USERPROFILE%\.codex` 打
 
 ## config.toml
 
-编辑对应系统路径下的 `config.toml`。下面是推荐配置，将
-`CONTROL_PANEL_MODEL_ID` 替换为控制台中的完整模型 ID：
+编辑对应系统路径下的 `config.toml`，并确保以下内容位于文件开头：
 
 ```toml title="推荐配置"
-model_provider = "thq"
-model = "CONTROL_PANEL_MODEL_ID"
-cli_auth_credentials_store = "file"
+model_provider = "OpenAI"
+model = "gpt-5.5"
+review_model = "gpt-5.5"
+model_reasoning_effort = "xhigh"
+disable_response_storage = true
+network_access = "enabled"
+windows_wsl_setup_acknowledged = true
 
-[model_providers.thq]
-name = "THQ API"
+[model_providers.OpenAI]
+name = "OpenAI"
 base_url = "https://api.thqllm.com/v1"
 wire_api = "responses"
 requires_openai_auth = true
-```
 
-自定义 provider 的标识使用 `thq`。不要把配置段改成 `[model_providers.openai]`，也不要
-覆盖 Codex 保留的 `openai` provider。
+[features]
+goals = true
+```
 
 `base_url` 保留 `/v1` 即可，Codex 会根据 `wire_api = "responses"` 请求实际的
 `/v1/responses` 路径，不要在 Base URL 后手动添加 `/responses`。
@@ -79,9 +80,8 @@ requires_openai_auth = true
 }
 ```
 
-JSON 不支持注释，字段名与字符串值必须使用双引号，最后一个字段后不要添加逗号。推荐方案由
-`cli_auth_credentials_store = "file"` 指定文件存储，再由 `requires_openai_auth = true`
-使用这份 OpenAI 登录凭据，因此 `config.toml` 中不需要 `env_key`。
+JSON 不支持注释，字段名与字符串值必须使用双引号，最后一个字段后不要添加逗号。推荐配置通过
+`requires_openai_auth = true` 使用这份 OpenAI 登录凭据，因此主配置中不需要 `env_key`。
 
 ## 重启验证
 
@@ -97,12 +97,12 @@ JSON 不支持注释，字段名与字符串值必须使用双引号，最后一
 请只回复：Codex 已连接 THQ API
 ```
 
-请求成功后，到控制台核对对应使用记录。状态中应显示 `thq` provider 和你填写的模型 ID。
+请求成功后，到控制台核对对应使用记录。状态中应显示 `OpenAI` provider 和 `gpt-5.5`。
 
 ## 环境变量备选
 
-如果不希望在 `auth.json` 中保存 Key，可以改用环境变量。这个方案与上面的 `auth.json`
-方案二选一，不要混合配置。
+如果不希望使用上面的 `OpenAI` provider 与 `auth.json` 组合，可以改用环境变量。下面是
+另一套独立配置，与推荐方案二选一，不要混合其中的 provider、认证字段或凭据来源。
 
 先设置 `THQ_API_KEY`：
 
@@ -128,8 +128,8 @@ wire_api = "responses"
 requires_openai_auth = false
 ```
 
-这个方案不读取 `auth.json`，也不需要 `cli_auth_credentials_store`。环境变量只对从同一终端
-启动的 Codex 生效；通过 IDE 使用时，需要确保 IDE 继承了该变量。
+这个方案使用独立的 `thq` provider，不读取 `auth.json`。环境变量只对从同一终端启动的
+Codex 生效；通过 IDE 使用时，需要确保 IDE 继承了该变量。
 
 ## 常见问题
 
@@ -141,8 +141,7 @@ requires_openai_auth = false
 ### 提示缺少 OpenAI API Key
 
 使用推荐方案时，确认 `auth.json` 位于当前用户的 `.codex` 目录，内容是合法 JSON，并且
-`cli_auth_credentials_store = "file"`、`requires_openai_auth = true`。检查文件是否被误保存为
-`auth.json.txt`。
+`requires_openai_auth = true`。检查文件是否被误保存为 `auth.json.txt`。
 
 使用环境变量备选方案时，确认 `requires_openai_auth = false`、`env_key = "THQ_API_KEY"`，
 并从已设置变量的同一终端启动 Codex。
@@ -154,8 +153,12 @@ requires_openai_auth = false
 
 ### 配置没有生效
 
-检查 TOML 段名是否为 `[model_providers.thq]`，顶层 `model_provider` 是否为 `thq`，以及
-是否存在其他配置来源覆盖用户级设置。修改后要完全重启终端、Codex 和承载它的 IDE。
+使用推荐方案时，检查 TOML 段名是否为 `[model_providers.OpenAI]`，顶层
+`model_provider` 是否为 `OpenAI`，以及配置是否位于 `config.toml` 开头。修改后要完全重启
+终端、Codex 和承载它的 IDE。
+
+使用环境变量备选方案时，再检查段名是否为 `[model_providers.thq]`、顶层
+`model_provider` 是否为 `thq`，以及启动 Codex 的终端是否已设置 `THQ_API_KEY`。
 
 更多通用步骤见[客户端接入总览](/docs/thq-api/clients/)和
 [常见问题](/docs/thq-api/faq)。
