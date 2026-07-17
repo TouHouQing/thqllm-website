@@ -1,11 +1,7 @@
 .switcher {
-  display: flex;
   width: 100%;
   min-width: 0;
-  min-height: 42px;
-  align-items: center;
-  gap: 6px 12px;
-  padding: 6px max(18px, calc((100% - 1180px) / 2));
+  overflow: hidden;
   border-bottom: 1px solid var(--thq-border);
   color: var(--thq-text-muted);
   background: var(--thq-paper-muted);
@@ -13,79 +9,86 @@
   line-height: 1.4;
 }
 
-.switcher > span {
+.switcherInner {
+  display: flex;
+  width: 100%;
+  max-width: 1216px;
+  min-width: 0;
+  min-height: 42px;
+  align-items: stretch;
+  gap: 12px;
+  margin-inline: auto;
+  padding-inline: 18px;
+}
+
+.switcherLabel {
+  display: inline-flex;
   flex: 0 0 auto;
+  align-items: center;
   color: var(--thq-vermilion);
   font-family: var(--thq-mono-font);
   font-size: 0.68rem;
   font-weight: 800;
+  white-space: nowrap;
 }
 
-.switcher > strong {
-  min-width: 0;
-  color: var(--thq-text);
-  font-size: 0.82rem;
-  line-height: 1.3;
-  overflow-wrap: anywhere;
-}
-
-.switcherLinks {
+.switcherTabs {
   display: flex;
   min-width: 0;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 2px 14px;
-  margin-left: auto;
+  flex: 1 1 auto;
+  align-items: stretch;
+  gap: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
 }
 
-.switcherLinks a {
+.switcherTab {
+  position: relative;
   display: inline-flex;
-  min-height: 30px;
+  min-height: 42px;
+  flex: 0 0 auto;
   align-items: center;
+  padding: 4px 11px 3px;
+  border-radius: 0;
   color: var(--thq-text-muted);
   font-weight: 700;
-  text-decoration: underline;
-  text-decoration-color: transparent;
-  text-underline-offset: 3px;
+  line-height: 1.3;
+  text-decoration: none;
+  white-space: nowrap;
   transition:
     color 150ms ease,
-    text-decoration-color 150ms ease;
+    background-color 150ms ease;
 }
 
-.switcherLinks a:hover {
+a.switcherTab:hover {
   color: var(--thq-ink);
-  text-decoration-color: currentColor;
+  background: var(--thq-paper);
 }
 
-.switcherLinks a:focus-visible {
+a.switcherTab:focus-visible {
+  z-index: 1;
   color: var(--thq-ink);
-  outline-color: var(--thq-vermilion);
-  outline-offset: 2px;
+  background: var(--thq-paper);
+  outline: 2px solid var(--thq-vermilion);
+  outline-offset: -2px;
 }
 
-.mobileSelect {
-  display: none;
+.switcherTabActive {
   min-width: 0;
-  max-width: 100%;
-  min-height: 34px;
-  margin-left: auto;
-  padding: 5px 32px 5px 9px;
-  border: 1px solid var(--thq-border);
-  border-radius: 4px;
   color: var(--thq-text);
   background: var(--thq-paper);
-  font: inherit;
-  font-weight: 700;
 }
 
-.mobileSelect:hover {
-  border-color: var(--thq-vermilion);
-}
-
-.mobileSelect:focus-visible {
-  border-color: var(--thq-vermilion);
-  outline: 2px solid var(--thq-gold);
-  outline-offset: 2px;
+.switcherTabActive::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--thq-vermilion);
+  content: "";
 }
 
 .projectHeader {
@@ -157,21 +160,19 @@
 }
 
 @media (max-width: 700px) {
-  .switcher {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    padding-block: 8px;
+  .switcherInner {
+    min-height: 44px;
+    gap: 8px;
+    padding-inline: 12px;
   }
 
-  .switcherLinks {
-    display: none;
+  .switcherLabel {
+    font-size: 0.64rem;
   }
 
-  .mobileSelect {
-    display: block;
-    width: 100%;
-    grid-column: 1 / -1;
-    margin-left: 0;
+  .switcherTab {
+    min-height: 44px;
+    padding-inline: 10px;
   }
 
   .projectHeader {

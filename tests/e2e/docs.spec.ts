@@ -17,6 +17,16 @@ const documentationRoots = projects
   )
   .toSorted((left, right) => left.order - right.order)
   .map(({ path, projectName }) => ({ path, projectName }));
+const documentedProjects = projects.flatMap((project) =>
+  project.docs
+    ? [
+        {
+          name: project.name,
+          path: project.docs.basePath,
+        },
+      ]
+    : [],
+);
 const thqApiProject = projects.find((project) => project.id === 'thq-api');
 
 if (!thqApiProject?.docs) {
@@ -218,7 +228,26 @@ for (const documentationRoot of documentationRoots) {
     await page.goto(documentationRoot.path);
 
     await expect(getProjectHeading(page, documentationRoot.projectName)).toBeVisible();
-    await expect(page.getByRole('navigation', { name: '切换项目文档' })).toBeVisible();
+    const switcher = page.getByRole('navigation', { name: '切换项目文档' });
+    await expect(switcher).toBeVisible();
+    await expect(switcher.locator('a, [aria-current="page"]')).toHaveText(
+      documentedProjects.map((project) => project.name),
+    );
+
+    for (const project of documentedProjects) {
+      if (project.name === documentationRoot.projectName) {
+        const currentTab = switcher.locator('[aria-current="page"]');
+        await expect(currentTab).toHaveText(project.name);
+        await expect(currentTab).not.toHaveAttribute('href');
+      } else {
+        await expect(switcher.getByRole('link', { name: `${project.name} 文档` })).toHaveAttribute(
+          'href',
+          project.path,
+        );
+      }
+    }
+
+    await expect(switcher.getByRole('combobox', { name: '切换当前项目文档' })).toHaveCount(0);
   });
 }
 
@@ -1784,25 +1813,19 @@ test('static documentation keeps landmarks and hidden anchors accessible', async
   }
 });
 
-test('project switcher loads the selected documentation root', async ({ page, isMobile }) => {
+test('project switcher loads the selected documentation root', async ({ page }) => {
   await page.goto('/docs/fluctgraph/');
 
-  const mobileSwitcher = page.getByRole('combobox', { name: '切换当前项目文档' });
-  if (isMobile) {
-    await mobileSwitcher.selectOption('thq-api');
-  } else {
-    await page.getByRole('link', { name: 'THQ API 文档' }).click();
-  }
+  const switcher = page.getByRole('navigation', { name: '切换项目文档' });
+  await switcher.getByRole('link', { name: 'THQ API 文档' }).click();
 
   await expect(page).toHaveURL(/\/docs\/thq-api\/$/);
   await expect(page.getByRole('heading', { level: 1, name: /THQ API/i })).toBeVisible();
-  if (isMobile) {
-    await expect(mobileSwitcher).toHaveValue('thq-api');
-  } else {
-    await expect(
-      page.getByRole('navigation', { name: '切换项目文档' }).locator('strong'),
-    ).toHaveText('THQ API');
-  }
+  const currentTab = page
+    .getByRole('navigation', { name: '切换项目文档' })
+    .locator('[aria-current="page"]');
+  await expect(currentTab).toHaveText('THQ API');
+  await expect(currentTab).not.toHaveAttribute('href');
 
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations).toEqual([]);
