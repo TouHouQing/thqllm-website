@@ -1,0 +1,89 @@
+---
+title: THQ Switch 专属 App
+description: 下载 THQ Switch，在桌面端完成账号、API Key、模型映射和常用 AI 工具配置。
+---
+
+# THQ Switch 专属 App
+
+THQ Switch 是面向 `sub.thqllm.com` 的桌面客户端。它把账号登录、邮箱验证、余额与用量查看、API Key 管理和本地 AI 工具配置集中在一个界面中，适合不希望手动编辑 JSON、TOML 或环境变量的用户。
+
+<ProjectLink href="https://github.com/TouHouQing/sub-switch/releases">下载 THQ Switch</ProjectLink>
+
+## 它可以帮你做什么
+
+- 登录或注册 THQ 中转站账号，并通过邮箱验证码完成注册。
+- 查看余额、用量、订单、模型和 API Key 状态。
+- 创建、选择、删除和管理 API Key。
+- 将 THQ 中转站的地址、Key 和工具配置一键写入本机。
+- 为 Codex、Claude Code、Claude Desktop、Gemini CLI、OpenCode、OpenClaw 等工具配置可用模型。
+- 通过托盘菜单快速打开客户端、官方网站和常用操作。
+
+## 支持的平台
+
+| 平台 | 系统要求 | 推荐安装包 |
+| --- | --- | --- |
+| Windows | Windows 10 及以上 | `.msi` 安装版；也可使用便携 `.zip` |
+| macOS | macOS 12 及以上 | `.dmg` 或 `.zip` |
+| Linux | Ubuntu、Debian、Fedora 等主流发行版 | `.AppImage`、`.deb` 或 `.rpm` |
+
+Linux 的 AppImage 首次运行前需要赋予执行权限：
+
+```bash
+chmod +x THQ-Switch-*.AppImage
+./THQ-Switch-*.AppImage
+```
+
+## 第一次使用
+
+### 1. 下载并打开客户端
+
+前往 [GitHub Releases](https://github.com/TouHouQing/sub-switch/releases) 下载与你的系统和芯片架构对应的安装包。Windows 和 macOS 完成安装后直接打开；Linux 请按发行版选择安装包，或使用上面的 AppImage 命令启动。
+
+### 2. 登录或注册账号
+
+在登录页使用 `sub.thqllm.com` 账号的邮箱和密码登录。没有账号时，选择注册，填写邮箱和密码后发送验证码；在邮箱中获取验证码并完成验证即可进入工作台。
+
+收不到验证码时，先检查邮箱地址是否包含空格，再查看垃圾邮件箱。
+
+### 3. 查看账户状态
+
+进入工作台后，先确认当前余额、用量、可用模型、订单和 API Key 状态。模型、价格、额度和限制会变化，应以客户端与控制台当前显示为准。
+
+### 4. 创建并选择 API Key
+
+在 API Key 区域创建一个用途明确的 Key，例如 `Codex Local`、`Claude Code Main` 或 `Desktop Client`。客户端会使用选中的可用 Key 写入本地工具配置。
+
+不要把 Key 发送到公开频道、提交到仓库或写入前端代码。不再使用或怀疑泄露时，立即在客户端或控制台撤销。
+
+### 5. 一键配置目标工具
+
+选择要使用的工具，例如 Codex、Claude Code 或 Gemini CLI，然后执行“配置到对应工具”。THQ Switch 会写入该工具所需的中转地址和 API Key，避免手动编辑配置文件时填错字段或路径。
+
+写入完成后，重启对应的终端、CLI 或桌面应用，让新配置生效。
+
+### 6. 按提示配置模型映射
+
+部分工具需要先设置模型映射，尤其是对模型名称较敏感的客户端。出现“请先配置模型映射”提示时，进入模型编辑页，选择或填写客户端当前可用的模型，再重新执行写入工具配置。
+
+## 专用服务地址
+
+THQ Switch 的内置账号与配置流程默认使用：
+
+| 用途 | 地址 |
+| --- | --- |
+| 官网与账号中心 | `https://sub.thqllm.com` |
+| App 默认 API Base URL | `https://sub.thqllm.com/v1` |
+
+这些地址用于客户端的登录、注册、验证码、API Key 和本地工具配置写入。若你需要自行填写某个客户端的协议字段，请改用[端点说明](/docs/thq-api/endpoints)与对应的[客户端指南](/docs/thq-api/clients/)。
+
+## 什么时候使用它
+
+优先使用 THQ Switch：当你希望用图形界面完成账号、Key、模型和常用客户端配置时。
+
+使用[快速开始](/docs/thq-api/quick-start)或[手动配置](/docs/thq-api/configuration)：当目标工具不在客户端列表中，或你需要自行控制每一个配置字段时。
+
+## 下一步
+
+- [客户端指南](/docs/thq-api/clients/)：查看各客户端支持的协议与配置方式。
+- [快速开始](/docs/thq-api/quick-start)：手动发起最小 API 请求验证连接。
+- [账户与用量](/docs/thq-api/account)：查看额度、用量与 API Key 管理原则。

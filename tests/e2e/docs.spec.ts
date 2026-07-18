@@ -36,6 +36,7 @@ if (!thqApiProject?.docs) {
 const thqApiDocs = thqApiProject.docs;
 const thqApiExpectedHeadings = new Map<string, string>([
   ['index', 'THQ API'],
+  ['thq-switch', 'THQ Switch 专属 App'],
   ['quick-start', '快速开始'],
   ['clients/index', '客户端接入总览'],
   ['clients/codex', 'Codex 接入 THQ API'],
@@ -49,7 +50,6 @@ const thqApiExpectedHeadings = new Map<string, string>([
   ['endpoints', '端点说明'],
   ['account', '账户、额度与使用记录'],
   ['faq', '常见问题与错误排查'],
-  ['changelog', '更新记录'],
 ]);
 const thqApiDocumentationRoutes = thqApiDocs.sections.flatMap((section) =>
   section.items.map((item) => {
@@ -258,15 +258,6 @@ test('documentation omits the project information header while keeping the proje
 
   await expect(page.getByRole('region', { name: 'FluctGraph 项目信息' })).toHaveCount(0);
   await expect(page.getByRole('navigation', { name: '切换项目文档' })).toBeVisible();
-});
-
-test('development notes omit the retired website launch record', async ({ page }) => {
-  await page.goto('/notes/');
-
-  await expect(page.getByRole('heading', { level: 1, name: '开发札记' })).toBeVisible();
-  await expect(page.locator('main')).not.toContainText('THQLLM 官网启动记录');
-  await expect(page.locator('main')).not.toContainText('官网启动记录');
-  await expect(page.getByText(/^最后更新于:/)).toHaveCount(0);
 });
 
 for (const route of thqApiDocumentationRoutes) {
@@ -1622,7 +1613,7 @@ test('short mobile documentation panels track the sticky menu and keep internal 
   await expect.poll(() => sidebar.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
   await expectItemInsidePanel(
     sidebar,
-    sidebar.getByRole('link', { name: '更新记录', exact: true }),
+    sidebar.getByRole('link', { name: '常见问题', exact: true }),
   );
 
   await sidebarButton.click();

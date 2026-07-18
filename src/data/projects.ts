@@ -20,10 +20,7 @@ export const projects = projectListSchema.parse([
         },
         {
           text: '参考',
-          items: [
-            { text: '常见问题', slug: 'faq' },
-            { text: '更新记录', slug: 'changelog' },
-          ],
+          items: [{ text: '常见问题', slug: 'faq' }],
         },
       ],
     },
@@ -46,6 +43,7 @@ export const projects = projectListSchema.parse([
           text: '开始接入',
           items: [
             { text: '概览', slug: 'index' },
+            { text: 'THQ Switch 专属 App', slug: 'thq-switch' },
             { text: '快速开始', slug: 'quick-start' },
           ],
         },
@@ -74,7 +72,6 @@ export const projects = projectListSchema.parse([
           items: [
             { text: '账户与用量', slug: 'account' },
             { text: '常见问题', slug: 'faq' },
-            { text: '更新记录', slug: 'changelog' },
           ],
         },
       ],
@@ -103,10 +100,7 @@ export const projects = projectListSchema.parse([
         },
         {
           text: '参考',
-          items: [
-            { text: '常见问题', slug: 'faq' },
-            { text: '更新记录', slug: 'changelog' },
-          ],
+          items: [{ text: '常见问题', slug: 'faq' }],
         },
       ],
     },

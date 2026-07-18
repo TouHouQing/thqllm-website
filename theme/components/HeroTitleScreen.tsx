@@ -11,8 +11,7 @@ interface HeroTitleScreenProps {
 const menuItems = [
   { index: '01', label: '项目选择', detail: 'PROJECT SELECT', href: '/#projects' },
   { index: '02', label: '使用文档', detail: 'MANUAL', href: '/docs/fluctgraph/' },
-  { index: '03', label: '开发札记', detail: 'EXTRA STAGE', href: '/notes/' },
-  { index: '04', label: '关于 THQLLM', detail: 'OMAKE', href: '/about/' },
+  { index: '03', label: '关于 THQLLM', detail: 'OMAKE', href: '/about/' },
 ] as const;
 
 export function HeroTitleScreen({ manualCount, projectCount }: HeroTitleScreenProps) {

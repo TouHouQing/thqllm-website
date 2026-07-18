@@ -41,7 +41,6 @@ const responsivePaths = [
 ] as const;
 const topLevelRoutes = [
   { path: '/projects/', heading: '项目' },
-  { path: '/notes/', heading: '开发札记' },
   { path: '/about/', heading: '关于 THQLLM' },
   { path: '/route-that-does-not-exist/', heading: 'CONTINUE?' },
 ] as const;
@@ -340,7 +339,7 @@ for (const viewport of mobileDanmakuViewports) {
     } else {
       expect([0, MOBILE_DANMAKU_BULLET_COUNT]).toContain(frame.length);
     }
-    expect(layout.exclusionRects).toHaveLength(5);
+    expect(layout.exclusionRects).toHaveLength(4);
     expect(
       {
         overlapCount: orbit.overlapCount,

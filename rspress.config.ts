@@ -75,7 +75,6 @@ export default defineConfig({
     nav: [
       { text: '项目', link: '/projects/', activeMatch: '/projects/' },
       { text: '文档', link: '/docs/fluctgraph/', activeMatch: '/docs/' },
-      { text: '开发札记', link: '/notes/', activeMatch: '/notes/' },
       { text: '关于', link: '/about/', activeMatch: '/about/' },
     ],
   },

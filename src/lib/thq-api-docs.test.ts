@@ -552,6 +552,18 @@ describe('THQ API documentation contract', () => {
     ).toContain('YOUR_THQ_API_KEY');
   });
 
+  it('publishes the THQ Switch onboarding guide with the supported download and service details', async () => {
+    const content = await readDocIfPresent('thq-switch.mdx');
+
+    expect(content).toBeDefined();
+    expect(content).toContain('https://github.com/TouHouQing/sub-switch/releases');
+    expect(content).toContain('https://sub.thqllm.com/v1');
+    expect(content).toContain('Windows 10');
+    expect(content).toContain('macOS 12');
+    expect(content).toContain('Linux');
+    expect(content).toContain('模型映射');
+  });
+
   it('uses the Codex API endpoint in the Codex client guide', async () => {
     const content = await readDocIfPresent('clients/codex.mdx');
 

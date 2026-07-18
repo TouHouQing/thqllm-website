@@ -104,6 +104,7 @@ describe('project registry', () => {
         text: '开始接入',
         items: [
           { text: '概览', slug: 'index' },
+          { text: 'THQ Switch 专属 App', slug: 'thq-switch' },
           { text: '快速开始', slug: 'quick-start' },
         ],
       },
@@ -132,10 +133,18 @@ describe('project registry', () => {
         items: [
           { text: '账户与用量', slug: 'account' },
           { text: '常见问题', slug: 'faq' },
-          { text: '更新记录', slug: 'changelog' },
         ],
       },
     ]);
+  });
+
+  it('does not register changelog routes for any project documentation', () => {
+    const documentedSlugs = projects.flatMap(
+      (project) =>
+        project.docs?.sections.flatMap((section) => section.items.map((item) => item.slug)) ?? [],
+    );
+
+    expect(documentedSlugs).not.toContain('changelog');
   });
 
   it('accepts an additional valid project without a registered-project count change', () => {

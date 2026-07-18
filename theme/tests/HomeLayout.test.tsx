@@ -27,15 +27,15 @@ const pendingProject: ProjectDefinition = {
 afterEach(cleanup);
 
 describe('HomeLayout', () => {
-  it('does not render the retired website launch note on the home page', () => {
+  it('does not render development-notes entry points on the home page', () => {
     render(
       <MemoryRouter>
         <HomeLayout />
       </MemoryRouter>,
     );
 
-    expect(screen.queryByText('THQLLM 官网启动记录')).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '阅读开发札记' })).not.toBeInTheDocument();
+    expect(screen.queryByText('开发札记')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /开发札记/ })).not.toBeInTheDocument();
   });
 
   it('renders HUD counts and project content from the injected registry fixture', () => {

@@ -68,12 +68,6 @@ const fixedManifestRoutes = [
     llms: { txt: true, full: true },
   },
   {
-    routePath: '/notes/',
-    htmlPath: 'notes/index.html',
-    markdownPath: 'notes/index.md',
-    llms: { txt: true, full: true },
-  },
-  {
     routePath: '/about/',
     htmlPath: 'about/index.html',
     markdownPath: 'about/index.md',
@@ -1144,7 +1138,7 @@ describe('verify-build manifest-driven output validation', () => {
     const result = await runVerifier();
 
     expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain('sitemap.xml urlset direct child 7 must be a url element.');
+    expect(result.stderr).toContain('sitemap.xml urlset direct child 6 must be a url element.');
   });
 
   it('does not count a nested decoy loc for a sitemap url without loc', async () => {

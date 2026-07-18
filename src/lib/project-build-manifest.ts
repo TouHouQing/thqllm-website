@@ -45,12 +45,6 @@ const fixedRoutes: readonly ProjectBuildManifestRoute[] = [
     llms: { txt: true, full: true },
   },
   {
-    routePath: '/notes/',
-    htmlPath: 'notes/index.html',
-    markdownPath: 'notes/index.md',
-    llms: { txt: true, full: true },
-  },
-  {
     routePath: '/about/',
     htmlPath: 'about/index.html',
     markdownPath: 'about/index.md',

@@ -33,6 +33,8 @@ describe('HeroTitleScreen', () => {
       'href',
       '/docs/fluctgraph/',
     );
+    expect(within(menu).getAllByRole('link')).toHaveLength(3);
+    expect(within(menu).queryByRole('link', { name: /开发札记/ })).not.toBeInTheDocument();
     expect(container.textContent).not.toContain('智能结界');
     expect(container.textContent).not.toContain('结界');
   });
@@ -46,7 +48,7 @@ describe('HeroTitleScreen', () => {
 
     const root = container.querySelector('[data-danmaku-root]');
     expect(root).not.toBeNull();
-    expect(root?.querySelectorAll('[data-danmaku-exclusion="menu"]')).toHaveLength(4);
+    expect(root?.querySelectorAll('[data-danmaku-exclusion="menu"]')).toHaveLength(3);
     expect(root?.querySelectorAll('[data-danmaku-exclusion="scroll-hint"]')).toHaveLength(1);
   });
 

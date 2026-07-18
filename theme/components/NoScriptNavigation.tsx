@@ -5,7 +5,6 @@ const primaryLinks = [
   { href: '/', label: '首页' },
   { href: '/projects/', label: '项目' },
   { href: '/docs/fluctgraph/', label: '文档' },
-  { href: '/notes/', label: '开发札记' },
   { href: '/about/', label: '关于' },
 ] as const;
 
