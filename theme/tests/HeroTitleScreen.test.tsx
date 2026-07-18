@@ -32,7 +32,7 @@ describe('HeroTitleScreen', () => {
     expect(within(menu).getByRole('link', { name: /项目选择/ })).not.toHaveAttribute('target');
     expect(within(menu).getByRole('link', { name: /使用文档/ })).toHaveAttribute(
       'href',
-      '/docs/fluctgraph/',
+      '/docs/thq-api/',
     );
     expect(within(menu).getAllByRole('link')).toHaveLength(3);
     expect(within(menu).queryByRole('link', { name: /开发札记/ })).not.toBeInTheDocument();

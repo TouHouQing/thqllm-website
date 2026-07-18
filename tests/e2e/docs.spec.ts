@@ -406,8 +406,8 @@ test('SearchPanel keeps Enter safe without breaking keyboard navigation', async 
   await docsLink.focus();
   await expect(docsLink).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/\/docs\/fluctgraph\/$/);
-  await expect(page.getByRole('heading', { level: 1, name: /FluctGraph/i })).toBeVisible();
+  await expect(page).toHaveURL(/\/docs\/thq-api\/$/);
+  await expect(page.getByRole('heading', { level: 1, name: /THQ API/i })).toBeVisible();
   expectNoPageErrors('following a regular link with Enter');
 
   await page.keyboard.press('ControlOrMeta+k');
@@ -430,7 +430,7 @@ test('SearchPanel keeps Enter safe without breaking keyboard navigation', async 
     key: 'Enter',
   });
   await expect(searchInput).toBeVisible();
-  await expect(page).toHaveURL(/\/docs\/fluctgraph\/$/);
+  await expect(page).toHaveURL(/\/docs\/thq-api\/$/);
   expectNoPageErrors('pressing composing Enter with a current suggestion');
 
   await page.keyboard.press('Enter');
@@ -1737,8 +1737,8 @@ test('client navigation rebinds document panel measurement when the project swit
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
 
   await navigateFromMobileMenu('文档');
-  await expect(page).toHaveURL(/\/docs\/fluctgraph\/(?:index\.html)?$/);
-  await expect(page.getByRole('heading', { level: 1, name: 'FluctGraph' })).toBeVisible();
+  await expect(page).toHaveURL(/\/docs\/thq-api\/(?:index\.html)?$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'THQ API' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: '切换项目文档' })).toBeVisible();
   await expectPanelTopVariableMatchesMenu(page);
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
@@ -1795,7 +1795,7 @@ test('client navigation from home preserves documentation accessibility', async 
     .getByRole('link', { name: /使用文档/ })
     .first()
     .click();
-  await expect(page.getByRole('heading', { level: 1, name: /FluctGraph/i })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: /THQ API/i })).toBeVisible();
 
   const results = await new AxeBuilder({ page }).analyze();
 

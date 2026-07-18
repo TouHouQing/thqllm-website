@@ -74,7 +74,7 @@ export default defineConfig({
     sidebar: createSidebarConfig(projects),
     nav: [
       { text: '项目', link: '/projects/', activeMatch: '/projects/' },
-      { text: '文档', link: '/docs/fluctgraph/', activeMatch: '/docs/' },
+      { text: '文档', link: '/docs/thq-api/', activeMatch: '/docs/' },
       { text: '关于', link: '/about/', activeMatch: '/about/' },
     ],
   },

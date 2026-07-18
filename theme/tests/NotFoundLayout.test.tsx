@@ -39,7 +39,7 @@ describe('NotFoundLayout', () => {
 
     const searchForm = searchRegion?.querySelector('form');
     expect(searchForm).not.toBeNull();
-    expect(searchForm).toHaveAttribute('action', '/docs/fluctgraph/');
+    expect(searchForm).toHaveAttribute('action', '/docs/thq-api/');
     expect(searchForm).toHaveAttribute('method', 'get');
 
     const homeLink = screen.getByRole('link', { name: '返回首页' });

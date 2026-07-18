@@ -1397,14 +1397,14 @@ test('home remains useful without JavaScript', async ({ browser }) => {
     await expect(
       page.getByRole('navigation', { name: '首页主菜单' }).getByRole('link', { name: /项目选择/ }),
     ).toBeVisible();
-    await expect(page.getByRole('link', { name: '进入 FluctGraph' })).toBeVisible();
+    await expect(page.getByRole('link', { name: '进入 THQ API' })).toBeVisible();
 
     await page
       .getByRole('link', { name: /使用文档/ })
       .first()
       .click();
-    await expect(page).toHaveURL(/\/docs\/fluctgraph\/$/);
-    await expect(page.getByRole('heading', { level: 1, name: /FluctGraph/i })).toBeVisible();
+    await expect(page).toHaveURL(/\/docs\/thq-api\/$/);
+    await expect(page.getByRole('heading', { level: 1, name: /THQ API/i })).toBeVisible();
   } finally {
     await context.close();
   }
@@ -1470,7 +1470,7 @@ test('custom 404 offers working recovery actions', async ({ page }) => {
   );
   const searchRegion = recoveryNavigation.getByRole('search', { name: '错误页站点搜索' });
   const searchForm = searchRegion.locator('form');
-  await expect(searchForm).toHaveAttribute('action', '/docs/fluctgraph/');
+  await expect(searchForm).toHaveAttribute('action', '/docs/thq-api/');
   await expect(searchForm).toHaveAttribute('method', 'get');
   await expect(searchRegion.getByRole('button', { name: '搜索文档' })).toHaveAttribute(
     'type',
@@ -1515,8 +1515,8 @@ test('static 404 keeps search recovery working without JavaScript', async ({
 
     await searchButton.click();
 
-    await expect(page).toHaveURL((url) => url.pathname === '/docs/fluctgraph/');
-    await expect(page.getByRole('heading', { level: 1, name: /FluctGraph/i })).toBeVisible();
+    await expect(page).toHaveURL((url) => url.pathname === '/docs/thq-api/');
+    await expect(page.getByRole('heading', { level: 1, name: /THQ API/i })).toBeVisible();
   } finally {
     await context.close();
   }

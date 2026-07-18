@@ -189,7 +189,7 @@ describe('ProjectStageGrid', () => {
 
     expect(
       view.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent),
-    ).toEqual(['FluctGraph', 'THQ API']);
+    ).toEqual(['THQ API', 'FluctGraph']);
     expect(fixture.map((project) => project.id)).toEqual(inputOrder);
   });
 });

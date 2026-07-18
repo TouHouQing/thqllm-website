@@ -96,6 +96,20 @@ describe('project registry', () => {
     );
   });
 
+  it('puts THQ API before FluctGraph across the project registry', () => {
+    expect(projects.map((project) => project.id)).toEqual([
+      'thq-api',
+      'fluctgraph',
+      'toho-image-studio',
+    ]);
+    expect(projects.map((project) => project.order)).toEqual([1, 2, 3]);
+    expect(projects.map((project) => project.stageLabel)).toEqual([
+      'STAGE 01',
+      'STAGE 02',
+      'EXTRA STAGE',
+    ]);
+  });
+
   it('registers the complete THQ API documentation sections', () => {
     const thqApi = projects.find((project) => project.id === 'thq-api');
 

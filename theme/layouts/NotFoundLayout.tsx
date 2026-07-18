@@ -57,7 +57,7 @@ export function NotFoundLayout() {
             </Link>
           ))}
           <search className={styles.searchForm} aria-label="错误页站点搜索">
-            <form action="/docs/fluctgraph/" method="get" onSubmit={handleSearchSubmit}>
+            <form action="/docs/thq-api/" method="get" onSubmit={handleSearchSubmit}>
               <button className={styles.link} type="submit" onKeyDown={handleSearchKeyDown}>
                 搜索文档
               </button>

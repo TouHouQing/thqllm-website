@@ -4,7 +4,7 @@ import styles from './NoScriptNavigation.module.css';
 const primaryLinks = [
   { href: '/', label: '首页' },
   { href: '/projects/', label: '项目' },
-  { href: '/docs/fluctgraph/', label: '文档' },
+  { href: '/docs/thq-api/', label: '文档' },
   { href: '/about/', label: '关于' },
 ] as const;
 

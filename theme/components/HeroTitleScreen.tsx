@@ -15,7 +15,7 @@ const menuItems = [
     detail: 'PROJECT SELECT',
     href: 'https://thqllm.com/#projects',
   },
-  { index: '02', label: '使用文档', detail: 'MANUAL', href: '/docs/fluctgraph/' },
+  { index: '02', label: '使用文档', detail: 'MANUAL', href: '/docs/thq-api/' },
   { index: '03', label: '关于 THQLLM', detail: 'OMAKE', href: '/about/' },
 ] as const;
 

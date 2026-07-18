@@ -2,37 +2,9 @@ import { projectListSchema } from './project-schema';
 
 export const projects = projectListSchema.parse([
   {
-    id: 'fluctgraph',
-    name: 'FluctGraph',
-    stageLabel: 'STAGE 01',
-    categoryLabel: 'KNOWLEDGE GRAPH',
-    description: '面向 AI IDE 和 Agent 工作流的私有知识图谱接入层。',
-    externalUrl: 'https://graph.thqllm.com/',
-    docs: {
-      basePath: '/docs/fluctgraph/',
-      sections: [
-        {
-          text: '开始',
-          items: [
-            { text: '概览', slug: 'index' },
-            { text: '快速开始', slug: 'quick-start' },
-          ],
-        },
-        {
-          text: '参考',
-          items: [{ text: '常见问题', slug: 'faq' }],
-        },
-      ],
-    },
-    accent: 'vermilion',
-    tags: ['知识图谱', 'MCP', 'Agent'],
-    order: 1,
-    featured: true,
-  },
-  {
     id: 'thq-api',
     name: 'THQ API',
-    stageLabel: 'STAGE 02',
+    stageLabel: 'STAGE 01',
     categoryLabel: 'AI API GATEWAY',
     description: '统一连接多种模型能力的 AI API Gateway 与中转服务。',
     externalUrl: 'https://sub.thqllm.com/',
@@ -78,6 +50,34 @@ export const projects = projectListSchema.parse([
     },
     accent: 'cyan',
     tags: ['模型中转', 'API', 'OpenAI 兼容'],
+    order: 1,
+    featured: true,
+  },
+  {
+    id: 'fluctgraph',
+    name: 'FluctGraph',
+    stageLabel: 'STAGE 02',
+    categoryLabel: 'KNOWLEDGE GRAPH',
+    description: '面向 AI IDE 和 Agent 工作流的私有知识图谱接入层。',
+    externalUrl: 'https://graph.thqllm.com/',
+    docs: {
+      basePath: '/docs/fluctgraph/',
+      sections: [
+        {
+          text: '开始',
+          items: [
+            { text: '概览', slug: 'index' },
+            { text: '快速开始', slug: 'quick-start' },
+          ],
+        },
+        {
+          text: '参考',
+          items: [{ text: '常见问题', slug: 'faq' }],
+        },
+      ],
+    },
+    accent: 'vermilion',
+    tags: ['知识图谱', 'MCP', 'Agent'],
     order: 2,
     featured: true,
   },
