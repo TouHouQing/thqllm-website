@@ -27,8 +27,9 @@ describe('HeroTitleScreen', () => {
     const menu = screen.getByRole('navigation', { name: '首页主菜单' });
     expect(within(menu).getByRole('link', { name: /项目选择/ })).toHaveAttribute(
       'href',
-      '/#projects',
+      'https://thqllm.com/#projects',
     );
+    expect(within(menu).getByRole('link', { name: /项目选择/ })).not.toHaveAttribute('target');
     expect(within(menu).getByRole('link', { name: /使用文档/ })).toHaveAttribute(
       'href',
       '/docs/fluctgraph/',

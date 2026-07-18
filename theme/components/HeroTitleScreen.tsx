@@ -9,7 +9,12 @@ interface HeroTitleScreenProps {
 }
 
 const menuItems = [
-  { index: '01', label: '项目选择', detail: 'PROJECT SELECT', href: '/#projects' },
+  {
+    index: '01',
+    label: '项目选择',
+    detail: 'PROJECT SELECT',
+    href: 'https://thqllm.com/#projects',
+  },
   { index: '02', label: '使用文档', detail: 'MANUAL', href: '/docs/fluctgraph/' },
   { index: '03', label: '关于 THQLLM', detail: 'OMAKE', href: '/about/' },
 ] as const;
@@ -46,19 +51,33 @@ export function HeroTitleScreen({ manualCount, projectCount }: HeroTitleScreenPr
         </div>
 
         <nav className={styles.menu} aria-label="首页主菜单">
-          {menuItems.map((item, index) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={styles.menuItem}
-              data-active={index === 0 ? 'true' : undefined}
-              data-danmaku-exclusion="menu"
-            >
-              <span>{item.index}</span>
-              <strong>{item.label}</strong>
-              <small>{item.detail}</small>
-            </Link>
-          ))}
+          {menuItems.map((item, index) =>
+            item.href.startsWith('https://') ? (
+              <a
+                key={item.href}
+                href={item.href}
+                className={styles.menuItem}
+                data-active={index === 0 ? 'true' : undefined}
+                data-danmaku-exclusion="menu"
+              >
+                <span>{item.index}</span>
+                <strong>{item.label}</strong>
+                <small>{item.detail}</small>
+              </a>
+            ) : (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={styles.menuItem}
+                data-active={index === 0 ? 'true' : undefined}
+                data-danmaku-exclusion="menu"
+              >
+                <span>{item.index}</span>
+                <strong>{item.label}</strong>
+                <small>{item.detail}</small>
+              </Link>
+            ),
+          )}
         </nav>
       </div>
 
