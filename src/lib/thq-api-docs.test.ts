@@ -662,7 +662,7 @@ goals = true`);
     ).toBe(true);
   });
 
-  it('uses the unversioned API origin in the Claude Code guide', async () => {
+  it('uses user settings.json with the unversioned API origin in the Claude Code guide', async () => {
     const content = await readDocIfPresent('clients/claude-code.mdx');
 
     if (content === undefined) {
@@ -670,9 +670,13 @@ goals = true`);
     }
 
     expect(
-      recommendedConfigMatches(content, 'bash title="推荐配置"', (block) =>
-        hasShellAssignment(block.content, 'ANTHROPIC_BASE_URL', 'https://api.thqllm.com'),
-      ),
+      recommendedConfigMatches(content, 'json title="settings.json"', (block) => {
+        return (
+          block.content.includes('"ANTHROPIC_BASE_URL": "https://api.thqllm.com"') &&
+          block.content.includes('"ANTHROPIC_AUTH_TOKEN": "YOUR_THQ_API_KEY"') &&
+          block.content.includes('"ANTHROPIC_MODEL": "CONTROL_PANEL_MODEL_ID"')
+        );
+      }),
     ).toBe(true);
   });
 

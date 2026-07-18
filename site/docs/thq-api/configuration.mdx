@@ -94,17 +94,23 @@ Chat Completions 的成功结果推断 Responses 一定可用；还需要按
 
 ## Claude Code
 
-Claude Code 使用 Anthropic Messages 网关。主机地址不带 `/v1`，Key 使用
-`ANTHROPIC_AUTH_TOKEN`：
+Claude Code 使用 Anthropic Messages 网关。将配置写入用户级
+`~/.claude/settings.json`（Windows 为 `%USERPROFILE%\.claude\settings.json`）的 `env`
+对象，主机地址不带 `/v1`：
 
-```bash title="Claude Code 推荐配置"
-export ANTHROPIC_BASE_URL="https://api.thqllm.com"
-export ANTHROPIC_AUTH_TOKEN="YOUR_THQ_API_KEY"
-export ANTHROPIC_MODEL="CONTROL_PANEL_MODEL_ID"
+```json title="Claude Code settings.json"
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://api.thqllm.com",
+    "ANTHROPIC_AUTH_TOKEN": "YOUR_THQ_API_KEY",
+    "ANTHROPIC_MODEL": "CONTROL_PANEL_MODEL_ID"
+  }
+}
 ```
 
 客户端会追加 `/v1/messages`。不要把 `ANTHROPIC_BASE_URL` 写成
-`https://api.thqllm.com/v1`。完整步骤见
+`https://api.thqllm.com/v1`，也不要把真实 Key 放入项目目录中的 `.claude/settings.json`。
+完整步骤见
 [Claude Code 接入指南](/docs/thq-api/clients/claude-code)和
 [Claude Code Settings 官方文档](https://code.claude.com/docs/en/settings)。
 

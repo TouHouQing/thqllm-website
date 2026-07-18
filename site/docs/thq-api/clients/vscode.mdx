@@ -60,19 +60,25 @@ OpenAI Responses、Anthropic Messages 或其他协议，也可能完全不允许
 
 ## Claude Code 扩展
 
-Claude Code 的 VS Code 扩展使用 Anthropic Messages 网关。先在启动 VS Code 的环境中设置：
+Claude Code 的 VS Code 扩展与 CLI 共用 Claude Code 用户级配置。先按
+[Claude Code 接入指南](/docs/thq-api/clients/claude-code)将 THQ 的 Base URL、Key 和模型
+写入 `~/.claude/settings.json`（Windows 为 `%USERPROFILE%\.claude\settings.json`）。
 
-```bash title="推荐配置"
-export ANTHROPIC_BASE_URL="https://api.thqllm.com"
-export ANTHROPIC_AUTH_TOKEN="YOUR_THQ_API_KEY"
-export ANTHROPIC_MODEL="CONTROL_PANEL_MODEL_ID"
+随后在 VS Code 设置中搜索“Claude Code login”，开启 **Disable Login Prompt**。也可以打开
+`Preferences: Open User Settings (JSON)`，在 VS Code 的用户设置中合并：
+
+```json title="VS Code 用户设置"
+{
+  "claudeCode.disableLoginPrompt": true
+}
 ```
 
-`ANTHROPIC_BASE_URL` 必须使用不带 `/v1` 的主机地址。扩展会追加 Anthropic Messages 路径；
-手动添加 `/v1` 可能造成重复路径。
+若用户设置中已有其他字段，只合并 `claudeCode.disableLoginPrompt`，不要覆盖整个文件。
+`ANTHROPIC_BASE_URL` 仍然写在 Claude Code 的用户级 `settings.json` 中，且必须使用不带 `/v1`
+的主机地址。扩展会追加 Anthropic Messages 路径；手动添加 `/v1` 可能造成重复路径。
 
-如果 VS Code 已经运行，它通常不会自动获得后来新增的 shell 环境变量。可以完全退出 VS Code，
-再从已设置变量的终端启动；也可以按组织的受控环境配置方式注入变量。详细说明见
+保存后运行 `Developer: Reload Window`，并新建 Claude Code 会话。`claudeCode.environmentVariables`
+是扩展进程专用设置；THQ 这类需要与 CLI 共用的网关配置不要写在其中。详细说明见
 [Claude Code 接入指南](/docs/thq-api/clients/claude-code)和
 [Claude Code VS Code 官方文档](https://code.claude.com/docs/en/vs-code)。
 
@@ -117,8 +123,9 @@ export ANTHROPIC_MODEL="CONTROL_PANEL_MODEL_ID"
 
 ### Claude Code 扩展仍使用旧地址
 
-运行 `Developer: Reload Window`，关闭旧会话并新建会话。若变量是在 VS Code 启动后才设置，
-完全退出后从正确的终端环境重新启动。
+确认 `~/.claude/settings.json`（Windows 为 `%USERPROFILE%\.claude\settings.json`）的 `env`
+对象包含 Base URL、Key 和模型，并在 VS Code 中开启 **Disable Login Prompt**。然后运行
+`Developer: Reload Window`，关闭旧会话并新建会话。
 
 ### 返回 404
 
