@@ -80,7 +80,7 @@ describe('project registry', () => {
         expect.objectContaining({
           id: 'fluctgraph',
           name: 'FluctGraph',
-          externalUrl: 'https://graph.tohoqing.com/',
+          externalUrl: 'https://graph.thqllm.com/',
         }),
         expect.objectContaining({
           id: 'thq-api',
@@ -90,7 +90,7 @@ describe('project registry', () => {
         expect.objectContaining({
           id: 'toho-image-studio',
           name: 'Toho Image Studio',
-          externalUrl: 'https://img.tohoqing.com/',
+          externalUrl: 'https://img.thqllm.com/',
         }),
       ]),
     );

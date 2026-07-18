@@ -7,7 +7,7 @@ export const projects = projectListSchema.parse([
     stageLabel: 'STAGE 01',
     categoryLabel: 'KNOWLEDGE GRAPH',
     description: '面向 AI IDE 和 Agent 工作流的私有知识图谱接入层。',
-    externalUrl: 'https://graph.tohoqing.com/',
+    externalUrl: 'https://graph.thqllm.com/',
     docs: {
       basePath: '/docs/fluctgraph/',
       sections: [
@@ -87,7 +87,7 @@ export const projects = projectListSchema.parse([
     stageLabel: 'EXTRA STAGE',
     categoryLabel: 'IMAGE WORKSPACE',
     description: '面向图像生成与编辑工作流的浏览器创作空间。',
-    externalUrl: 'https://img.tohoqing.com/',
+    externalUrl: 'https://img.thqllm.com/',
     docs: {
       basePath: '/docs/toho-image-studio/',
       sections: [

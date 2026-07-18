@@ -1,22 +1,52 @@
 ---
 title: 关于 THQLLM
-description: THQLLM 的项目范围、设计原则与内容边界。
+description: 了解 THQ、THQLLM 的产品方向、当前项目与未来计划。
 sidebar: false
 ---
 
-import { ProjectDirectoryLinks } from '../../theme/components/ProjectsDirectory';
-
 # 关于 THQLLM
 
-THQLLM 用于整理和连接模型中转、AI 编程、图像生成与其他 AI 实验项目。
+THQLLM 是 THQ 围绕 LLM API 实际使用场景延伸出的产品集合。它关注的不只是模型调用本身，也关注模型如何进入日常开发、知识管理、图像创作和个人工作流。
 
-## 原则
+THQ 持续记录技术实践与个人项目。博客：[tohoqing.com](https://tohoqing.com/)；GitHub：[touhouqing](https://github.com/touhouqing)。
 
-- 项目入口清楚，访问项目与阅读文档互不混淆。
-- 文档只写入已经确认的信息，不虚构命令、参数或服务能力。
-- 官网保持纯静态，不要求用户在门户中提交 API Key。
-- 东方同人弹幕游戏气质来自原创场景、排版和交互，不使用现成角色素材。
+## 当前产品
 
-## 当前项目
+### FluctGraph
 
-<ProjectDirectoryLinks />
+FluctGraph 面向 AI IDE、Agent 与知识库工作流，提供私有知识图谱接入层。它用于把资料、上下文和工具链更有条理地连接到 AI 工作流中。
+
+项目地址：[graph.thqllm.com](https://graph.thqllm.com/)
+
+### THQ API
+
+THQ API 提供模型中转与多协议 API 接入，服务于 AI 编程、自动化调用和各类兼容客户端。它支持以统一的账户、API Key 和工具配置流程连接常用模型能力。
+
+项目地址：[sub.thqllm.com](https://sub.thqllm.com/)
+
+### THQ Switch
+
+THQ Switch 是 `sub.thqllm.com` 的专属桌面客户端。它把登录注册、余额与用量、API Key 管理、模型映射和本地工具配置整合到一个界面中，帮助用户减少手动修改 JSON、TOML 和环境变量的步骤。
+
+下载地址：[GitHub Releases](https://github.com/TouHouQing/sub-switch/releases)
+
+### Toho Image Studio
+
+Toho Image Studio 是面向图像生成与编辑工作流的浏览器创作空间，用于组织提示词、生成与编辑相关的日常操作。
+
+项目地址：[img.thqllm.com](https://img.thqllm.com/)
+
+## 未来方向
+
+THQLLM 会继续沿着实际使用场景完善产品：
+
+- 让模型接入、客户端配置和账户管理更直接、更少出错。
+- 为 AI 编程、Agent 与知识管理提供更连贯的工具协作方式。
+- 持续扩展图像生成、编辑与创作工作流。
+- 把可复用的经验整理为清晰的使用文档和工具能力。
+
+## 联系与交流
+
+- QQ 交流群：`242080189`
+- THQ 博客：[tohoqing.com](https://tohoqing.com/)
+- GitHub：[touhouqing](https://github.com/touhouqing)

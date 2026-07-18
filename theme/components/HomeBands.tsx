@@ -37,7 +37,6 @@ export function AboutBand() {
     <section className={styles.about} aria-labelledby="about-title">
       <p>OMAKE / ABOUT</p>
       <h2 id="about-title">关于 THQLLM</h2>
-      <span>把模型、代码与图像工具整理成清晰、可使用、可查阅的项目网络。</span>
       <Link href="/about/">了解更多</Link>
     </section>
   );

@@ -3,7 +3,7 @@ import type { ComponentProps } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectDefinition } from '../../src/data/project-schema';
 import { projects } from '../../src/data/projects';
-import { ManualBand } from '../components/HomeBands';
+import { AboutBand, ManualBand } from '../components/HomeBands';
 
 vi.mock('@rspress/core/theme-original', () => ({
   Link: (props: ComponentProps<'a'>) => <a {...props} />,
@@ -68,5 +68,16 @@ describe('ManualBand', () => {
 
     expect(renderedItemText).toEqual(expectedItems);
     expect(fixture.map((project) => project.id)).toEqual(originalIds);
+  });
+});
+
+describe('AboutBand', () => {
+  it('keeps the about-page link without the retired project-network description', () => {
+    render(<AboutBand />);
+
+    expect(
+      screen.queryByText('把模型、代码与图像工具整理成清晰、可使用、可查阅的项目网络。'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '了解更多' })).toHaveAttribute('href', '/about/');
   });
 });
