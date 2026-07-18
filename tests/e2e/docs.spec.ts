@@ -260,6 +260,15 @@ test('documentation omits the project information header while keeping the proje
   await expect(page.getByRole('navigation', { name: '切换项目文档' })).toBeVisible();
 });
 
+test('development notes omit the retired website launch record', async ({ page }) => {
+  await page.goto('/notes/');
+
+  await expect(page.getByRole('heading', { level: 1, name: '开发札记' })).toBeVisible();
+  await expect(page.locator('main')).not.toContainText('THQLLM 官网启动记录');
+  await expect(page.locator('main')).not.toContainText('官网启动记录');
+  await expect(page.getByText(/^最后更新于:/)).toHaveCount(0);
+});
+
 for (const route of thqApiDocumentationRoutes) {
   test(`THQ API route ${route.path} is published and linked`, async ({ page, isMobile }) => {
     test.skip(Boolean(isMobile), 'THQ API route coverage only needs one browser project');

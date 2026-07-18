@@ -1,6 +1,5 @@
 import { Link } from '@rspress/core/theme-original';
 import { ArrowRight, BookOpen } from 'lucide-react';
-import { notes } from '../../src/data/notes';
 import type { ProjectDefinition } from '../../src/data/project-schema';
 import styles from './HomeBands.module.css';
 
@@ -29,24 +28,6 @@ export function ManualBand({ projects }: { projects: readonly ProjectDefinition[
           </li>
         ))}
       </ul>
-    </section>
-  );
-}
-
-export function NotesBand() {
-  const latest = notes[0];
-
-  return (
-    <section className={styles.notes} aria-labelledby="notes-title">
-      <div>
-        <p>{latest.label}</p>
-        <h2 id="notes-title">{latest.title}</h2>
-        <span>{latest.summary}</span>
-      </div>
-      <Link href={latest.slug}>
-        阅读开发札记
-        <ArrowRight aria-hidden="true" size={16} />
-      </Link>
     </section>
   );
 }

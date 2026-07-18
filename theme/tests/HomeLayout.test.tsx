@@ -27,6 +27,17 @@ const pendingProject: ProjectDefinition = {
 afterEach(cleanup);
 
 describe('HomeLayout', () => {
+  it('does not render the retired website launch note on the home page', () => {
+    render(
+      <MemoryRouter>
+        <HomeLayout />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByText('THQLLM 官网启动记录')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '阅读开发札记' })).not.toBeInTheDocument();
+  });
+
   it('renders HUD counts and project content from the injected registry fixture', () => {
     const projectRegistry = [...projects, pendingProject];
     const expectedProjectCount = String(projectRegistry.length).padStart(2, '0');
