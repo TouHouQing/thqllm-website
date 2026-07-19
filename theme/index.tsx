@@ -6,6 +6,7 @@ import { ProjectLink } from './components/mdx/ProjectLink';
 import { NoScriptNavigation } from './components/NoScriptNavigation';
 import { ProjectDocSwitcher } from './components/ProjectDocSwitcher';
 import { SiteSearch } from './components/SiteSearch';
+import { SiteSeo } from './components/SiteSeo';
 
 export { DocLayout } from './layouts/DocLayout';
 
@@ -24,17 +25,20 @@ const mdxComponents = {
 
 export function Layout() {
   return (
-    <BasicLayout
-      HomeLayout={HomeLayout}
-      NotFoundLayout={NotFoundLayout}
-      afterNav={
-        <>
-          <NoScriptNavigation />
-          <ProjectDocSwitcher />
-        </>
-      }
-      components={mdxComponents}
-    />
+    <>
+      <SiteSeo />
+      <BasicLayout
+        HomeLayout={HomeLayout}
+        NotFoundLayout={NotFoundLayout}
+        afterNav={
+          <>
+            <NoScriptNavigation />
+            <ProjectDocSwitcher />
+          </>
+        }
+        components={mdxComponents}
+      />
+    </>
   );
 }
 
