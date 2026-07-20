@@ -3,9 +3,23 @@ import { projects } from '../data/projects';
 import { createProjectDocRoutePath } from './project-doc-routes';
 
 export const SITE_ORIGIN = 'https://thqllm.com';
+export const HOME_TITLE = 'THQLLM｜AI 大模型中转站与 Codex 中转 API';
+export const HOME_DESCRIPTION =
+  'THQLLM 提供 AI 大模型 API、企业级 AI 中转站、Codex/GPT/Claude 中转站、AI 编程与图像生成项目入口，并整理 AI 代充、GPT 代充、Claude 代充相关服务说明。';
 
-const SITE_DESCRIPTION =
-  'THQLLM 是 THQ 的 AI 项目官网，汇集 THQ API、FluctGraph、Toho Image Studio 与使用文档。';
+const SITE_DESCRIPTION = HOME_DESCRIPTION;
+
+const SITE_KEYWORDS = [
+  'AI 大模型',
+  '大模型 API',
+  'AI 大模型中转站',
+  'AI 中转站',
+  '企业级 AI 中转站',
+  'Codex 中转站',
+  'GPT 中转站',
+  'Claude 中转站',
+  'AI 代充',
+];
 
 const indexableRobots = 'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1';
 
@@ -112,6 +126,7 @@ function createStructuredData(
         '@id': `${SITE_ORIGIN}/#organization`,
         '@type': 'Organization',
         description: SITE_DESCRIPTION,
+        knowsAbout: SITE_KEYWORDS,
         name: 'THQLLM',
         sameAs: ['https://tohoqing.com/', 'https://github.com/TouHouQing'],
         url: `${SITE_ORIGIN}/`,
@@ -121,6 +136,7 @@ function createStructuredData(
         '@type': 'WebSite',
         description: SITE_DESCRIPTION,
         inLanguage: 'zh-CN',
+        keywords: SITE_KEYWORDS.join(', '),
         name: 'THQLLM',
         publisher: { '@id': `${SITE_ORIGIN}/#organization` },
         url: `${SITE_ORIGIN}/`,

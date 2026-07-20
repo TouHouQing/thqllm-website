@@ -3,7 +3,7 @@ import type { ComponentProps } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectDefinition } from '../../src/data/project-schema';
 import { projects } from '../../src/data/projects';
-import { AboutBand, ManualBand } from '../components/HomeBands';
+import { AboutBand, ManualBand, SeoIntroBand } from '../components/HomeBands';
 
 vi.mock('@rspress/core/theme-original', () => ({
   Link: (props: ComponentProps<'a'>) => <a {...props} />,
@@ -79,5 +79,17 @@ describe('AboutBand', () => {
       screen.queryByText('把模型、代码与图像工具整理成清晰、可使用、可查阅的项目网络。'),
     ).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '了解更多' })).toHaveAttribute('href', '/about/');
+  });
+});
+
+describe('SeoIntroBand', () => {
+  it('publishes the homepage search themes as readable content', () => {
+    render(<SeoIntroBand />);
+
+    expect(
+      screen.getByRole('heading', { name: 'AI 大模型中转站与大模型 API 入口' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Codex 中转站、GPT 中转站、Claude 中转站/)).toBeInTheDocument();
+    expect(screen.getByText(/AI 代充、GPT 代充、Claude 代充/)).toBeInTheDocument();
   });
 });

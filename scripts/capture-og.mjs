@@ -942,7 +942,10 @@ async function validatePreviewReady(previewUrl, identity) {
 
   const contentType = rootResponse.headers.get('content-type') ?? '';
   const rootBody = await rootResponse.text();
-  if (!contentType.includes('text/html') || !/<title>\s*THQLLM\s*<\/title>/.test(rootBody)) {
+  if (
+    !contentType.includes('text/html') ||
+    !/<title>\s*THQLLM(?:\s*[|｜—-].*)?\s*<\/title>/i.test(rootBody)
+  ) {
     throw new PreviewIdentityError(`Preview root is not the THQLLM HTML page at ${previewUrl}`);
   }
 

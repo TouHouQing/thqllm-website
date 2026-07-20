@@ -1,6 +1,11 @@
 import { Head, useLocation } from '@rspress/core/runtime';
 import { projects } from '../../src/data/projects';
-import { createSiteSeo, serializeStructuredData } from '../../src/lib/site-seo';
+import {
+  createSiteSeo,
+  HOME_DESCRIPTION,
+  HOME_TITLE,
+  serializeStructuredData,
+} from '../../src/lib/site-seo';
 
 const socialImage = 'https://thqllm.com/og-cover.png';
 const socialImageAlt = 'THQLLM 项目官网';
@@ -8,6 +13,7 @@ const socialImageAlt = 'THQLLM 项目官网';
 export function SiteSeo() {
   const { pathname } = useLocation();
   const seo = createSiteSeo(pathname, projects);
+  const isHomepage = seo.canonicalPath === '/';
 
   return (
     <Head>
@@ -19,6 +25,8 @@ export function SiteSeo() {
       <meta property="og:image:alt" content={socialImageAlt} />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
+      {isHomepage ? <meta name="twitter:title" content={HOME_TITLE} /> : null}
+      {isHomepage ? <meta name="twitter:description" content={HOME_DESCRIPTION} /> : null}
       <meta name="twitter:image" content={socialImage} />
       <meta name="twitter:image:alt" content={socialImageAlt} />
       <script id="thqllm-structured-data" type="application/ld+json">

@@ -31,6 +31,12 @@ for (const [path, canonicalUrl] of indexableRoutes) {
 test('homepage structured data identifies THQLLM as the publishing website', async ({ page }) => {
   await page.goto('/');
 
+  await expect(page).toHaveTitle('THQLLM | AI 大模型中转站与 Codex 中转 API');
+  await expect(page.locator('head meta[name="description"]')).toHaveAttribute(
+    'content',
+    'THQLLM 提供 AI 大模型 API、企业级 AI 中转站、Codex/GPT/Claude 中转站、AI 编程与图像生成项目入口，并整理 AI 代充、GPT 代充、Claude 代充相关服务说明。',
+  );
+
   const structuredData = await page.locator('head script#thqllm-structured-data').textContent();
   const parsed = JSON.parse(structuredData ?? '{}') as {
     '@graph'?: Array<{ '@type'?: string; name?: string }>;

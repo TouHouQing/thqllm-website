@@ -19,7 +19,7 @@ export default defineConfig({
   lang: 'zh',
   title: 'THQLLM',
   description:
-    'THQLLM 是 THQ 的 AI 项目官网，汇集 THQ API、FluctGraph、Toho Image Studio 与使用文档。',
+    'THQLLM 提供 AI 大模型 API、企业级 AI 中转站、Codex/GPT/Claude 中转站、AI 编程与图像生成项目入口，并整理 AI 代充、GPT 代充、Claude 代充相关服务说明。',
   icon: '/favicon.svg',
   logo: {
     light: '/favicon.svg',

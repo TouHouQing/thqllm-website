@@ -6,7 +6,8 @@ export const projects = projectListSchema.parse([
     name: 'THQ API',
     stageLabel: 'STAGE 01',
     categoryLabel: 'AI API GATEWAY',
-    description: '统一连接多种模型能力的 AI API Gateway 与中转服务。',
+    description:
+      '面向个人开发者与团队的 AI 大模型中转站，提供企业级 API 网关、Codex、GPT、Claude 等模型接入与 OpenAI 兼容调用。',
     externalUrl: 'https://sub.thqllm.com/',
     docs: {
       basePath: '/docs/thq-api/',
@@ -49,7 +50,7 @@ export const projects = projectListSchema.parse([
       ],
     },
     accent: 'cyan',
-    tags: ['模型中转', 'API', 'OpenAI 兼容'],
+    tags: ['AI 大模型', '大模型中转站', 'Codex / GPT / Claude', 'OpenAI 兼容'],
     order: 1,
     featured: true,
   },

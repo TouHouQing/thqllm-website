@@ -1,8 +1,67 @@
 .manual,
+.seoIntro,
 .about,
 .footer {
   padding-right: max(24px, calc((100% - 1180px) / 2));
   padding-left: max(24px, calc((100% - 1180px) / 2));
+}
+
+.seoIntro {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.82fr) minmax(320px, 1.18fr);
+  gap: 64px;
+  padding-top: 74px;
+  padding-bottom: 74px;
+  color: var(--thq-paper);
+  background: #202a31;
+  border-top: 1px solid rgb(255 253 247 / 16%);
+  border-bottom: 1px solid rgb(255 253 247 / 16%);
+}
+
+.seoIntroHeading {
+  min-width: 0;
+}
+
+.seoIntro p {
+  margin: 0 0 10px;
+  font-family: var(--thq-mono-font);
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.seoIntroHeading p {
+  color: var(--thq-cyan);
+}
+
+.seoIntro h2 {
+  max-width: 620px;
+  margin: 0;
+  font-family: var(--thq-serif-font);
+  font-size: 3.1rem;
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.seoIntroCopy {
+  align-self: end;
+  max-width: 760px;
+}
+
+.seoIntroCopy p {
+  margin: 0;
+  color: rgb(255 253 247 / 78%);
+  font-family: var(--thq-body-font);
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1.85;
+}
+
+.seoIntroCopy p + p {
+  margin-top: 18px;
 }
 
 .manual {
@@ -209,6 +268,13 @@
 }
 
 @media (max-width: 720px) {
+  .seoIntro {
+    grid-template-columns: 1fr;
+    gap: 30px;
+    padding-top: 58px;
+    padding-bottom: 58px;
+  }
+
   .manual {
     grid-template-columns: 1fr;
     gap: 32px;

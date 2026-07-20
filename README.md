@@ -56,7 +56,8 @@ project URL to the generated project Markdown, including projects without docs.
 
 - Do not add unverified API endpoints, model names, commands, or configuration fields.
 - Do not use official Touhou Project characters, logos, music, or unlicensed fan art.
-- Keep the homepage title as `THQLLM`.
+- Keep `THQLLM` at the start of the homepage title so the brand remains clear while the title can
+  also describe the AI API and model-relay topics covered by the site.
 
 ## Visual baselines
 
