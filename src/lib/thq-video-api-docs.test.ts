@@ -75,6 +75,8 @@ describe('THQ Video API documentation contract', () => {
     for (const requiredText of [
       'firefly-video-v2',
       'firefly-video-v2-fast',
+      '满血 SD2',
+      'SD2-fast',
       '/v1/models',
       '/v1/videos',
       '/v1/videos/{task_id}',
@@ -103,6 +105,7 @@ describe('THQ Video API documentation contract', () => {
       'video-v1-5s',
       'video-v1-10s',
       'video-v1-15s',
+      'Video V1 对应 SD2-fast',
       '/v1/video/generations',
       'data:image/jpeg;base64,',
       '"image"',
@@ -123,7 +126,7 @@ describe('THQ Video API documentation contract', () => {
     expect(firefly).toContain('| `firefly-video-v2` | 0.3 / 秒 |');
     expect(firefly).not.toContain('0.15 / 秒');
     expect(firefly).not.toContain('0.17 / 秒');
-    expect(videoV1).toContain('Video V1 的三个时长模型均按 **0.2 / 秒**计费。');
+    expect(videoV1).toContain('SD2-fast（Video V1）的三个时长模型均按 **0.2 / 秒**计费。');
   });
 
   it('does not publish references to missing local documents', async () => {

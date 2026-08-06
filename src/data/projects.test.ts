@@ -125,8 +125,8 @@ describe('project registry', () => {
         text: '开始接入',
         items: [
           { text: '概览', slug: 'index' },
-          { text: 'Firefly Video v2', slug: 'firefly-video-v2' },
-          { text: 'Video V1', slug: 'video-v1' },
+          { text: 'SD2', slug: 'firefly-video-v2' },
+          { text: 'SD2-fast', slug: 'video-v1' },
         ],
       },
     ]);

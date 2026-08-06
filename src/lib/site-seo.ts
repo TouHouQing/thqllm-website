@@ -21,6 +21,8 @@ const SITE_KEYWORDS = [
   '视频模型 API',
   '视频生成 API',
   '图生视频 API',
+  'SD2',
+  'SD2-fast',
   'AI 代充',
 ];
 

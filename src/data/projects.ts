@@ -60,7 +60,7 @@ export const projects = projectListSchema.parse([
     stageLabel: 'STAGE 02',
     categoryLabel: 'VIDEO MODEL API',
     description:
-      '面向视频生成应用的模型 API 中转服务，提供文生视频、图生视频、多图转场与 Firefly Video v2 等视频模型接入。',
+      '面向视频生成应用的模型 API 中转服务，提供满血 SD2、SD2-fast、文生视频、图生视频与多图转场能力。',
     externalUrl: 'https://new.thqllm.com/',
     docs: {
       basePath: '/docs/thq-video-api/',
@@ -69,14 +69,14 @@ export const projects = projectListSchema.parse([
           text: '开始接入',
           items: [
             { text: '概览', slug: 'index' },
-            { text: 'Firefly Video v2', slug: 'firefly-video-v2' },
-            { text: 'Video V1', slug: 'video-v1' },
+            { text: 'SD2', slug: 'firefly-video-v2' },
+            { text: 'SD2-fast', slug: 'video-v1' },
           ],
         },
       ],
     },
     accent: 'sakura',
-    tags: ['视频生成', '文生视频 / 图生视频', 'Firefly / Video V1'],
+    tags: ['视频生成', '文生视频 / 图生视频', 'SD2 / SD2-fast'],
     order: 2,
     featured: true,
   },

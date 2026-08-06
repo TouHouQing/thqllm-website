@@ -51,8 +51,8 @@ export function SeoIntroBand() {
           代充等账户服务，请以对应项目控制台展示的官方入口和规则为准。
         </p>
         <p>
-          新增的 THQ Video API 专注视频模型 API 中转，覆盖 Firefly Video v2 与 Video V1
-          两组视频生成能力，支持文生视频、图生视频和多图转场等调用方式。
+          新增的 THQ Video API 专注视频模型 API 中转，覆盖满血 SD2 与 SD2-fast
+          两档视频生成能力，支持文生视频、图生视频和多图转场等调用方式。
         </p>
       </div>
     </section>
