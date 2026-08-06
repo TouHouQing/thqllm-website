@@ -117,7 +117,7 @@ describe('project registry', () => {
     ]);
   });
 
-  it('registers two model-group tutorials for THQ Video API', () => {
+  it('registers the Firefly Video v2 tutorial for THQ Video API', () => {
     const videoApi = projects.find((project) => project.id === 'thq-video-api');
 
     expect(videoApi?.docs?.sections).toEqual([
@@ -126,7 +126,6 @@ describe('project registry', () => {
         items: [
           { text: '概览', slug: 'index' },
           { text: 'SD2', slug: 'firefly-video-v2' },
-          { text: 'SD2-fast', slug: 'video-v1' },
         ],
       },
     ]);

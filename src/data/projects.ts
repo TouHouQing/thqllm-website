@@ -70,7 +70,6 @@ export const projects = projectListSchema.parse([
           items: [
             { text: '概览', slug: 'index' },
             { text: 'SD2', slug: 'firefly-video-v2' },
-            { text: 'SD2-fast', slug: 'video-v1' },
           ],
         },
       ],

@@ -48,12 +48,11 @@ async function readVideoDocs() {
 }
 
 describe('THQ Video API documentation contract', () => {
-  it('publishes exactly the registered overview and two model-group tutorials', async () => {
-    expect(registeredFiles).toEqual(['index.mdx', 'firefly-video-v2.mdx', 'video-v1.mdx']);
+  it('publishes exactly the registered overview and Firefly Video v2 tutorial', async () => {
+    expect(registeredFiles).toEqual(['index.mdx', 'firefly-video-v2.mdx']);
     expect(registeredRoutes).toEqual([
       '/docs/thq-video-api/',
       '/docs/thq-video-api/firefly-video-v2',
-      '/docs/thq-video-api/video-v1',
     ]);
     expect(await collectMdxFiles(docsRoot)).toEqual([...registeredFiles].toSorted());
   });
@@ -98,35 +97,13 @@ describe('THQ Video API documentation contract', () => {
     }
   });
 
-  it('keeps the Video V1 tutorial for text, single-image, and multi-image generation', async () => {
-    const content = await readFile(path.join(docsRoot, 'video-v1.mdx'), 'utf8');
-
-    for (const requiredText of [
-      'video-v1-5s',
-      'video-v1-10s',
-      'video-v1-15s',
-      'Video V1 对应 SD2-fast',
-      '/v1/video/generations',
-      'data:image/jpeg;base64,',
-      '"image"',
-      '"images"',
-      'SUCCESS',
-      'FAILURE',
-      'result_url',
-    ]) {
-      expect(content, `Video V1 guide is missing ${requiredText}`).toContain(requiredText);
-    }
-  });
-
-  it('publishes the current per-second pricing for every video model group', async () => {
+  it('publishes the current per-second pricing for the Firefly Video v2 model group', async () => {
     const firefly = await readFile(path.join(docsRoot, 'firefly-video-v2.mdx'), 'utf8');
-    const videoV1 = await readFile(path.join(docsRoot, 'video-v1.mdx'), 'utf8');
 
     expect(firefly).toContain('| `firefly-video-v2-fast` | 0.2 / 秒 |');
     expect(firefly).toContain('| `firefly-video-v2` | 0.3 / 秒 |');
     expect(firefly).not.toContain('0.15 / 秒');
     expect(firefly).not.toContain('0.17 / 秒');
-    expect(videoV1).toContain('SD2-fast（Video V1）的三个时长模型均按 **0.2 / 秒**计费。');
   });
 
   it('does not publish references to missing local documents', async () => {

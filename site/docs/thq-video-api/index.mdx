@@ -1,6 +1,6 @@
 ---
 title: SD2 视频模型 API 中转站｜THQ Video API
-description: THQ Video API 是面向视频生成的 API 中转服务，提供满血 SD2 与 SD2-fast 两组文生视频、图生视频和多图转场接口。
+description: THQ Video API 是面向视频生成的 API 中转服务，提供满血 SD2 与 SD2-fast 视频生成接口。
 ---
 
 # THQ Video API
@@ -10,23 +10,13 @@ THQ API 分开部署，统一使用 `new.thqllm.com` 作为视频生成接口入
 
 <ProjectLink href="https://new.thqllm.com/">打开 THQ Video API 控制台</ProjectLink>
 
-## 两组视频模型
-
-### 满血 SD2
+## Firefly Video v2 模型组
 
 满血 SD2 对应真实模型 ID `firefly-video-v2`，同时提供 `firefly-video-v2-fast` 这一
-SD2-fast 模型。满血 SD2 支持文生视频、分镜视频、首尾帧和多种参考素材上传，
+SD2-fast 模型。Firefly Video v2 支持文生视频、分镜视频、首尾帧和多种参考素材上传，
 标准模型支持 1080p，适合需要更高输出规格的生成任务。
 
 [阅读 SD2 接入教程](/docs/thq-video-api/firefly-video-v2)
-
-### SD2-fast
-
-SD2-fast 的 Video V1 接口提供 `video-v1-5s`、`video-v1-10s` 和 `video-v1-15s` 三个
-按时长区分的真实模型 ID，Video V1 对应 SD2-fast，支持文生视频、单图生视频和多图转场成片。
-参考图片使用带 MIME 前缀的 base64 data-URI 传入。
-
-[阅读 SD2-fast 接入教程](/docs/thq-video-api/video-v1)
 
 ## 专用服务地址
 
@@ -35,11 +25,8 @@ SD2-fast 的 Video V1 接口提供 `video-v1-5s`、`video-v1-10s` 和 `video-v1-
 | 控制台与账号入口 | `https://new.thqllm.com` |
 | API 基址 | `https://new.thqllm.com` |
 
-满血 SD2 的接口路径从 `/v1` 开始，例如创建任务使用
-`https://new.thqllm.com/v1/videos`。SD2-fast（Video V1）的创建与查询接口使用
-`https://new.thqllm.com/v1/video/generations`。
-
-两组接口的任务路径不同，请按对应模型组教程调用，不要把两套创建和轮询路径混用。
+满血 SD2 与 SD2-fast 的接口路径从 `/v1` 开始，例如创建任务使用
+`https://new.thqllm.com/v1/videos`。
 
 ## 鉴权
 
