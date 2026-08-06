@@ -50,6 +50,10 @@ export function SeoIntroBand() {
           等模型的统一接入，也适合连接 AI 编程、Agent 和自动化应用。 关于 AI 代充、GPT 代充、Claude
           代充等账户服务，请以对应项目控制台展示的官方入口和规则为准。
         </p>
+        <p>
+          新增的 THQ Video API 专注视频模型 API 中转，覆盖 Firefly Video v2 与 Video V1
+          两组视频生成能力，支持文生视频、图生视频和多图转场等调用方式。
+        </p>
       </div>
     </section>
   );

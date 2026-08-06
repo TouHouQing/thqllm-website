@@ -1,0 +1,476 @@
+---
+title: Firefly Video v2 视频生成 API 接入教程｜THQ Video API
+description: 使用 THQ Video API 的 Firefly Video v2 与 Fast 模型完成文生视频、分镜生成、参考素材上传、任务轮询和视频下载。
+---
+
+# Firefly Video v2 接入教程
+
+本页介绍 THQ Video API 对外开放的 Firefly Video v2 视频生成接口。所有示例都使用
+`new.thqllm.com`，不需要也不能替换成其他站点的源站地址。
+
+## 1. 接口速览
+
+| 功能 | 方法 | 路径 |
+| --- | --- | --- |
+| 获取模型列表 | GET | `/v1/models` |
+| 创建视频任务 | POST | `/v1/videos` |
+| 查询任务 | GET | `/v1/videos/{task_id}` |
+| 获取视频信息 | HEAD | `/v1/videos/{task_id}/content` |
+| 播放或下载视频 | GET | `/v1/videos/{task_id}/content` |
+
+公开模型：
+
+- `firefly-video-v2`
+- `firefly-video-v2-fast`
+
+所有接口均使用 THQ Video API Key 鉴权：
+
+```http
+Authorization: Bearer YOUR_THQ_VIDEO_API_KEY
+```
+
+## 2. 模型能力与价格
+
+| 模型 | 480p | 720p | 1080p | 时长 | 生成音频 |
+| --- | --- | --- | --- | --- | --- |
+| `firefly-video-v2-fast` | 支持 | 支持 | 不支持 | 5 / 10 / 15 秒 | 支持 |
+| `firefly-video-v2` | 支持 | 支持 | 支持 | 5 / 10 / 15 秒 | 支持 |
+
+控制台模型广场显示的基础价格：
+
+| 模型 | 基础价格 |
+| --- | ---: |
+| `firefly-video-v2-fast` | 0.2 / 秒 |
+| `firefly-video-v2` | 0.3 / 秒 |
+
+实际任务按模型和时长计费；同一模型在可用分辨率范围内使用相同单价：
+
+| 模型 | 单价 | 5 秒 | 10 秒 | 15 秒 |
+| --- | ---: | ---: | ---: | ---: |
+| `firefly-video-v2-fast` | 0.2 / 秒 | 1.00 | 2.00 | 3.00 |
+| `firefly-video-v2` | 0.3 / 秒 | 1.50 | 3.00 | 4.50 |
+
+价格以 [THQ Video API 控制台](https://new.thqllm.com/)的模型广场和任务实际扣费为准。
+参数校验失败的请求不扣费；任务被确认失败后自动退款。
+
+## 3. 获取模型列表
+
+调用前可以先确认账户当前可用模型：
+
+```bash
+export THQ_VIDEO_API_KEY="YOUR_THQ_VIDEO_API_KEY"
+
+curl -sS https://new.thqllm.com/v1/models \
+  -H "Authorization: Bearer $THQ_VIDEO_API_KEY"
+```
+
+API Key 没有对应模型权限或余额不足时，创建任务会失败。请先检查返回列表中是否包含要使用的
+模型 ID。
+
+## 4. 创建纯文本视频
+
+不上传参考素材时，使用 UTF-8 JSON：
+
+```bash
+curl -sS https://new.thqllm.com/v1/videos \
+  -H "Authorization: Bearer $THQ_VIDEO_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "firefly-video-v2-fast",
+    "prompt": "雨后的城市街道，镜头平稳向前移动，霓虹灯在湿润路面形成倒影",
+    "negative_prompt": "文字，字幕，水印，画面抖动",
+    "duration": 5,
+    "resolution": "720p",
+    "aspect_ratio": "16:9",
+    "generate_audio": true,
+    "seed": 20260728
+  }'
+```
+
+### JSON 参数
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `model` | string | 是 | 无 | 只能使用公开模型名 |
+| `prompt` | string | 条件必填 | 无 | 1–1500 字符；使用 `shots` 时可省略 |
+| `negative_prompt` | string | 否 | 空 | 最多 1500 字符 |
+| `duration` | integer | 否 | 5 | 只能是 5、10、15 |
+| `resolution` | string | 否 | `720p` | `480p`、`720p`；Standard 额外支持 `1080p` |
+| `aspect_ratio` | string | 否 | `16:9` | `21:9`、`16:9`、`4:3`、`1:1`、`3:4`、`9:16` |
+| `generate_audio` | boolean | 否 | `false` | 是否生成音频，JSON 中必须使用布尔值 |
+| `seed` | integer | 否 | 随机 | 取值范围 0–2147483647 |
+| `shots` | array | 否 | 无 | 2–15 个分镜，分镜时长之和必须等于 `duration` |
+
+JSON 请求不能携带参考图片、视频或音频。带参考素材的任务必须使用
+`multipart/form-data` 上传真实文件。
+
+## 5. 创建分镜视频
+
+每个分镜只能包含 `prompt` 和 `duration`。所有分镜的 `duration` 之和必须等于任务总时长：
+
+```bash
+curl -sS https://new.thqllm.com/v1/videos \
+  -H "Authorization: Bearer $THQ_VIDEO_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "firefly-video-v2",
+    "duration": 15,
+    "resolution": "720p",
+    "aspect_ratio": "16:9",
+    "generate_audio": true,
+    "shots": [
+      {"prompt": "广角镜头，两个人走进阳光照射的教室", "duration": 5},
+      {"prompt": "中景镜头，两人在窗边交谈", "duration": 5},
+      {"prompt": "近景镜头，两人相视微笑", "duration": 5}
+    ]
+  }'
+```
+
+## 6. 上传参考素材
+
+包含任意参考素材时，请求必须使用 `multipart/form-data`。不要手动设置 `Content-Type` 的
+boundary，让 HTTP 客户端自动生成。
+
+### 文件字段
+
+| 字段 | 数量 | 用途 |
+| --- | ---: | --- |
+| `first_frame` | 最多 1 张 | 首帧参考图片 |
+| `last_frame` | 最多 1 张 | 尾帧参考图片 |
+| `images` | 可重复 | 人物、场景、风格等图片参考 |
+| `videos` | 可重复 | 动作或运镜视频参考 |
+| `audios` | 可重复 | 音频参考 |
+
+多个同类素材必须重复使用相同字段名：
+
+```bash
+-F "images=@./reference-1.jpg" \
+-F "images=@./reference-2.png"
+```
+
+### 完整 multipart 示例
+
+```bash
+curl -sS https://new.thqllm.com/v1/videos \
+  -H "Authorization: Bearer $THQ_VIDEO_API_KEY" \
+  -F "model=firefly-video-v2" \
+  -F "prompt=保持参考人物和场景一致，生成自然、克制的电影感运动" \
+  -F "negative_prompt=文字，字幕，水印，身份漂移" \
+  -F "duration=15" \
+  -F "resolution=720p" \
+  -F "aspect_ratio=16:9" \
+  -F "generate_audio=true" \
+  -F "first_frame=@./first-frame.jpg" \
+  -F "last_frame=@./last-frame.jpg" \
+  -F "images=@./character-reference.png" \
+  -F "videos=@./motion-reference.mp4" \
+  -F "audios=@./dialogue-reference.wav"
+```
+
+multipart 普通参数均以字符串传递：
+
+- `duration` 只能是字符串 `5`、`10`、`15`。
+- `generate_audio` 只能是小写字符串 `true` 或 `false`。
+- `seed` 使用无前导零的十进制字符串。
+- `shots` 使用 JSON 数组序列化后的字符串。
+
+### 素材限制
+
+| 素材 | 格式 | 数量 | 大小 | 其它限制 |
+| --- | --- | ---: | ---: | --- |
+| 图片 | JPEG、PNG、WebP | 包含首尾帧最多 9 张 | 每张最多 30,000,000 字节 | 必须是有效图片 |
+| 视频 | MP4、MOV | 最多 3 个 | 合计最多 50,000,000 字节 | 合计 2–15 秒；短边 480–720；长边不超过 1280 |
+| 音频 | MP3、WAV | 最多 3 个 | 每个最多 15,000,000 字节 | 合计不超过 15 秒 |
+| 全部素材 | 上述格式 | 合计最多 12 个 | 受各类型限制 | 音频必须同时存在图片或视频 |
+
+整个 HTTP 请求最大为 384 MiB。空文件、伪造格式、重复复用同一个上传对象或未知素材字段会被
+拒绝。
+
+本接口不接受参考素材 URL、文件路径字符串、`asset_id` 或 JSON Base64。所有参考素材必须作为
+multipart 文件上传。
+
+### 人物图片兼容处理
+
+为提高人物参考素材的任务成功率，平台可能自动对上传图片中的人物区域进行兼容性预处理：
+
+- 只处理 `first_frame`、`last_frame`、`images`。
+- 不处理上传的视频和音频。
+- 不追加、删除或改写客户的 `prompt`、`negative_prompt`、`shots`。
+- 处理后的图片局部像素可能发生变化，并可能影响生成视频的首帧表现。
+
+如果业务要求参考图片像素完全不变，请不要提交需要自动兼容处理的人物图片。
+
+## 7. 创建响应
+
+任务创建成功返回 HTTP 200。请立即保存 `id` 或 `task_id`，二者均为 THQ Video API 公网任务 ID：
+
+```json
+{
+  "id": "task_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "task_id": "task_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "object": "video",
+  "model": "firefly-video-v2-fast",
+  "status": "queued",
+  "progress": 0,
+  "created_at": 1785220000,
+  "seconds": "5"
+}
+```
+
+不要解析或依赖任务 ID 的内部格式。
+
+## 8. 查询任务
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer $THQ_VIDEO_API_KEY" \
+  "https://new.thqllm.com/v1/videos/task_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
+建议每 3–5 秒查询一次，不要高频轮询。
+
+| 状态 | 含义 | 客户端处理 |
+| --- | --- | --- |
+| `queued` | 排队或等待资源 | 继续轮询 |
+| `processing` / `in_progress` | 正在处理 | 继续轮询 |
+| `completed` | 已完成 | 读取 `download_url` 并下载 |
+| `failed` | 已失败 | 停止轮询，记录 `error`；确认失败会自动退款 |
+
+完成响应示例：
+
+```json
+{
+  "id": "task_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "task_id": "task_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "object": "video",
+  "model": "firefly-video-v2-fast",
+  "status": "completed",
+  "progress": 100,
+  "seconds": "5",
+  "resolution": "720p",
+  "aspect_ratio": "16:9",
+  "download_url": "/v1/videos/task_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/content"
+}
+```
+
+失败响应示例：
+
+```json
+{
+  "status": "failed",
+  "error": {
+    "code": "generation_failed",
+    "message": "video generation failed"
+  }
+}
+```
+
+任务进入 `failed` 后不要继续轮询。请记录脱敏后的 `error` 信息，并在确认请求参数和账户状态后再决定是否重试。
+
+`download_url` 可能是相对路径。相对路径需要拼接 API 基址：
+
+```text
+https://new.thqllm.com + /v1/videos/<task_id>/content
+```
+
+## 9. 播放和下载视频
+
+下载接口同样需要 API Key，不能把带密钥的下载请求直接暴露在公开前端：
+
+```bash
+curl -fL \
+  -H "Authorization: Bearer $THQ_VIDEO_API_KEY" \
+  "https://new.thqllm.com/v1/videos/task_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/content" \
+  -o result.mp4
+```
+
+检查文件信息：
+
+```bash
+curl -I \
+  -H "Authorization: Bearer $THQ_VIDEO_API_KEY" \
+  "https://new.thqllm.com/v1/videos/task_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/content"
+```
+
+接口支持 HTTP Range，可用于拖动播放和断点续传：
+
+```bash
+curl -i \
+  -H "Authorization: Bearer $THQ_VIDEO_API_KEY" \
+  -H "Range: bytes=0-99" \
+  "https://new.thqllm.com/v1/videos/task_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/content"
+```
+
+有效 Range 请求返回 HTTP 206 和 `Content-Range`。
+
+## 10. Python 示例
+
+安装依赖：
+
+```bash
+pip install requests
+```
+
+下面的示例覆盖纯文本创建、轮询和下载：
+
+```python
+import pathlib
+import time
+from urllib.parse import urljoin
+
+import requests
+
+
+BASE_URL = "https://new.thqllm.com"
+API_KEY = "YOUR_THQ_VIDEO_API_KEY"
+HEADERS = {"Authorization": f"Bearer {API_KEY}"}
+
+payload = {
+    "model": "firefly-video-v2-fast",
+    "prompt": "A steady cinematic tracking shot through a rainy city street",
+    "duration": 5,
+    "resolution": "720p",
+    "aspect_ratio": "16:9",
+    "generate_audio": True,
+}
+
+response = requests.post(
+    f"{BASE_URL}/v1/videos",
+    headers=HEADERS,
+    json=payload,
+    timeout=120,
+)
+response.raise_for_status()
+task = response.json()
+task_id = task.get("id") or task["task_id"]
+
+deadline = time.time() + 3600
+while time.time() < deadline:
+    response = requests.get(
+        f"{BASE_URL}/v1/videos/{task_id}",
+        headers=HEADERS,
+        timeout=30,
+    )
+    response.raise_for_status()
+    task = response.json()
+    status = task.get("status")
+    if status == "completed":
+        break
+    if status == "failed":
+        raise RuntimeError(task.get("error") or "video generation failed")
+    time.sleep(5)
+else:
+    raise TimeoutError("video task polling timed out")
+
+download_url = urljoin(BASE_URL + "/", task["download_url"].lstrip("/"))
+with requests.get(download_url, headers=HEADERS, stream=True, timeout=300) as response:
+    response.raise_for_status()
+    with pathlib.Path("result.mp4").open("wb") as output:
+        for chunk in response.iter_content(1024 * 1024):
+            if chunk:
+                output.write(chunk)
+```
+
+上传图片参考时使用真实文件和 `multipart/form-data`：
+
+```python
+import requests
+
+
+base_url = "https://new.thqllm.com"
+api_key = "YOUR_THQ_VIDEO_API_KEY"
+
+data = {
+    "model": "firefly-video-v2",
+    "prompt": "Preserve the reference subject and create natural cinematic motion",
+    "duration": "10",
+    "resolution": "720p",
+    "aspect_ratio": "16:9",
+    "generate_audio": "true",
+}
+
+with open("first-frame.jpg", "rb") as first_frame, open("reference.png", "rb") as reference:
+    files = [
+        ("first_frame", ("first-frame.jpg", first_frame, "image/jpeg")),
+        ("images", ("reference.png", reference, "image/png")),
+    ]
+    response = requests.post(
+        f"{base_url}/v1/videos",
+        headers={"Authorization": f"Bearer {api_key}"},
+        data=data,
+        files=files,
+        timeout=300,
+    )
+
+response.raise_for_status()
+print(response.json())
+```
+
+## 11. 错误处理
+
+| HTTP 状态 | 常见含义 | 建议 |
+| ---: | --- | --- |
+| 400 | 模型、时长、分辨率、比例或文本参数无效 | 修正参数，不要原样重试 |
+| 401 | API Key 缺失、无效或已禁用 | 检查鉴权头和密钥状态 |
+| 402 / 403 | 余额不足、无模型权限或请求被平台拒绝 | 检查余额、分组和错误信息 |
+| 413 | 请求体、文件大小或素材数量超限 | 减少素材数量或大小 |
+| 415 | Content-Type 不支持 | 使用 JSON 或 multipart/form-data |
+| 422 | 素材内容、格式、尺寸、时长或组合无效 | 按错误码修正素材 |
+| 429 | 请求过快或暂时没有可用容量 | 退避后重试 |
+| 500 / 502 / 503 / 504 | 平台或上游暂时异常 | 先查询已有任务状态，不要盲目重复创建 |
+
+错误响应可能采用下面任一兼容格式：
+
+```json
+{
+  "error": {
+    "message": "invalid_resolution",
+    "type": "invalid_request_error",
+    "code": "invalid_resolution"
+  }
+}
+```
+
+或：
+
+```json
+{
+  "message": "上游返回的错误信息"
+}
+```
+
+客户端应同时读取顶层 `message` 和 `error.message`，不要只依赖单一错误结构。
+
+## 12. 重试与稳定性建议
+
+- 创建成功后立即持久化 `task_id`，任务轮询可以跨进程恢复。
+- 任务查询建议从 3–5 秒间隔开始，最长增加到 10 秒。
+- GET 查询、HEAD 和 Range 下载可以进行有限次数的指数退避重试。
+- POST 创建请求发生网络超时时，无法仅凭超时判断任务是否已被受理，不要立即无限重提。
+- `failed` 状态是终态；`queued`、`processing`、`in_progress` 不是失败。
+- 下载完成后检查 HTTP 状态、文件长度和视频能否正常解码。
+- 保存业务订单号与 `task_id` 的对应关系，但不要记录完整 API Key 或用户上传素材。
+
+## 13. 上线验收清单
+
+1. `GET /v1/models` 返回目标模型。
+2. 使用 JSON 创建一个 5 秒测试任务并保存 `task_id`。
+3. 轮询直到 `completed` 或 `failed`，不能只看创建接口 HTTP 200。
+4. 完成后使用带鉴权的 `download_url` 下载视频。
+5. 验证 HEAD 返回 200，Range 请求返回 206。
+6. 分别验证需要使用的模型、分辨率和时长。
+7. 使用素材时，分别验证图片、视频、音频及多参考图场景。
+8. 验证参数错误不扣费、确认失败自动退款。
+9. 确认日志和前端不泄漏 API Key。
+
+## 14. 不适用于 THQ Video API 的内容
+
+请只使用 `https://new.thqllm.com` 和本页列出的公开模型、接口路径与 API Key。不要混用其他服务商或源站资料中的：
+
+- 直连 IP、未验证域名、非公开模型名或未在本文列出的接口路径。
+- 后台管理接口、账户积分账本、客户端密钥、第三方任务下载地址或结果字段。
+- 自签名证书、关闭证书验证或跳过 TLS 校验的调用方式。
+- 远程素材 URL、`asset_id`、文件路径字符串或 JSON Base64；参考素材必须按本文要求以 multipart 文件上传。
+
+如需从其他模型组切换，请返回 [THQ Video API 概览](/docs/thq-video-api/) 或阅读
+[Video V1 接入教程](/docs/thq-video-api/video-v1)。

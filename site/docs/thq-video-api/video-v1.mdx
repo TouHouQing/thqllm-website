@@ -1,0 +1,267 @@
+---
+title: Video V1 视频生成 API 接入教程｜THQ Video API
+description: 使用 THQ Video API 的 Video V1 模型完成文生视频、单图生视频、多图转场、任务轮询和视频下载。
+---
+
+# Video V1 接入教程
+
+本页介绍 THQ Video API 的 Video V1 视频生成接口。Video V1 按输出时长区分模型，
+支持文生视频、单图生视频和多图转场成片。
+
+## 1. 模型与尺寸
+
+| 模型名 | 时长 | 支持比例 |
+| --- | --- | --- |
+| `video-v1-5s` | 5 秒 | 16:9 / 9:16 / 1:1 |
+| `video-v1-10s` | 10 秒 | 16:9 / 9:16 / 1:1 |
+| `video-v1-15s` | 15 秒 | 16:9 / 9:16 / 1:1 |
+
+| 比例 | 分辨率 | 适用场景 |
+| --- | --- | --- |
+| 16:9（横屏） | 1920×1080 | PC 展示、B 站、YouTube |
+| 9:16（竖屏） | 1080×1920 | 抖音、微信视频号、小红书 |
+| 1:1（方形） | 1080×1080 | 朋友圈、Instagram |
+
+## 2. 价格
+
+Video V1 的三个时长模型均按 **0.2 / 秒**计费。
+
+| 模型 | 单价 | 5 秒 | 10 秒 | 15 秒 |
+| --- | ---: | ---: | ---: | ---: |
+| `video-v1-5s` | 0.2 / 秒 | 1.00 | - | - |
+| `video-v1-10s` | 0.2 / 秒 | - | 2.00 | - |
+| `video-v1-15s` | 0.2 / 秒 | - | - | 3.00 |
+
+实际扣费以 [THQ Video API 控制台](https://new.thqllm.com/)的模型广场和任务记录为准。
+
+## 3. 提交生成任务
+
+### 请求
+
+```http
+POST https://new.thqllm.com/v1/video/generations
+Authorization: Bearer YOUR_THQ_VIDEO_API_KEY
+Content-Type: application/json
+```
+
+### 参数说明
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `model` | string | 是 | 模型名，见上表 |
+| `prompt` | string | 是 | 文生视频使用画面描述；图生视频使用运动描述，支持中英文 |
+| `image` | string | 否 | 单图生视频：一张参考图的 base64 data-URI |
+| `images` | string[] | 否 | 多图生视频：多张参考图的 base64 data-URI 数组，最多 8 张 |
+| `ratio` | string | 否 | 默认 `16:9`，可选 `9:16` / `1:1` |
+
+只传 `prompt` 时为文生视频；增加 `image` 时为单图生视频；传入 `images` 数组时为多图转场。
+三种模式的模型、轮询、下载方式和价格规则一致。
+
+### 文生视频请求示例
+
+```bash
+export THQ_VIDEO_API_KEY="YOUR_THQ_VIDEO_API_KEY"
+
+curl -sS https://new.thqllm.com/v1/video/generations \
+  -H "Authorization: Bearer $THQ_VIDEO_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "video-v1-5s",
+    "prompt": "一只橘猫在阳光下的草地上奔跑，慢动作，电影感",
+    "ratio": "16:9"
+  }'
+```
+
+返回示例：
+
+```json
+{
+  "task_id": "task_xxxxxxxxxxxxxxxxxxxx",
+  "status": "queued",
+  "seconds": "5"
+}
+```
+
+请立即保存返回的 `task_id`。不要解析任务 ID 的内部格式。
+
+## 4. 图生视频
+
+### 单图生视频
+
+在文生视频请求上增加 `image` 字段，让静态图按照提示词描述的动作动起来：
+
+```json
+{
+  "model": "video-v1-5s",
+  "prompt": "镜头缓缓推进，猫咪眨眼并轻轻转头",
+  "image": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ...（此处为整张图片的 base64 编码）",
+  "ratio": "16:9"
+}
+```
+
+参考图必须使用带 MIME 前缀的 data-URI：
+
+- JPEG 使用 `data:image/jpeg;base64,`
+- PNG 使用 `data:image/png;base64,`
+
+只放裸 base64 会失败。建议先把图片压到不超过 1024px，并优先使用 JPEG 以减少请求体积。
+
+### 多图生视频
+
+将多张参考图放入 `images` 数组，视频会按图片顺序生成转场画面。实测最多支持 8 张：
+
+```json
+{
+  "model": "video-v1-15s",
+  "prompt": "镜头平滑运镜，画面依次自然过渡",
+  "images": [
+    "data:image/jpeg;base64,/9j/4AAQ...（第 1 张）",
+    "data:image/jpeg;base64,/9j/4AAQ...（第 2 张）",
+    "data:image/jpeg;base64,/9j/4AAQ...（第 3 张，最多 8 张）"
+  ],
+  "ratio": "16:9"
+}
+```
+
+图片数量较多时建议使用 `video-v1-15s`，让每个场景拥有更充足的停留时间。只传一张图片时，
+请使用 `image` 字段。
+
+### 本地图片转 data-URI
+
+```python
+import base64
+
+with open("cat.jpg", "rb") as f:
+    data_uri = "data:image/jpeg;base64," + base64.b64encode(f.read()).decode()
+
+# 单图：{"model": "video-v1-5s", "prompt": "...", "image": data_uri}
+```
+
+图生视频的 `prompt` 应描述镜头运动、主体动作和转场节奏，不要重复描述图片已经包含的内容。
+例如：
+
+- `镜头缓慢拉远，人物微笑并挥手`
+- `主体轻微动起来，眨眼、转头，头发随风飘动`
+- `场景之间平滑淡入淡出，镜头保持稳定`
+
+## 5. 轮询任务状态
+
+请求：
+
+```http
+GET https://new.thqllm.com/v1/video/generations/{task_id}
+Authorization: Bearer YOUR_THQ_VIDEO_API_KEY
+```
+
+| status | 含义 | 处理建议 |
+| --- | --- | --- |
+| `queued` | 排队中 | 继续等待 |
+| `IN_PROGRESS` | 生成中 | 继续轮询，进度停在 5% 也可能是正常现象 |
+| `SUCCESS` | 生成完成 | 读取 `result_url` 下载视频 |
+| `FAILURE` | 生成失败 | 稍等后重新提交，并记录脱敏错误 |
+
+完成响应示例：
+
+```json
+{
+  "task_id": "task_xxxxxxxxxxxxxxxxxxxx",
+  "status": "SUCCESS",
+  "result_url": "/v1/videos/task_xxxxxxxxxxxxxxxxxxxx/content"
+}
+```
+
+视频下载地址为：
+
+```text
+https://new.thqllm.com/v1/videos/{task_id}/content
+```
+
+创建任务约需 3–5 分钟。轮询建议每 15 秒一次，不要在状态未变化时高频重复提交。
+
+## 6. Python 调用示例
+
+安装依赖：
+
+```bash
+pip install requests
+```
+
+以下示例提交一个文生视频任务，等待完成后打印下载地址：
+
+```python
+import requests
+import time
+
+
+API_KEY = "YOUR_THQ_VIDEO_API_KEY"
+BASE_URL = "https://new.thqllm.com"
+HEADERS = {
+    "Authorization": f"Bearer {API_KEY}",
+    "Content-Type": "application/json",
+}
+
+response = requests.post(
+    f"{BASE_URL}/v1/video/generations",
+    headers=HEADERS,
+    json={
+        "model": "video-v1-10s",
+        "prompt": "夕阳下的城市天际线，延时摄影，电影感",
+        "ratio": "16:9",
+    },
+    timeout=120,
+)
+response.raise_for_status()
+task_id = response.json()["task_id"]
+print(f"任务已提交：{task_id}")
+
+while True:
+    time.sleep(15)
+    result = requests.get(
+        f"{BASE_URL}/v1/video/generations/{task_id}",
+        headers={"Authorization": f"Bearer {API_KEY}"},
+        timeout=30,
+    ).json()
+    status = result.get("data", result).get("status")
+    print(f"状态：{status}")
+
+    if status == "SUCCESS":
+        video_url = f"{BASE_URL}/v1/videos/{task_id}/content"
+        print(f"视频地址：{video_url}")
+        break
+    if status == "FAILURE":
+        raise RuntimeError("视频生成失败，请稍后重新提交")
+```
+
+下载视频时仍需要带 API Key：
+
+```bash
+curl -fL \
+  -H "Authorization: Bearer $THQ_VIDEO_API_KEY" \
+  "https://new.thqllm.com/v1/videos/task_xxxxxxxxxxxxxxxxxxxx/content" \
+  -o result.mp4
+```
+
+## 7. 使用注意事项
+
+1. 生成时间通常约为 3–5 分钟，请耐心等待。
+2. 轮询建议间隔 15 秒，进度停在 5% 不一定代表任务卡死。
+3. 输出格式为 MP4，可直接下载或嵌入播放器。
+4. Prompt 越具体越容易得到稳定结果，建议包含主体、动作和画面风格。
+5. 遇到 `FAILURE` 时，等待 1–2 分钟后重新提交，避免短时间连续创建重复任务。
+6. 图生视频不需要图床，`image` 和 `images` 一律使用 base64 data-URI。
+7. 不要使用旧版图片直链方式，也不要省略 `data:image/...;base64,` 前缀。
+8. 不要在前端代码、公开仓库或日志中暴露 API Key。
+
+## 8. Prompt 示例
+
+| 场景 | Prompt 示例 |
+| --- | --- |
+| 产品展示 | 一款白色智能手表在大理石桌面上旋转展示，高清，商业摄影风格 |
+| 自然风景 | 青藏高原日出，云海翻涌，延时摄影，航拍视角，4K 电影感 |
+| 人物动作 | 一位女舞者在空旷的舞台上独舞，慢动作，逆光，艺术感 |
+| 城市夜景 | 上海外滩夜景，霓虹灯倒影在水面，延时摄影，广角 |
+| 竖屏短视频 | 一杯热咖啡冒着白色蒸汽，特写，暖色调，适合竖屏（使用 `ratio: 9:16`） |
+| 图生视频 | 镜头缓慢推进，主体轻微动起来，眨眼、转头，头发随风飘动，背景轻微虚化流动 |
+
+返回 [THQ Video API 概览](/docs/thq-video-api/) 或查看
+[Firefly Video v2 接入教程](/docs/thq-video-api/firefly-video-v2)。

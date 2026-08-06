@@ -1,0 +1,61 @@
+---
+title: 视频模型 API 中转站｜THQ Video API
+description: THQ Video API 是面向视频生成的 API 中转服务，提供 Firefly Video v2 与 Video V1 两组文生视频、图生视频和多图转场接口。
+---
+
+# THQ Video API
+
+THQ Video API 是 THQLLM 旗下专门面向视频模型的 API 中转服务。它与提供对话模型和生图模型的
+THQ API 分开部署，统一使用 `new.thqllm.com` 作为视频生成接口入口。
+
+<ProjectLink href="https://new.thqllm.com/">打开 THQ Video API 控制台</ProjectLink>
+
+## 两组视频模型
+
+### Firefly Video v2
+
+Firefly Video v2 提供 `firefly-video-v2` 和 `firefly-video-v2-fast` 两个模型，支持文生视频、
+分镜视频、首尾帧和多种参考素材上传。标准模型支持 1080p，适合需要更高输出规格的生成任务。
+
+[阅读 Firefly Video v2 接入教程](/docs/thq-video-api/firefly-video-v2)
+
+### Video V1
+
+Video V1 提供 `video-v1-5s`、`video-v1-10s` 和 `video-v1-15s` 三个按时长区分的模型，
+支持文生视频、单图生视频和多图转场成片。参考图片使用带 MIME 前缀的 base64 data-URI 传入。
+
+[阅读 Video V1 接入教程](/docs/thq-video-api/video-v1)
+
+## 专用服务地址
+
+| 用途 | 地址 |
+| --- | --- |
+| 控制台与账号入口 | `https://new.thqllm.com` |
+| API 基址 | `https://new.thqllm.com` |
+
+Firefly Video v2 的接口路径从 `/v1` 开始，例如创建任务使用
+`https://new.thqllm.com/v1/videos`。Video V1 的创建与查询接口使用
+`https://new.thqllm.com/v1/video/generations`。
+
+两组接口的任务路径不同，请按对应模型组教程调用，不要把两套创建和轮询路径混用。
+
+## 鉴权
+
+所有视频接口都使用 Bearer API Key：
+
+```http
+Authorization: Bearer YOUR_THQ_VIDEO_API_KEY
+```
+
+建议在可信的后端服务、本地开发环境或受控脚本中保存 Key。不要把真实 Key 写入前端网页、
+公开仓库、日志、截图或提交给第三方的排查信息。
+
+## 接入前准备
+
+1. 在 [THQ Video API 控制台](https://new.thqllm.com/)注册或登录。
+2. 创建用于视频生成的 API Key，并为不同应用或环境分配不同 Key。
+3. 确认目标模型、分辨率、时长和比例处于当前账户可用范围。
+4. 先使用最小文本请求验证鉴权，再接入参考图片、视频或音频等素材。
+5. 保存任务 ID，按照对应教程的建议间隔查询状态。
+
+模型可用性、余额和实际扣费以 `new.thqllm.com` 当前控制台展示为准。

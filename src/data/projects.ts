@@ -55,9 +55,35 @@ export const projects = projectListSchema.parse([
     featured: true,
   },
   {
+    id: 'thq-video-api',
+    name: 'THQ Video API',
+    stageLabel: 'STAGE 02',
+    categoryLabel: 'VIDEO MODEL API',
+    description:
+      '面向视频生成应用的模型 API 中转服务，提供文生视频、图生视频、多图转场与 Firefly Video v2 等视频模型接入。',
+    externalUrl: 'https://new.thqllm.com/',
+    docs: {
+      basePath: '/docs/thq-video-api/',
+      sections: [
+        {
+          text: '开始接入',
+          items: [
+            { text: '概览', slug: 'index' },
+            { text: 'Firefly Video v2', slug: 'firefly-video-v2' },
+            { text: 'Video V1', slug: 'video-v1' },
+          ],
+        },
+      ],
+    },
+    accent: 'sakura',
+    tags: ['视频生成', '文生视频 / 图生视频', 'Firefly / Video V1'],
+    order: 2,
+    featured: true,
+  },
+  {
     id: 'fluctgraph',
     name: 'FluctGraph',
-    stageLabel: 'STAGE 02',
+    stageLabel: 'STAGE 03',
     categoryLabel: 'KNOWLEDGE GRAPH',
     description: '面向 AI IDE 和 Agent 工作流的私有知识图谱接入层。',
     externalUrl: 'https://graph.thqllm.com/',
@@ -79,7 +105,7 @@ export const projects = projectListSchema.parse([
     },
     accent: 'vermilion',
     tags: ['知识图谱', 'MCP', 'Agent'],
-    order: 2,
+    order: 3,
     featured: true,
   },
   {
@@ -107,7 +133,7 @@ export const projects = projectListSchema.parse([
     },
     accent: 'gold',
     tags: ['图像生成', '图像编辑', '提示词'],
-    order: 3,
+    order: 4,
     featured: true,
   },
 ]);

@@ -88,6 +88,11 @@ describe('project registry', () => {
           externalUrl: 'https://sub.thqllm.com/',
         }),
         expect.objectContaining({
+          id: 'thq-video-api',
+          name: 'THQ Video API',
+          externalUrl: 'https://new.thqllm.com/',
+        }),
+        expect.objectContaining({
           id: 'toho-image-studio',
           name: 'Toho Image Studio',
           externalUrl: 'https://img.thqllm.com/',
@@ -96,17 +101,34 @@ describe('project registry', () => {
     );
   });
 
-  it('puts THQ API before FluctGraph across the project registry', () => {
+  it('puts the video API directly after THQ API across the project registry', () => {
     expect(projects.map((project) => project.id)).toEqual([
       'thq-api',
+      'thq-video-api',
       'fluctgraph',
       'toho-image-studio',
     ]);
-    expect(projects.map((project) => project.order)).toEqual([1, 2, 3]);
+    expect(projects.map((project) => project.order)).toEqual([1, 2, 3, 4]);
     expect(projects.map((project) => project.stageLabel)).toEqual([
       'STAGE 01',
       'STAGE 02',
+      'STAGE 03',
       'EXTRA STAGE',
+    ]);
+  });
+
+  it('registers two model-group tutorials for THQ Video API', () => {
+    const videoApi = projects.find((project) => project.id === 'thq-video-api');
+
+    expect(videoApi?.docs?.sections).toEqual([
+      {
+        text: '开始接入',
+        items: [
+          { text: '概览', slug: 'index' },
+          { text: 'Firefly Video v2', slug: 'firefly-video-v2' },
+          { text: 'Video V1', slug: 'video-v1' },
+        ],
+      },
     ]);
   });
 

@@ -5,7 +5,7 @@ import { createProjectDocRoutePath } from './project-doc-routes';
 export const SITE_ORIGIN = 'https://thqllm.com';
 export const HOME_TITLE = 'THQLLM｜AI 大模型中转站与 Codex 中转 API';
 export const HOME_DESCRIPTION =
-  'THQLLM 提供 AI 大模型 API、企业级 AI 中转站、Codex/GPT/Claude 中转站、AI 编程与图像生成项目入口，并整理 AI 代充、GPT 代充、Claude 代充相关服务说明。';
+  'THQLLM 提供 AI 大模型 API、视频模型 API、企业级 AI 中转站、Codex/GPT/Claude 中转站、AI 编程与图像生成项目入口，并整理 AI 代充、GPT 代充、Claude 代充相关服务说明。';
 
 const SITE_DESCRIPTION = HOME_DESCRIPTION;
 
@@ -18,6 +18,9 @@ const SITE_KEYWORDS = [
   'Codex 中转站',
   'GPT 中转站',
   'Claude 中转站',
+  '视频模型 API',
+  '视频生成 API',
+  '图生视频 API',
   'AI 代充',
 ];
 
@@ -101,7 +104,9 @@ function createProjectDirectoryData(projectRegistry: readonly ProjectDefinition[
       item: {
         '@type': 'WebApplication',
         applicationCategory:
-          project.id === 'toho-image-studio' ? 'MultimediaApplication' : 'DeveloperApplication',
+          project.id === 'toho-image-studio' || project.id === 'thq-video-api'
+            ? 'MultimediaApplication'
+            : 'DeveloperApplication',
         description: project.description,
         name: project.name,
         operatingSystem: 'Web',
