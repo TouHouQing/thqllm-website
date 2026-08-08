@@ -48,7 +48,7 @@ async function readVideoDocs() {
 }
 
 describe('THQ Video API documentation contract', () => {
-  it('publishes exactly the registered overview and Firefly Video v2 tutorial', async () => {
+  it('publishes exactly the registered overview and shared SD2 tutorial', async () => {
     expect(registeredFiles).toEqual(['index.mdx', 'firefly-video-v2.mdx']);
     expect(registeredRoutes).toEqual([
       '/docs/thq-video-api/',
@@ -68,10 +68,36 @@ describe('THQ Video API documentation contract', () => {
     expect(combinedContent).not.toMatch(/YCYAPI|Adobe2API|192\.6\.121\.6/i);
   });
 
-  it('keeps the Firefly Video v2 tutorial as a complete multipart task workflow', async () => {
+  it('keeps the overview page focused on the first successful call', async () => {
+    const content = await readFile(path.join(docsRoot, 'index.mdx'), 'utf8');
+
+    for (const requiredText of [
+      '第一次使用：照着 5 步完成',
+      '先选一个模型',
+      '创建视频任务',
+      '查询视频任务',
+      '下载生成结果',
+      '所有模型都使用同一套接口格式',
+    ]) {
+      expect(content, `Video API overview is missing ${requiredText}`).toContain(requiredText);
+    }
+  });
+
+  it('keeps the SD2 tutorial organized around a first successful task', async () => {
     const content = await readFile(path.join(docsRoot, 'firefly-video-v2.mdx'), 'utf8');
 
     for (const requiredText of [
+      '先看懂 4 步调用流程',
+      '选择模型',
+      '准备 API Key',
+      '创建第一条视频',
+      '等待视频生成完成',
+      '下载视频',
+      '进阶：使用参考图、视频或音频',
+      '进阶：使用分镜生成连续画面',
+      '价格说明',
+      '常见问题',
+      '上线前检查',
       'firefly-video-v2',
       'firefly-video-v2-fast',
       'leonardo-seedance-2.0',
@@ -79,8 +105,6 @@ describe('THQ Video API documentation contract', () => {
       '满血 SD2',
       'SD2-fast',
       'Leonardo Seedance 2.0',
-      '同 firefly-video-v2',
-      '同 firefly-video-v2-fast',
       '/v1/models',
       '/v1/videos',
       '/v1/videos/{task_id}',
@@ -93,7 +117,7 @@ describe('THQ Video API documentation contract', () => {
       'completed',
       'failed',
       'generation_failed',
-      '不适用于 THQ Video API 的内容',
+      '避免这些常见错误',
       '远程素材 URL',
       'JSON Base64',
       '跳过 TLS',
@@ -107,16 +131,11 @@ describe('THQ Video API documentation contract', () => {
   it('publishes the current per-second pricing for the Firefly Video v2 model group', async () => {
     const firefly = await readFile(path.join(docsRoot, 'firefly-video-v2.mdx'), 'utf8');
 
-    expect(firefly).toContain('| `firefly-video-v2-fast` | 480p | 0.15 / 秒 |');
-    expect(firefly).toContain('| `firefly-video-v2-fast` | 720p | 0.18 / 秒 |');
-    expect(firefly).toContain('| `firefly-video-v2` | 480p | 0.18 / 秒 |');
-    expect(firefly).toContain('| `firefly-video-v2` | 720p | 0.25 / 秒 |');
-    expect(firefly).toContain('| `firefly-video-v2` | 1080p | 0.5 / 秒 |');
-    expect(firefly).toContain('| `leonardo-seedance-2.0` | 480p | 0.18 / 秒 |');
-    expect(firefly).toContain('| `leonardo-seedance-2.0` | 720p | 0.25 / 秒 |');
-    expect(firefly).toContain('| `leonardo-seedance-2.0-fast` | 480p | 0.15 / 秒 |');
-    expect(firefly).toContain('| `leonardo-seedance-2.0-fast` | 720p | 0.18 / 秒 |');
-    expect(firefly).not.toContain('| `leonardo-seedance-2.0` | 1080p |');
+    expect(firefly).toContain('| `firefly-video-v2-fast` | 0.15 / 秒 | 0.18 / 秒 | 不支持 |');
+    expect(firefly).toContain('| `firefly-video-v2` | 0.18 / 秒 | 0.25 / 秒 | 0.5 / 秒 |');
+    expect(firefly).toContain('| `leonardo-seedance-2.0-fast` | 0.15 / 秒 | 0.18 / 秒 | 不支持 |');
+    expect(firefly).toContain('| `leonardo-seedance-2.0` | 0.18 / 秒 | 0.25 / 秒 | 不支持 |');
+    expect(firefly).not.toContain('`leonardo-seedance-2.0` | 0.18 / 秒 | 0.25 / 秒 | 0.5 / 秒');
   });
 
   it('does not publish references to missing local documents', async () => {

@@ -1,51 +1,75 @@
 ---
-title: SD2 视频模型 API 中转站｜THQ Video API
-description: THQ Video API 是面向视频生成的 API 中转服务，提供满血 SD2 与 SD2-fast 视频生成接口。
+title: THQ Video API 文档｜SD2 视频生成 API 中转站
+description: 通过 THQ Video API 调用 Firefly Video v2 和 Leonardo Seedance 2.0，完成文生视频、图生视频、分镜生成和视频下载。
 ---
 
 # THQ Video API
 
-THQ Video API 是 THQLLM 旗下专门面向视频模型的 API 中转服务。它与提供对话模型和生图模型的
-THQ API 分开部署，统一使用 `new.thqllm.com` 作为视频生成接口入口。
+THQ Video API 是 THQLLM 面向视频生成场景提供的 API 中转服务。
+你只需要准备一个 API Key，提交视频任务，等待任务完成，再下载生成结果。
+服务地址统一是 `new.thqllm.com`，不需要填写其他源站地址。
 
 <ProjectLink href="https://new.thqllm.com/">打开 THQ Video API 控制台</ProjectLink>
 
-## SD2 模型组
+## 第一次使用：照着 5 步完成
 
-SD2 组包含 Firefly Video v2 与 Leonardo Seedance 2.0 两个模型家族。
-Firefly Video v2 对应真实模型 ID `firefly-video-v2` 和 `firefly-video-v2-fast`；
-Leonardo Seedance 2.0 对应真实模型 ID `leonardo-seedance-2.0` 和 `leonardo-seedance-2.0-fast`。
-两者都支持文生视频、分镜视频、首尾帧和多种参考素材上传，但 Leonardo Seedance 2.0 不提供 1080p。
+不需要先理解所有参数，按下面顺序就能生成第一条视频：
 
-[阅读 SD2 接入教程](/docs/thq-video-api/firefly-video-v2)
+1. 在 [THQ Video API 控制台](https://new.thqllm.com/)注册或登录。
+2. 创建一个 API Key，并复制保存。
+3. 打开 [SD2 接入教程](/docs/thq-video-api/firefly-video-v2)，复制“第一次调用”中的命令。
+4. 提交任务后保存任务 ID，并查询到状态变成 `completed`。
+5. 使用教程中的下载命令保存视频。
+
+## 先选一个模型
+
+如果你还不知道选哪个，第一次直接使用 `firefly-video-v2-fast`，并选择 5 秒、720p。
+这套参数适合先确认 API Key、账户和调用流程是否正常。
+
+| 模型 | 适合场景 | 分辨率 | 时长 |
+| --- | --- | --- | --- |
+| `firefly-video-v2` | 画质优先，需要 1080p | 480p / 720p / 1080p | 5 / 10 / 15 秒 |
+| `firefly-video-v2-fast` | 先测试效果，速度和成本优先 | 480p / 720p | 5 / 10 / 15 秒 |
+| `leonardo-seedance-2.0` | Leonardo Seedance 2.0 标准速度 | 480p / 720p | 5 / 10 / 14 秒 |
+| `leonardo-seedance-2.0-fast` | Leonardo Seedance 2.0 速度优先 | 480p / 720p | 5 / 10 / 14 秒 |
+
+只需要记住：
+
+- 想要最高输出规格，选择 `firefly-video-v2`。
+- 想先快速跑通，选择 `firefly-video-v2-fast`。
+- 想使用 Leonardo Seedance 2.0，选择以 `leonardo-seedance-2.0` 开头的模型。
+- 所有模型都使用同一套接口格式，只需要替换 `model` 参数。
 
 ## 专用服务地址
 
 | 用途 | 地址 |
 | --- | --- |
 | 控制台与账号入口 | `https://new.thqllm.com` |
-| API 基址 | `https://new.thqllm.com` |
+| API 基址 | `https://new.thqllm.com/v1` |
+| 模型列表 | `GET https://new.thqllm.com/v1/models` |
+| 创建视频任务 | `POST https://new.thqllm.com/v1/videos` |
+| 查询视频任务 | `GET https://new.thqllm.com/v1/videos/{task_id}` |
+| 下载生成结果 | `GET https://new.thqllm.com/v1/videos/{task_id}/content` |
 
-满血 SD2 与 SD2-fast 的接口路径从 `/v1` 开始，例如创建任务使用
+调用接口时，完整地址就是“API 基址 + 接口路径”。例如创建任务：
 `https://new.thqllm.com/v1/videos`。
 
-## 鉴权
+## 你需要准备什么
 
-所有视频接口都使用 Bearer API Key：
+只需要两个东西：
+
+- THQ Video API Key
+- 一个视频提示词 `prompt`
+
+有参考图片、视频或音频时，再使用 `multipart/form-data` 上传素材。
+
+## 认证方式
+
+所有请求都需要携带 Bearer API Key：
 
 ```http
 Authorization: Bearer YOUR_THQ_VIDEO_API_KEY
 ```
 
-建议在可信的后端服务、本地开发环境或受控脚本中保存 Key。不要把真实 Key 写入前端网页、
-公开仓库、日志、截图或提交给第三方的排查信息。
-
-## 接入前准备
-
-1. 在 [THQ Video API 控制台](https://new.thqllm.com/)注册或登录。
-2. 创建用于视频生成的 API Key，并为不同应用或环境分配不同 Key。
-3. 确认目标模型、分辨率、时长和比例处于当前账户可用范围。
-4. 先使用最小文本请求验证鉴权，再接入参考图片、视频或音频等素材。
-5. 保存任务 ID，按照对应教程的建议间隔查询状态。
-
-模型可用性、余额和实际扣费以 `new.thqllm.com` 当前控制台展示为准。
+模型列表、账户余额和实际扣费以 [THQ Video API 控制台](https://new.thqllm.com/)当前显示为准。
+建议只在后端、本地开发环境或受控脚本中保存 API Key，不要把真实 Key 放进公开前端代码。
