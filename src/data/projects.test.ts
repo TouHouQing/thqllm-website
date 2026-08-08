@@ -90,6 +90,7 @@ describe('project registry', () => {
         expect.objectContaining({
           id: 'thq-video-api',
           name: 'THQ Video API',
+          description: expect.stringContaining('Leonardo Seedance 2.0'),
           externalUrl: 'https://new.thqllm.com/',
         }),
         expect.objectContaining({
@@ -117,7 +118,7 @@ describe('project registry', () => {
     ]);
   });
 
-  it('registers the Firefly Video v2 tutorial for THQ Video API', () => {
+  it('registers the shared SD2 tutorial for THQ Video API', () => {
     const videoApi = projects.find((project) => project.id === 'thq-video-api');
 
     expect(videoApi?.docs?.sections).toEqual([

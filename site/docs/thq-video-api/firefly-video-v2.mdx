@@ -1,13 +1,15 @@
 ---
-title: 满血 SD2 视频生成 API 接入教程｜THQ Video API
-description: 使用 THQ Video API 的满血 SD2 与 SD2-fast 模型完成文生视频、分镜生成、参考素材上传、任务轮询和视频下载。
+title: SD2 视频生成 API 接入教程｜THQ Video API
+description: 使用 THQ Video API 的 Firefly Video v2 与 Leonardo Seedance 2.0 完成文生视频、分镜生成、参考素材上传、任务轮询和视频下载。
 ---
 
-# 满血 SD2 接入教程
+# SD2 接入教程
 
-本页介绍 THQ Video API 对外开放的满血 SD2 视频生成接口。满血 SD2 的真实模型 ID 是
-`firefly-video-v2`，快速模型 `firefly-video-v2-fast` 对应 SD2-fast。所有示例都使用
-`new.thqllm.com`，不需要也不能替换成其他站点的源站地址。
+本页介绍 THQ Video API 的 SD2 视频生成接口。当前 SD2 组对应四个公开模型：
+满血 SD2 对应 `firefly-video-v2`，SD2-fast 对应 `firefly-video-v2-fast`；
+Leonardo Seedance 2.0 同 firefly-video-v2，对应 `leonardo-seedance-2.0`；
+Leonardo Seedance 2.0 Fast 同 firefly-video-v2-fast，对应 `leonardo-seedance-2.0-fast`。
+它们都通过 `new.thqllm.com` 提供服务，但价格和可用分辨率略有不同。
 
 ## 1. 接口速览
 
@@ -21,8 +23,10 @@ description: 使用 THQ Video API 的满血 SD2 与 SD2-fast 模型完成文生�
 
 公开模型：
 
-- 满血 SD2：`firefly-video-v2`
-- SD2-fast：`firefly-video-v2-fast`
+- Firefly Video v2：`firefly-video-v2`
+- Firefly Video v2 Fast：`firefly-video-v2-fast`
+- Leonardo Seedance 2.0：`leonardo-seedance-2.0`
+- Leonardo Seedance 2.0 Fast：`leonardo-seedance-2.0-fast`
 
 所有接口均使用 THQ Video API Key 鉴权：
 
@@ -32,24 +36,36 @@ Authorization: Bearer YOUR_THQ_VIDEO_API_KEY
 
 ## 2. 模型能力与价格
 
+### Firefly Video v2
+
 | 模型 | 480p | 720p | 1080p | 时长 | 生成音频 |
 | --- | --- | --- | --- | --- | --- |
 | `firefly-video-v2-fast` | 支持 | 支持 | 不支持 | 5 / 10 / 15 秒 | 支持 |
 | `firefly-video-v2` | 支持 | 支持 | 支持 | 5 / 10 / 15 秒 | 支持 |
 
-控制台模型广场显示的基础价格：
+| 模型 | 分辨率 | 单价 |
+| --- | --- | ---: |
+| `firefly-video-v2-fast` | 480p | 0.15 / 秒 |
+| `firefly-video-v2-fast` | 720p | 0.18 / 秒 |
+| `firefly-video-v2` | 480p | 0.18 / 秒 |
+| `firefly-video-v2` | 720p | 0.25 / 秒 |
+| `firefly-video-v2` | 1080p | 0.5 / 秒 |
 
-| 模型 | 基础价格 |
-| --- | ---: |
-| `firefly-video-v2-fast` | 0.2 / 秒 |
-| `firefly-video-v2` | 0.3 / 秒 |
+### Leonardo Seedance 2.0
 
-实际任务按模型和时长计费；同一模型在可用分辨率范围内使用相同单价：
+Leonardo Seedance 2.0 与 Firefly Video v2 使用同一套接入方式，但不提供 1080p。
 
-| 模型 | 单价 | 5 秒 | 10 秒 | 15 秒 |
-| --- | ---: | ---: | ---: | ---: |
-| `firefly-video-v2-fast` | 0.2 / 秒 | 1.00 | 2.00 | 3.00 |
-| `firefly-video-v2` | 0.3 / 秒 | 1.50 | 3.00 | 4.50 |
+| 模型 | 480p | 720p | 1080p | 时长 | 生成音频 |
+| --- | --- | --- | --- | --- | --- |
+| `leonardo-seedance-2.0-fast` | 支持 | 支持 | 不支持 | 5 / 10 / 14 秒 | 支持 |
+| `leonardo-seedance-2.0` | 支持 | 支持 | 不支持 | 5 / 10 / 14 秒 | 支持 |
+
+| 模型 | 分辨率 | 单价 |
+| --- | --- | ---: |
+| `leonardo-seedance-2.0-fast` | 480p | 0.15 / 秒 |
+| `leonardo-seedance-2.0-fast` | 720p | 0.18 / 秒 |
+| `leonardo-seedance-2.0` | 480p | 0.18 / 秒 |
+| `leonardo-seedance-2.0` | 720p | 0.25 / 秒 |
 
 价格以 [THQ Video API 控制台](https://new.thqllm.com/)的模型广场和任务实际扣费为准。
 参数校验失败的请求不扣费；任务被确认失败后自动退款。
@@ -65,8 +81,7 @@ curl -sS https://new.thqllm.com/v1/models \
   -H "Authorization: Bearer $THQ_VIDEO_API_KEY"
 ```
 
-API Key 没有对应模型权限或余额不足时，创建任务会失败。请先检查返回列表中是否包含要使用的
-模型 ID。
+API Key 没有对应模型权限或余额不足时，创建任务会失败。请先检查返回列表中是否包含要使用的模型 ID。
 
 ## 4. 创建纯文本视频
 
@@ -95,17 +110,16 @@ curl -sS https://new.thqllm.com/v1/videos \
 | `model` | string | 是 | 无 | 只能使用公开模型名 |
 | `prompt` | string | 条件必填 | 无 | 1–1500 字符；使用 `shots` 时可省略 |
 | `negative_prompt` | string | 否 | 空 | 最多 1500 字符 |
-| `duration` | integer | 否 | 5 | 只能是 5、10、15 |
-| `resolution` | string | 否 | `720p` | `480p`、`720p`；Standard 额外支持 `1080p` |
+| `duration` | integer | 否 | 5 | 只能是 5、10、14、15；以当前模型组支持项为准 |
+| `resolution` | string | 否 | `720p` | Firefly 支持 `480p`、`720p`、`1080p`；Leonardo 支持 `480p`、`720p` |
 | `aspect_ratio` | string | 否 | `16:9` | `21:9`、`16:9`、`4:3`、`1:1`、`3:4`、`9:16` |
 | `generate_audio` | boolean | 否 | `false` | 是否生成音频，JSON 中必须使用布尔值 |
 | `seed` | integer | 否 | 随机 | 取值范围 0–2147483647 |
 | `shots` | array | 否 | 无 | 2–15 个分镜，分镜时长之和必须等于 `duration` |
 
-JSON 请求不能携带参考图片、视频或音频。带参考素材的任务必须使用
-`multipart/form-data` 上传真实文件。
+JSON 请求不能携带参考图片、视频或音频。带参考素材的任务必须使用 `multipart/form-data` 上传真实文件。
 
-## 5. 创建分镜视频
+## 5. Firefly Video v2 分镜视频
 
 每个分镜只能包含 `prompt` 和 `duration`。所有分镜的 `duration` 之和必须等于任务总时长：
 
@@ -127,10 +141,55 @@ curl -sS https://new.thqllm.com/v1/videos \
   }'
 ```
 
-## 6. 上传参考素材
+## 6. Leonardo Seedance 2.0 接入
 
-包含任意参考素材时，请求必须使用 `multipart/form-data`。不要手动设置 `Content-Type` 的
-boundary，让 HTTP 客户端自动生成。
+Leonardo Seedance 2.0 的请求方式与 Firefly Video v2 相同，但它没有 1080p，且 14 秒是这个模型组的常用时长。
+
+### 纯文本创建
+
+```bash
+curl -sS https://new.thqllm.com/v1/videos \
+  -H "Authorization: Bearer $THQ_VIDEO_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "leonardo-seedance-2.0-fast",
+    "prompt": "雨后的城市街道，镜头缓慢推进，霓虹灯倒映在湿润路面，无文字",
+    "duration": 14,
+    "resolution": "720p",
+    "aspect_ratio": "16:9",
+    "generate_audio": true
+  }'
+```
+
+### 参考素材上传
+
+参考素材使用同样的 multipart 结构，模型参数只需要换成 Leonardo Seedance 2.0：
+
+```bash
+curl -sS https://new.thqllm.com/v1/videos \
+  -H "Authorization: Bearer $THQ_VIDEO_API_KEY" \
+  -F "model=leonardo-seedance-2.0" \
+  -F "prompt=保持主体外观一致，先展示首帧构图，再平稳推进到尾帧，动作自然，无文字" \
+  -F "duration=14" \
+  -F "resolution=720p" \
+  -F "aspect_ratio=16:9" \
+  -F "generate_audio=true" \
+  -F "first_frame=@./start.png;type=image/png" \
+  -F "last_frame=@./end.png;type=image/png" \
+  -F "images=@./reference-1.png;type=image/png" \
+  -F "videos=@./motion-1.mp4;type=video/mp4" \
+  -F "audios=@./reference.mp3;type=audio/mpeg"
+```
+
+### Leonardo 限制
+
+- `leonardo-seedance-2.0` 与 `leonardo-seedance-2.0-fast` 都不支持 1080p。
+- `duration` 以 5、10、14 秒为主，具体仍以控制台可用项为准。
+- 其他上传、轮询、下载和错误处理方式与 Firefly Video v2 保持一致。
+
+## 7. 上传参考素材
+
+包含任意参考素材时，请求必须使用 `multipart/form-data`。不要手动设置 `Content-Type` 的 boundary，让 HTTP 客户端自动生成。
 
 ### 文件字段
 
@@ -184,11 +243,9 @@ multipart 普通参数均以字符串传递：
 | 音频 | MP3、WAV | 最多 3 个 | 每个最多 15,000,000 字节 | 合计不超过 15 秒 |
 | 全部素材 | 上述格式 | 合计最多 12 个 | 受各类型限制 | 音频必须同时存在图片或视频 |
 
-整个 HTTP 请求最大为 384 MiB。空文件、伪造格式、重复复用同一个上传对象或未知素材字段会被
-拒绝。
+整个 HTTP 请求最大为 384 MiB。空文件、伪造格式、重复复用同一个上传对象或未知素材字段会被拒绝。
 
-本接口不接受参考素材 URL、文件路径字符串、`asset_id` 或 JSON Base64。所有参考素材必须作为
-multipart 文件上传。
+本接口不接受参考素材 URL、文件路径字符串、`asset_id` 或 JSON Base64。所有参考素材必须作为 multipart 文件上传。
 
 ### 人物图片兼容处理
 
@@ -201,7 +258,7 @@ multipart 文件上传。
 
 如果业务要求参考图片像素完全不变，请不要提交需要自动兼容处理的人物图片。
 
-## 7. 创建响应
+## 8. 创建响应
 
 任务创建成功返回 HTTP 200。请立即保存 `id` 或 `task_id`，二者均为 THQ Video API 公网任务 ID：
 
@@ -220,7 +277,7 @@ multipart 文件上传。
 
 不要解析或依赖任务 ID 的内部格式。
 
-## 8. 查询任务
+## 9. 查询任务
 
 ```bash
 curl -sS \
@@ -274,7 +331,7 @@ curl -sS \
 https://new.thqllm.com + /v1/videos/<task_id>/content
 ```
 
-## 9. 播放和下载视频
+## 10. 播放和下载视频
 
 下载接口同样需要 API Key，不能把带密钥的下载请求直接暴露在公开前端：
 
@@ -304,7 +361,7 @@ curl -i \
 
 有效 Range 请求返回 HTTP 206 和 `Content-Range`。
 
-## 10. Python 示例
+## 11. Python 示例
 
 安装依赖：
 
@@ -407,7 +464,7 @@ response.raise_for_status()
 print(response.json())
 ```
 
-## 11. 错误处理
+## 12. 错误处理
 
 | HTTP 状态 | 常见含义 | 建议 |
 | ---: | --- | --- |
@@ -442,7 +499,7 @@ print(response.json())
 
 客户端应同时读取顶层 `message` 和 `error.message`，不要只依赖单一错误结构。
 
-## 12. 重试与稳定性建议
+## 13. 重试与稳定性建议
 
 - 创建成功后立即持久化 `task_id`，任务轮询可以跨进程恢复。
 - 任务查询建议从 3–5 秒间隔开始，最长增加到 10 秒。
@@ -452,7 +509,7 @@ print(response.json())
 - 下载完成后检查 HTTP 状态、文件长度和视频能否正常解码。
 - 保存业务订单号与 `task_id` 的对应关系，但不要记录完整 API Key 或用户上传素材。
 
-## 13. 上线验收清单
+## 14. 上线验收清单
 
 1. `GET /v1/models` 返回目标模型。
 2. 使用 JSON 创建一个 5 秒测试任务并保存 `task_id`。
@@ -464,7 +521,7 @@ print(response.json())
 8. 验证参数错误不扣费、确认失败自动退款。
 9. 确认日志和前端不泄漏 API Key。
 
-## 14. 不适用于 THQ Video API 的内容
+## 15. 不适用于 THQ Video API 的内容
 
 请只使用 `https://new.thqllm.com` 和本页列出的公开模型、接口路径与 API Key。不要混用其他服务商或源站资料中的：
 

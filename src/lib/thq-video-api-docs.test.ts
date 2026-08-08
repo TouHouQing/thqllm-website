@@ -74,8 +74,13 @@ describe('THQ Video API documentation contract', () => {
     for (const requiredText of [
       'firefly-video-v2',
       'firefly-video-v2-fast',
+      'leonardo-seedance-2.0',
+      'leonardo-seedance-2.0-fast',
       '满血 SD2',
       'SD2-fast',
+      'Leonardo Seedance 2.0',
+      '同 firefly-video-v2',
+      '同 firefly-video-v2-fast',
       '/v1/models',
       '/v1/videos',
       '/v1/videos/{task_id}',
@@ -92,6 +97,8 @@ describe('THQ Video API documentation contract', () => {
       '远程素材 URL',
       'JSON Base64',
       '跳过 TLS',
+      '14 秒',
+      '1080p',
     ]) {
       expect(content, `Firefly guide is missing ${requiredText}`).toContain(requiredText);
     }
@@ -100,10 +107,16 @@ describe('THQ Video API documentation contract', () => {
   it('publishes the current per-second pricing for the Firefly Video v2 model group', async () => {
     const firefly = await readFile(path.join(docsRoot, 'firefly-video-v2.mdx'), 'utf8');
 
-    expect(firefly).toContain('| `firefly-video-v2-fast` | 0.2 / 秒 |');
-    expect(firefly).toContain('| `firefly-video-v2` | 0.3 / 秒 |');
-    expect(firefly).not.toContain('0.15 / 秒');
-    expect(firefly).not.toContain('0.17 / 秒');
+    expect(firefly).toContain('| `firefly-video-v2-fast` | 480p | 0.15 / 秒 |');
+    expect(firefly).toContain('| `firefly-video-v2-fast` | 720p | 0.18 / 秒 |');
+    expect(firefly).toContain('| `firefly-video-v2` | 480p | 0.18 / 秒 |');
+    expect(firefly).toContain('| `firefly-video-v2` | 720p | 0.25 / 秒 |');
+    expect(firefly).toContain('| `firefly-video-v2` | 1080p | 0.5 / 秒 |');
+    expect(firefly).toContain('| `leonardo-seedance-2.0` | 480p | 0.18 / 秒 |');
+    expect(firefly).toContain('| `leonardo-seedance-2.0` | 720p | 0.25 / 秒 |');
+    expect(firefly).toContain('| `leonardo-seedance-2.0-fast` | 480p | 0.15 / 秒 |');
+    expect(firefly).toContain('| `leonardo-seedance-2.0-fast` | 720p | 0.18 / 秒 |');
+    expect(firefly).not.toContain('| `leonardo-seedance-2.0` | 1080p |');
   });
 
   it('does not publish references to missing local documents', async () => {

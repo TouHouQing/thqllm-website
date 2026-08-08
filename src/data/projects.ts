@@ -60,7 +60,7 @@ export const projects = projectListSchema.parse([
     stageLabel: 'STAGE 02',
     categoryLabel: 'VIDEO MODEL API',
     description:
-      '面向视频生成应用的模型 API 中转服务，提供满血 SD2、SD2-fast、文生视频、图生视频与多图转场能力。',
+      '面向视频生成应用的模型 API 中转服务，提供满血 SD2、SD2-fast、Leonardo Seedance 2.0 及其 Fast 版本、文生视频、图生视频与多图转场能力。',
     externalUrl: 'https://new.thqllm.com/',
     docs: {
       basePath: '/docs/thq-video-api/',
