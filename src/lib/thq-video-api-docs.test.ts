@@ -48,11 +48,12 @@ async function readVideoDocs() {
 }
 
 describe('THQ Video API documentation contract', () => {
-  it('publishes exactly the registered overview and shared SD2 tutorial', async () => {
-    expect(registeredFiles).toEqual(['index.mdx', 'firefly-video-v2.mdx']);
+  it('publishes exactly the registered overview and video tutorial groups', async () => {
+    expect(registeredFiles).toEqual(['index.mdx', 'firefly-video-v2.mdx', 'sd2-official.mdx']);
     expect(registeredRoutes).toEqual([
       '/docs/thq-video-api/',
       '/docs/thq-video-api/firefly-video-v2',
+      '/docs/thq-video-api/sd2-official',
     ]);
     expect(await collectMdxFiles(docsRoot)).toEqual([...registeredFiles].toSorted());
   });
@@ -65,7 +66,7 @@ describe('THQ Video API documentation contract', () => {
     expect(combinedContent).toContain('THQ Video API');
     expect(combinedContent).toContain('YOUR_THQ_VIDEO_API_KEY');
     expect(combinedContent).not.toMatch(/ycyapi\.cn/i);
-    expect(combinedContent).not.toMatch(/YCYAPI|Adobe2API|192\.6\.121\.6/i);
+    expect(combinedContent).not.toMatch(/YCYAPI|Adobe2API|192\.6\.121\.6|22-视频-官方API/i);
   });
 
   it('keeps the overview page focused on the first successful call', async () => {
@@ -73,11 +74,13 @@ describe('THQ Video API documentation contract', () => {
 
     for (const requiredText of [
       '第一次使用：照着 5 步完成',
-      '先选一个模型',
+      '先选一个分组',
+      'SD2 官方满血',
       '创建视频任务',
       '查询视频任务',
       '下载生成结果',
       '所有模型都使用同一套接口格式',
+      'seedance-2.0-0826-720p',
     ]) {
       expect(content, `Video API overview is missing ${requiredText}`).toContain(requiredText);
     }
@@ -136,6 +139,53 @@ describe('THQ Video API documentation contract', () => {
     expect(firefly).toContain('| `leonardo-seedance-2.0-fast` | 0.15 / 秒 | 0.18 / 秒 | 不支持 |');
     expect(firefly).toContain('| `leonardo-seedance-2.0` | 0.18 / 秒 | 0.25 / 秒 | 不支持 |');
     expect(firefly).not.toContain('`leonardo-seedance-2.0` | 0.18 / 秒 | 0.25 / 秒 | 0.5 / 秒');
+  });
+
+  it('keeps the SD2 official full guide focused on the official 15-second workflow', async () => {
+    const official = await readFile(path.join(docsRoot, 'sd2-official.mdx'), 'utf8');
+
+    for (const requiredText of [
+      'SD2 官方满血',
+      '先看懂 4 步调用流程',
+      '选择模型',
+      '准备 API Key',
+      '创建第一条视频',
+      '等待视频生成完成',
+      '下载视频',
+      'seconds',
+      '"seconds": "15"',
+      'Idempotency-Key',
+      'references',
+      'data:',
+      'download_url',
+      '不要自己拼下载地址',
+      'seedance-2.0-0826-480p',
+      'seedance-2.0-0826-720p',
+      'seedance-2.0-fast-0826-480p',
+      'seedance-2.0-fast-0826-720p',
+      'result_not_ready',
+      'QuotaExceeded',
+      '上线前检查',
+    ]) {
+      expect(official, `SD2 official guide is missing ${requiredText}`).toContain(requiredText);
+    }
+  });
+
+  it('publishes the current per-second pricing for the SD2 official full group', async () => {
+    const official = await readFile(path.join(docsRoot, 'sd2-official.mdx'), 'utf8');
+
+    expect(official).toContain(
+      '| `seedance-2.0-0826-480p` | 标准质量，480p | 480p | 0.25 / 秒 | 3.75 / 条 |',
+    );
+    expect(official).toContain(
+      '| `seedance-2.0-0826-720p` | 标准质量，720p | 720p | 0.35 / 秒 | 5.25 / 条 |',
+    );
+    expect(official).toContain(
+      '| `seedance-2.0-fast-0826-480p` | 快速生成，480p | 480p | 0.20 / 秒 | 3.00 / 条 |',
+    );
+    expect(official).toContain(
+      '| `seedance-2.0-fast-0826-720p` | 快速生成，720p | 720p | 0.30 / 秒 | 4.50 / 条 |',
+    );
   });
 
   it('does not publish references to missing local documents', async () => {

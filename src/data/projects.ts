@@ -60,7 +60,7 @@ export const projects = projectListSchema.parse([
     stageLabel: 'STAGE 02',
     categoryLabel: 'VIDEO MODEL API',
     description:
-      '面向视频生成应用的模型 API 中转服务，提供满血 SD2、SD2-fast、Leonardo Seedance 2.0 及其 Fast 版本、文生视频、图生视频与多图转场能力。',
+      '面向视频生成应用的模型 API 中转服务，提供 SD2、SD2-fast、SD2 官方满血、Seedance 2.0 0826、文生视频、图生视频与多参考素材生成能力。',
     externalUrl: 'https://new.thqllm.com/',
     docs: {
       basePath: '/docs/thq-video-api/',
@@ -70,12 +70,13 @@ export const projects = projectListSchema.parse([
           items: [
             { text: '概览', slug: 'index' },
             { text: 'SD2', slug: 'firefly-video-v2' },
+            { text: 'SD2 官方满血', slug: 'sd2-official' },
           ],
         },
       ],
     },
     accent: 'sakura',
-    tags: ['视频生成', '文生视频 / 图生视频', 'SD2 / SD2-fast'],
+    tags: ['视频生成', '文生视频 / 图生视频', 'SD2 / 官方满血'],
     order: 2,
     featured: true,
   },

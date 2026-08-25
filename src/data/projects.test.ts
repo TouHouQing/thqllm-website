@@ -90,7 +90,7 @@ describe('project registry', () => {
         expect.objectContaining({
           id: 'thq-video-api',
           name: 'THQ Video API',
-          description: expect.stringContaining('Leonardo Seedance 2.0'),
+          description: expect.stringContaining('SD2 官方满血'),
           externalUrl: 'https://new.thqllm.com/',
         }),
         expect.objectContaining({
@@ -118,7 +118,7 @@ describe('project registry', () => {
     ]);
   });
 
-  it('registers the shared SD2 tutorial for THQ Video API', () => {
+  it('registers the THQ Video API tutorial groups', () => {
     const videoApi = projects.find((project) => project.id === 'thq-video-api');
 
     expect(videoApi?.docs?.sections).toEqual([
@@ -127,6 +127,7 @@ describe('project registry', () => {
         items: [
           { text: '概览', slug: 'index' },
           { text: 'SD2', slug: 'firefly-video-v2' },
+          { text: 'SD2 官方满血', slug: 'sd2-official' },
         ],
       },
     ]);

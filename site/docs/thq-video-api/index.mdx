@@ -1,6 +1,6 @@
 ---
 title: THQ Video API 文档｜SD2 视频生成 API 中转站
-description: 通过 THQ Video API 调用 Firefly Video v2 和 Leonardo Seedance 2.0，完成文生视频、图生视频、分镜生成和视频下载。
+description: 通过 THQ Video API 调用 SD2、SD2 官方满血和 Seedance 2.0 0826，完成文生视频、图生视频、分镜生成和视频下载。
 ---
 
 # THQ Video API
@@ -17,11 +17,20 @@ THQ Video API 是 THQLLM 面向视频生成场景提供的 API 中转服务。
 
 1. 在 [THQ Video API 控制台](https://new.thqllm.com/)注册或登录。
 2. 创建一个 API Key，并复制保存。
-3. 打开 [SD2 接入教程](/docs/thq-video-api/firefly-video-v2)，复制“第一次调用”中的命令。
+3. 选择下方合适的模型分组，打开对应教程并复制“第一次调用”中的命令。
 4. 提交任务后保存任务 ID，并查询到状态变成 `completed`。
 5. 使用教程中的下载命令保存视频。
 
-## 先选一个模型
+## 先选一个分组
+
+如果你不确定要看哪篇教程，先按下面方式选择：
+
+| 分组 | 适合场景 | 教程 |
+| --- | --- | --- |
+| SD2 | 通用文生视频、图生视频、分镜、multipart 文件上传 | [SD2 接入教程](/docs/thq-video-api/firefly-video-v2) |
+| SD2 官方满血 | 官方 Seedance 2.0 0826，固定 15 秒，模型名自带 480p / 720p 分辨率 | [SD2 官方满血教程](/docs/thq-video-api/sd2-official) |
+
+## SD2 常用模型
 
 如果你还不知道选哪个，第一次直接使用 `firefly-video-v2-fast`，并选择 5 秒、720p。
 这套参数适合先确认 API Key、账户和调用流程是否正常。
@@ -39,6 +48,18 @@ THQ Video API 是 THQLLM 面向视频生成场景提供的 API 中转服务。
 - 想先快速跑通，选择 `firefly-video-v2-fast`。
 - 想使用 Leonardo Seedance 2.0，选择以 `leonardo-seedance-2.0` 开头的模型。
 - 所有模型都使用同一套接口格式，只需要替换 `model` 参数。
+
+## SD2 官方满血模型
+
+官方满血分组固定生成 15 秒视频，分辨率写在模型名里，不要再额外传 `resolution`。
+这个分组的教程请看 [SD2 官方满血](/docs/thq-video-api/sd2-official)。
+
+| 模型 | 适合场景 | 单价 |
+| --- | --- | ---: |
+| `seedance-2.0-0826-480p` | 标准质量，480p | 0.25 / 秒 |
+| `seedance-2.0-0826-720p` | 标准质量，720p | 0.35 / 秒 |
+| `seedance-2.0-fast-0826-480p` | 快速生成，480p | 0.20 / 秒 |
+| `seedance-2.0-fast-0826-720p` | 快速生成，720p | 0.30 / 秒 |
 
 ## 专用服务地址
 
