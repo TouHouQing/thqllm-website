@@ -5,7 +5,7 @@ import { createProjectDocRoutePath } from './project-doc-routes';
 export const SITE_ORIGIN = 'https://thqllm.com';
 export const HOME_TITLE = 'THQLLM｜AI 大模型中转站与 Codex 中转 API';
 export const HOME_DESCRIPTION =
-  'THQLLM 提供 AI 大模型 API、视频模型 API、企业级 AI 中转站、Codex/GPT/Claude 中转站、AI 编程与图像生成项目入口，并整理 AI 代充、GPT 代充、Claude 代充相关服务说明。';
+  'THQLLM 提供 AI 大模型 API、AI 视频创作工作台、视频模型 API、企业级 AI 中转站、Codex/GPT/Claude 中转站、AI 编程与图像生成项目入口，并整理 AI 代充、GPT 代充、Claude 代充相关服务说明。';
 
 const SITE_DESCRIPTION = HOME_DESCRIPTION;
 
@@ -19,6 +19,8 @@ const SITE_KEYWORDS = [
   'GPT 中转站',
   'Claude 中转站',
   '视频模型 API',
+  'AI 视频创作',
+  '视频创作工作台',
   '视频生成 API',
   '图生视频 API',
   'SD2',

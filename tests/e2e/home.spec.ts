@@ -25,6 +25,9 @@ async function openDeterministicHome(page: Page) {
       }),
     );
   });
+  const canvas = page.getByTestId('danmaku-canvas');
+  await expect(canvas).toHaveAttribute('data-motion', 'reduced');
+  await expect(canvas).toHaveAttribute('data-danmaku-frame', /^\[/);
 }
 
 test('home presents the THQLLM portal without forbidden copy', async ({ page }) => {

@@ -1,96 +1,67 @@
 ---
-title: THQ Video API 文档｜SD2 视频生成 API 中转站
-description: 通过 THQ Video API 调用 SD2、SD2 官方满血和 Seedance 2.0 0826，完成文生视频、图生视频、分镜生成和视频下载。
+title: AI 视频创作工作台与视频模型 API｜THQ Video API
+description: 在 THQ Video API 中用分镜和画布串联文本、图片、角色与场景参考、视频生成及 MP4 成片导出，也可通过视频模型 API 接入应用和自动化工作流。
 ---
 
 # THQ Video API
 
-THQ Video API 是 THQLLM 面向视频生成场景提供的 API 中转服务。
-你只需要准备一个 API Key，提交视频任务，等待任务完成，再下载生成结果。
-服务地址统一是 `new.thqllm.com`，不需要填写其他源站地址。
+THQ Video API 在 `new.thqllm.com` 提供 **AI 视频创作工作台与视频模型 API 服务**。
+创作者可以在浏览器中从想法、分镜和参考素材开始，生成镜头并导出成片；
+开发者可以通过 API 把视频生成接入自己的产品和自动化工作流。
 
-<ProjectLink href="https://new.thqllm.com/">打开 THQ Video API 控制台</ProjectLink>
+<ProjectLink href="https://new.thqllm.com/studio">打开 AI 视频创作工作台</ProjectLink>
 
-## 第一次使用：照着 5 步完成
+## 两种使用方式
 
-不需要先理解所有参数，按下面顺序就能生成第一条视频：
-
-1. 在 [THQ Video API 控制台](https://new.thqllm.com/)注册或登录。
-2. 创建一个 API Key，并复制保存。
-3. 选择下方合适的模型分组，打开对应教程并复制“第一次调用”中的命令。
-4. 提交任务后保存任务 ID，并查询到状态变成 `completed`。
-5. 使用教程中的下载命令保存视频。
-
-## 先选一个分组
-
-如果你不确定要看哪篇教程，先按下面方式选择：
-
-| 分组 | 适合场景 | 教程 |
-| --- | --- | --- |
-| SD2 | 通用文生视频、图生视频、分镜、multipart 文件上传 | [SD2 接入教程](/docs/thq-video-api/firefly-video-v2) |
-| SD2 官方满血 | 官方 Seedance 2.0 0826，固定 15 秒，模型名自带 480p / 720p 分辨率 | [SD2 官方满血教程](/docs/thq-video-api/sd2-official) |
-
-## SD2 常用模型
-
-如果你还不知道选哪个，第一次直接使用 `firefly-video-v2-fast`，并选择 5 秒、720p。
-这套参数适合先确认 API Key、账户和调用流程是否正常。
-
-| 模型 | 适合场景 | 分辨率 | 时长 |
-| --- | --- | --- | --- |
-| `firefly-video-v2` | 画质优先，需要 1080p | 480p / 720p / 1080p | 5 / 10 / 15 秒 |
-| `firefly-video-v2-fast` | 先测试效果，速度和成本优先 | 480p / 720p | 5 / 10 / 15 秒 |
-| `leonardo-seedance-2.0` | Leonardo Seedance 2.0 标准速度 | 480p / 720p | 5 / 10 / 14 秒 |
-| `leonardo-seedance-2.0-fast` | Leonardo Seedance 2.0 速度优先 | 480p / 720p | 5 / 10 / 14 秒 |
-
-只需要记住：
-
-- 想要最高输出规格，选择 `firefly-video-v2`。
-- 想先快速跑通，选择 `firefly-video-v2-fast`。
-- 想使用 Leonardo Seedance 2.0，选择以 `leonardo-seedance-2.0` 开头的模型。
-- 所有模型都使用同一套接口格式，只需要替换 `model` 参数。
-
-## SD2 官方满血模型
-
-官方满血分组固定生成 15 秒视频，分辨率写在模型名里，不要再额外传 `resolution`。
-这个分组的教程请看 [SD2 官方满血](/docs/thq-video-api/sd2-official)。
-
-| 模型 | 适合场景 | 单价 |
-| --- | --- | ---: |
-| `seedance-2.0-0826-480p` | 标准质量，480p | 0.25 / 秒 |
-| `seedance-2.0-0826-720p` | 标准质量，720p | 0.35 / 秒 |
-| `seedance-2.0-fast-0826-480p` | 快速生成，480p | 0.20 / 秒 |
-| `seedance-2.0-fast-0826-720p` | 快速生成，720p | 0.30 / 秒 |
-
-## 专用服务地址
-
-| 用途 | 地址 |
+| 使用方式 | 适合的场景 |
 | --- | --- |
-| 控制台与账号入口 | `https://new.thqllm.com` |
-| API 基址 | `https://new.thqllm.com/v1` |
-| 模型列表 | `GET https://new.thqllm.com/v1/models` |
-| 创建视频任务 | `POST https://new.thqllm.com/v1/videos` |
-| 查询视频任务 | `GET https://new.thqllm.com/v1/videos/{task_id}` |
-| 下载生成结果 | `GET https://new.thqllm.com/v1/videos/{task_id}/content` |
+| 分镜表与画布创作 | 短视频、产品展示、AI 短剧与多镜头内容，直接组织素材和生成结果 |
+| 视频模型 API | 自有应用、后端服务、脚本和自动化视频生产流程 |
 
-调用接口时，完整地址就是“API 基址 + 接口路径”。例如创建任务：
-`https://new.thqllm.com/v1/videos`。
+两种方式使用同一个本站账号体系。视频生成使用账号当前可用的模型分组，
+模型名称、参数、参考素材支持、价格和实际扣费以控制台与对应渠道说明为准。
 
-## 你需要准备什么
+## 从想法到成片
 
-只需要两个东西：
+1. **准备文本与分镜**：手动填写脚本和提示词，或使用自行配置的文本模型生成分镜草稿；确认后再进入下一步。
+2. **准备图片**：直接上传已有图片，或调用自行配置的图片服务生成首帧与参考图。
+3. **组织创作素材**：建立角色、场景与风格卡片，将名称、描述和参考图应用到指定分镜或全部分镜；需要固定参考时可锁定版本。
+4. **生成视频镜头**：选择本站视频分组和具体模型，填写提示词、时长、分辨率等参数，检查请求后提交；任务状态和生成结果可以继续查看。
+5. **挑选与续创**：查看镜头的多个生成版本，选择合适的结果；也可使用前一镜头的末帧或视频参考继续创作。
+6. **导出成片**：按分镜顺序裁剪、调整转场和音频，在浏览器本地拼接导出 MP4。
 
-- THQ Video API Key
-- 一个视频提示词 `prompt`
+**文本和图片都可以不调用模型。** 手动文本与上传图片可以直接作为下游视频的输入。
+需要 AI 辅助时，每位用户可在“文本与图片服务”中设置自己的服务 URL 和 API Key，并获取可用模型。
+视频模型始终从本站账号可用的分组与模型中选择。
 
-有参考图片、视频或音频时，再使用 `multipart/form-data` 上传素材。
+“本地合成 MP4”按顺序拼接已有镜头；“AI 续创最终视频”会将选定镜头作为参考，
+再次调用本站视频模型生成一个新视频，并产生新的计费任务。
 
-## 认证方式
+## 项目与备份
 
-所有请求都需要携带 Bearer API Key：
+项目、画布和已保存素材存放在当前浏览器。建议使用项目 ZIP 导出备份，
+在另一台设备上导入后继续创作；目前不提供项目的自动跨设备同步。
+
+## 开发者 API 接入
+
+控制台与 API 基址为 `https://new.thqllm.com`。先登录控制台，创建用于应用调用的 API Key，
+确认当前账号可用的分组、模型与接口说明，再提交视频任务、保存任务 ID、查询状态并下载结果。
+
+API 调用使用 Bearer API Key：
 
 ```http
 Authorization: Bearer YOUR_THQ_VIDEO_API_KEY
 ```
 
-模型列表、账户余额和实际扣费以 [THQ Video API 控制台](https://new.thqllm.com/)当前显示为准。
-建议只在后端、本地开发环境或受控脚本中保存 API Key，不要把真实 Key 放进公开前端代码。
+建议在可信的后端服务、本地开发环境或受控脚本中保存 Key。不要把真实 Key 写入前端网页、
+公开仓库、日志、截图或提交给第三方的排查信息。
+
+<ProjectLink href="https://new.thqllm.com/">打开账号与 API 控制台</ProjectLink>
+
+## 模型 API 教程
+
+以下教程介绍特定分组的 API 接入方式。本站视频创作与 API 服务不限于这些分组，
+可用模型、参数和价格以控制台当前模型列表与渠道说明为准。
+
+- [SD2 视频生成 API 教程](/docs/thq-video-api/firefly-video-v2)
+- [SD2 官方满血 API 教程](/docs/thq-video-api/sd2-official)

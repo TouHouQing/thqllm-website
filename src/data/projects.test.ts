@@ -90,7 +90,7 @@ describe('project registry', () => {
         expect.objectContaining({
           id: 'thq-video-api',
           name: 'THQ Video API',
-          description: expect.stringContaining('SD2 官方满血'),
+          description: expect.stringContaining('AI 视频创作工作台'),
           externalUrl: 'https://new.thqllm.com/',
         }),
         expect.objectContaining({
@@ -123,9 +123,9 @@ describe('project registry', () => {
 
     expect(videoApi?.docs?.sections).toEqual([
       {
-        text: '开始接入',
+        text: '开始使用',
         items: [
-          { text: '概览', slug: 'index' },
+          { text: '创作与 API 概览', slug: 'index' },
           { text: 'SD2', slug: 'firefly-video-v2' },
           { text: 'SD2 官方满血', slug: 'sd2-official' },
         ],

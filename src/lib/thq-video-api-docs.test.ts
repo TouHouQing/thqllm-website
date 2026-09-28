@@ -69,18 +69,19 @@ describe('THQ Video API documentation contract', () => {
     expect(combinedContent).not.toMatch(/YCYAPI|Adobe2API|192\.6\.121\.6|22-视频-官方API/i);
   });
 
-  it('keeps the overview page focused on the first successful call', async () => {
+  it('introduces the creative workflow alongside developer API access', async () => {
     const content = await readFile(path.join(docsRoot, 'index.mdx'), 'utf8');
 
     for (const requiredText of [
-      '第一次使用：照着 5 步完成',
-      '先选一个分组',
+      'AI 视频创作工作台与视频模型 API 服务',
+      '分镜表与画布创作',
+      '文本和图片都可以不调用模型',
+      '角色、场景与风格卡片',
+      '本地合成 MP4',
+      '项目 ZIP 导出备份',
+      '开发者 API 接入',
       'SD2 官方满血',
-      '创建视频任务',
-      '查询视频任务',
-      '下载生成结果',
-      '所有模型都使用同一套接口格式',
-      'seedance-2.0-0826-720p',
+      '/docs/thq-video-api/sd2-official',
     ]) {
       expect(content, `Video API overview is missing ${requiredText}`).toContain(requiredText);
     }

@@ -1,0 +1,2300 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>THQ Video API｜AI 视频创作工作台与视频模型 API</title>
+    <meta
+      name="description"
+      content="THQ Video API 提供 AI 视频创作工作台与视频模型 API，用分镜和画布串联文本、图片、角色与场景参考、视频生成和 MP4 成片导出，服务创作者与开发者。"
+    />
+    <meta
+      name="keywords"
+      content="AI 视频创作,AI 短剧,视频创作工作台,分镜画布,角色参考,场景参考,视频模型 API,文生视频,图生视频,THQ Video API"
+    />
+    <meta name="author" content="THQLLM" />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
+    <meta name="theme-color" content="#11141b" />
+    <link rel="canonical" href="https://new.thqllm.com/" />
+    <link rel="icon" href="https://thqllm.com/favicon.svg" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:site_name" content="THQ Video API" />
+    <meta property="og:title" content="THQ Video API｜AI 视频创作工作台与视频模型 API" />
+    <meta
+      property="og:description"
+      content="从文本、图片和参考素材开始，在分镜与画布中生成镜头并导出成片，也可通过视频模型 API 接入应用。"
+    />
+    <meta property="og:url" content="https://new.thqllm.com/" />
+    <meta property="og:image" content="https://thqllm.com/og-cover.png" />
+    <meta property="og:image:alt" content="THQ Video API AI 视频创作与模型 API" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="THQ Video API｜AI 视频创作工作台与视频模型 API" />
+    <meta
+      name="twitter:description"
+      content="AI 视频创作工作台与视频模型 API，让创作者和开发者在同一入口完成视频创作与接入。"
+    />
+    <meta name="twitter:image" content="https://thqllm.com/og-cover.png" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://new.thqllm.com/#organization",
+            "name": "THQLLM",
+            "url": "https://thqllm.com/",
+            "sameAs": [
+              "https://github.com/TouHouQing",
+              "https://tohoqing.com/"
+            ]
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://new.thqllm.com/#website",
+            "name": "THQ Video API",
+            "url": "https://new.thqllm.com/",
+            "description": "AI 视频创作工作台与视频模型 API 服务，连接分镜、素材参考、视频生成与成片导出。",
+            "inLanguage": "zh-CN",
+            "publisher": {
+              "@id": "https://new.thqllm.com/#organization"
+            }
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://new.thqllm.com/#application",
+            "name": "THQ Video API",
+            "applicationCategory": "MultimediaApplication",
+            "operatingSystem": "Web",
+            "url": "https://new.thqllm.com/",
+            "description": "用分镜和画布组织文本、图片与视频，复用角色和场景参考，生成镜头并导出 MP4，同时提供视频模型 API。",
+            "featureList": [
+              "分镜与画布创作",
+              "手动文本与上传图片",
+              "角色、场景与风格参考",
+              "视频模型生成与镜头版本",
+              "本地 MP4 合成与项目备份",
+              "任务创建与状态轮询",
+              "视频播放与下载"
+            ]
+          },
+          {
+            "@type": "FAQPage",
+            "@id": "https://new.thqllm.com/#faq",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "THQ Video API 支持哪些视频模型？",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "视频模型按本站账号可用分组选择，具体名称、参数、参考素材支持和价格以控制台当前展示为准。"
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "视频 API 的接口地址是什么？",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "控制台和 API 基址均为 https://new.thqllm.com，视频任务接口从 /v1 开始。"
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "视频模型如何计费？",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "视频模型价格以控制台模型广场和实际任务扣费为准。"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
+
+    <style>
+      #thq-video-page {
+        --ink: #11141b;
+        --ink-soft: #1c222b;
+        --ink-muted: #626a73;
+        --paper: #f7f8f6;
+        --white: #ffffff;
+        --line: #d7dde0;
+        --red: #ca3c33;
+        --red-dark: #8e2924;
+        --cyan: #27abb5;
+        --cyan-pale: #dff2f3;
+        --gold: #d3a64a;
+        --green: #25866a;
+        --max: 1160px;
+        --serif: "Songti SC", "STSong", "Noto Serif CJK SC", Georgia, serif;
+        --sans: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+        --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        min-height: 100vh;
+        color: var(--ink);
+        color-scheme: only light;
+        background: var(--paper);
+        isolation: isolate;
+        padding-top: 64px;
+        font-family: var(--sans);
+        line-height: 1.7;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      #thq-video-page,
+      #thq-video-page *,
+      #thq-video-page *::before,
+      #thq-video-page *::after {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+        scroll-padding-top: 78px;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      /*
+       * NewAPI's navigation sits outside this shadow root and is transparent.
+       * Match the backing strip to its theme so light text remains readable
+       * when NewAPI is using dark mode.
+       */
+      :host-context(.dark) #thq-video-page {
+        background-image: linear-gradient(
+          to bottom,
+          #11141b 0,
+          #11141b 64px,
+          transparent 64px
+        );
+        background-repeat: no-repeat;
+      }
+
+      #thq-video-page a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      #thq-video-page button {
+        font: inherit;
+      }
+
+      #thq-video-page button,
+      #thq-video-page a {
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      #thq-video-page button:focus-visible,
+      #thq-video-page a:focus-visible,
+      #thq-video-page summary:focus-visible {
+        outline: 3px solid var(--cyan);
+        outline-offset: 3px;
+      }
+
+      .container {
+        width: min(calc(100% - 40px), var(--max));
+        margin: 0 auto;
+      }
+
+      .skip-link {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        z-index: 1000;
+        padding: 10px 16px;
+        color: var(--white);
+        background: var(--ink);
+        transform: translateY(-150%);
+      }
+
+      .skip-link:focus {
+        transform: translateY(0);
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        flex: 0 0 auto;
+        gap: 11px;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 42px;
+        height: 42px;
+        place-items: center;
+        color: var(--white);
+        background: var(--red);
+        border: 2px solid var(--ink);
+        box-shadow: 4px 4px 0 var(--ink);
+        font-family: var(--serif);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .brand-copy {
+        display: grid;
+        line-height: 1.1;
+      }
+
+      .brand-copy strong {
+        font-family: var(--serif);
+        font-size: 18px;
+      }
+
+      .brand-copy small {
+        margin-top: 4px;
+        color: var(--ink-muted);
+        font-family: var(--mono);
+        font-size: 9px;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .button {
+        display: inline-flex;
+        min-height: 44px;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 18px;
+        border: 1px solid transparent;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 750;
+        transition:
+          transform 160ms ease,
+          box-shadow 160ms ease,
+          background 160ms ease;
+      }
+
+      .button:hover {
+        transform: translateY(-2px);
+      }
+
+      .button-primary {
+        color: var(--white);
+        background: var(--red);
+        border-color: var(--red);
+        box-shadow: 5px 5px 0 var(--red-dark);
+      }
+
+      .button-primary:hover {
+        background: #dc4c42;
+      }
+
+      .button-dark {
+        color: var(--white);
+        background: var(--ink);
+        border-color: var(--ink);
+        box-shadow: 5px 5px 0 rgba(39, 171, 181, 0.7);
+      }
+
+      .button-light {
+        color: var(--ink);
+        background: var(--white);
+        border-color: var(--line);
+      }
+
+      .button-outline {
+        color: var(--white);
+        background: transparent;
+        border-color: rgba(255, 255, 255, 0.5);
+      }
+
+      .hero {
+        position: relative;
+        overflow: hidden;
+        color: var(--white);
+        background:
+          radial-gradient(circle at 78% 24%, rgba(39, 171, 181, 0.18), transparent 25%),
+          linear-gradient(135deg, #11141b 0%, #1d222b 62%, #2c272b 100%);
+      }
+
+      .hero::before {
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+        background-size: 38px 38px;
+        content: "";
+        mask-image: linear-gradient(90deg, black, transparent 85%);
+        opacity: 0.7;
+      }
+
+      .hero-inner {
+        position: relative;
+        display: grid;
+        min-height: 630px;
+        align-items: center;
+        grid-template-columns: minmax(0, 0.94fr) minmax(440px, 1.06fr);
+        gap: 64px;
+        padding-top: 86px;
+        padding-bottom: 86px;
+      }
+
+      .hero-copy {
+        position: relative;
+        z-index: 1;
+        max-width: 600px;
+      }
+
+      .eyebrow,
+      .section-index {
+        display: block;
+        color: var(--cyan);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .hero h1 {
+        max-width: 600px;
+        margin: 22px 0 20px;
+        font-family: var(--serif);
+        font-size: clamp(48px, 6vw, 82px);
+        font-weight: 700;
+        letter-spacing: 0;
+        line-height: 1.05;
+      }
+
+      .hero h1 span {
+        display: block;
+        color: #f3f4ef;
+        font-family: var(--sans);
+        font-size: clamp(20px, 2.1vw, 28px);
+        font-weight: 600;
+        letter-spacing: 0;
+        line-height: 1.4;
+      }
+
+      .hero-description {
+        max-width: 550px;
+        margin: 0;
+        color: #c6cbd0;
+        font-size: 15px;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 32px;
+      }
+
+      .hero-stats {
+        display: grid;
+        max-width: 520px;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+        margin: 48px 0 0;
+        padding: 18px 0 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.18);
+      }
+
+      .hero-stats div {
+        display: grid;
+        gap: 3px;
+      }
+
+      .hero-stats dt {
+        color: #8f9aa3;
+        font-family: var(--mono);
+        font-size: 9px;
+        text-transform: uppercase;
+      }
+
+      .hero-stats dd {
+        margin: 0;
+        color: #fff;
+        font-family: var(--serif);
+        font-size: 20px;
+      }
+
+      .api-stage {
+        position: relative;
+        min-height: 445px;
+        padding: 18px;
+        border: 1px solid rgba(39, 171, 181, 0.9);
+        box-shadow: 10px 10px 0 var(--red);
+        transform: rotate(1.3deg);
+      }
+
+      .api-stage::before,
+      .api-stage::after {
+        position: absolute;
+        width: 22px;
+        height: 22px;
+        border-color: var(--cyan);
+        content: "";
+      }
+
+      .api-stage::before {
+        top: -1px;
+        left: -1px;
+        border-top: 2px solid;
+        border-left: 2px solid;
+      }
+
+      .api-stage::after {
+        right: -1px;
+        bottom: -1px;
+        border-right: 2px solid;
+        border-bottom: 2px solid;
+      }
+
+      .api-panel {
+        position: relative;
+        min-height: 408px;
+        padding: 20px;
+        background: #222832;
+        border: 1px solid #4b555f;
+        transform: rotate(-1.3deg);
+      }
+
+      .api-panel-head,
+      .code-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        color: #aeb8c1;
+        font-family: var(--mono);
+        font-size: 10px;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #82e2b4;
+      }
+
+      .status::before {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #82e2b4;
+        box-shadow: 0 0 0 4px rgba(130, 226, 180, 0.12);
+        content: "";
+      }
+
+      .endpoint {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 28px;
+        color: #fff;
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+
+      .method {
+        display: inline-flex;
+        min-width: 44px;
+        justify-content: center;
+        padding: 4px 6px;
+        color: #fff;
+        background: var(--red);
+        font-size: 10px;
+      }
+
+      .api-code {
+        overflow: auto;
+        margin: 16px 0 18px;
+        padding: 16px;
+        color: #d9e5e3;
+        background: #11141b;
+        border-left: 3px solid var(--cyan);
+        font-family: var(--mono);
+        font-size: 11px;
+        line-height: 1.75;
+        white-space: pre-wrap;
+      }
+
+      .code-key {
+        color: #71d6d4;
+      }
+
+      .code-string {
+        color: #f2cf7b;
+      }
+
+      .frame-strip {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin-top: 18px;
+      }
+
+      .frame {
+        position: relative;
+        min-height: 76px;
+        overflow: hidden;
+        border: 1px solid #56616a;
+        background:
+          linear-gradient(145deg, transparent 0 35%, rgba(255, 255, 255, 0.18) 36% 40%, transparent 41%),
+          linear-gradient(160deg, #25384e 0 44%, #8d4f39 45% 70%, #e2b661 71%);
+      }
+
+      .frame:nth-child(2) {
+        background:
+          linear-gradient(150deg, transparent 0 45%, rgba(255, 255, 255, 0.24) 46% 49%, transparent 50%),
+          linear-gradient(160deg, #273a39 0 38%, #a43f3b 39% 66%, #e7c27b 67%);
+      }
+
+      .frame:nth-child(3) {
+        background:
+          linear-gradient(35deg, transparent 0 44%, rgba(255, 255, 255, 0.2) 45% 49%, transparent 50%),
+          linear-gradient(160deg, #21464b 0 40%, #ce6850 41% 67%, #f1cc78 68%);
+      }
+
+      .frame:nth-child(4) {
+        background:
+          linear-gradient(155deg, transparent 0 40%, rgba(255, 255, 255, 0.16) 41% 45%, transparent 46%),
+          linear-gradient(160deg, #283a5a 0 39%, #9f4047 40% 64%, #d89b59 65%);
+      }
+
+      .frame span {
+        position: absolute;
+        right: 7px;
+        bottom: 5px;
+        color: rgba(255, 255, 255, 0.82);
+        font-family: var(--mono);
+        font-size: 8px;
+      }
+
+      .model-ribbon {
+        color: var(--white);
+        background: var(--red);
+      }
+
+      .model-ribbon-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        min-height: 70px;
+      }
+
+      .model-ribbon strong {
+        font-family: var(--mono);
+        font-size: 10px;
+        text-transform: uppercase;
+      }
+
+      .model-ribbon-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 28px;
+        color: #fff2e8;
+        font-family: var(--serif);
+        font-size: 18px;
+      }
+
+      .section {
+        padding: 96px 0;
+      }
+
+      .section-heading {
+        display: grid;
+        align-items: end;
+        grid-template-columns: minmax(0, 1fr) minmax(260px, 0.85fr);
+        gap: 64px;
+        margin-bottom: 42px;
+      }
+
+      .section h2 {
+        max-width: 660px;
+        margin: 18px 0 0;
+        font-family: var(--serif);
+        font-size: clamp(36px, 4.2vw, 58px);
+        font-weight: 700;
+        letter-spacing: 0;
+        line-height: 1.15;
+      }
+
+      .section-heading > p {
+        margin: 0;
+        color: var(--ink-muted);
+        font-size: 13px;
+      }
+
+      .models {
+        background: var(--white);
+      }
+
+      .model-grid {
+        display: grid;
+        grid-template-columns: 1.35fr 1fr;
+        gap: 16px;
+      }
+
+      .model-card {
+        position: relative;
+        min-height: 280px;
+        padding: 28px;
+        border: 1px solid var(--line);
+      }
+
+      .model-card.primary {
+        color: var(--white);
+        background: var(--ink);
+        border-color: var(--ink);
+        box-shadow: 10px 10px 0 rgba(39, 171, 181, 0.85);
+      }
+
+      .model-card.fast {
+        background: #fffdf8;
+        border-top: 4px solid var(--gold);
+        box-shadow: 8px 8px 0 rgba(211, 166, 74, 0.25);
+      }
+
+      .model-number {
+        color: var(--red);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .model-card.primary .model-number {
+        color: var(--cyan);
+      }
+
+      .model-card h3 {
+        margin: 20px 0 12px;
+        font-family: var(--serif);
+        font-size: 34px;
+        line-height: 1.1;
+      }
+
+      .model-card p {
+        max-width: 540px;
+        margin: 0;
+        color: var(--ink-muted);
+        font-size: 13px;
+      }
+
+      .model-card.primary p {
+        color: #b6c0c6;
+      }
+
+      .model-id {
+        display: inline-block;
+        margin-top: 22px;
+        padding: 7px 9px;
+        color: var(--cyan);
+        background: rgba(39, 171, 181, 0.1);
+        border: 1px solid currentColor;
+        font-family: var(--mono);
+        font-size: 11px;
+      }
+
+      .model-card.fast .model-id {
+        color: var(--red);
+        background: rgba(202, 60, 51, 0.06);
+      }
+
+      .model-price {
+        position: absolute;
+        right: 28px;
+        bottom: 24px;
+        font-family: var(--serif);
+        font-size: 27px;
+      }
+
+      .model-price small {
+        color: inherit;
+        font-family: var(--sans);
+        font-size: 11px;
+      }
+
+      .capabilities {
+        background: var(--paper);
+      }
+
+      .capability-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+      }
+
+      .capability {
+        min-height: 176px;
+        padding: 24px;
+        background: var(--white);
+        border: 1px solid var(--line);
+      }
+
+      .capability:nth-child(2) {
+        border-top: 4px solid var(--cyan);
+      }
+
+      .capability:nth-child(3) {
+        border-top: 4px solid var(--green);
+      }
+
+      .capability:nth-child(4) {
+        border-top: 4px solid var(--gold);
+      }
+
+      .capability:nth-child(5) {
+        color: var(--white);
+        background: var(--red);
+        border-color: var(--red);
+      }
+
+      .capability:nth-child(6) {
+        border-top: 4px solid var(--ink);
+      }
+
+      .capability-label {
+        color: var(--red);
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .capability:nth-child(5) .capability-label {
+        color: #ffd5cd;
+      }
+
+      .capability h3 {
+        margin: 15px 0 8px;
+        font-family: var(--serif);
+        font-size: 24px;
+        line-height: 1.2;
+      }
+
+      .capability p {
+        margin: 0;
+        color: var(--ink-muted);
+        font-size: 12px;
+      }
+
+      .capability:nth-child(5) p {
+        color: #ffe8e2;
+      }
+
+      .quick-start {
+        background: var(--cyan-pale);
+      }
+
+      .quick-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
+        gap: 64px;
+        align-items: start;
+      }
+
+      .quick-copy h2 {
+        max-width: 440px;
+      }
+
+      .quick-copy > p {
+        max-width: 430px;
+        margin: 22px 0 0;
+        color: var(--ink-muted);
+        font-size: 13px;
+      }
+
+      .steps {
+        display: grid;
+        gap: 20px;
+        margin: 32px 0 0;
+        padding: 0;
+        list-style: none;
+        counter-reset: steps;
+      }
+
+      .steps li {
+        display: grid;
+        grid-template-columns: 34px 1fr;
+        gap: 12px;
+        counter-increment: steps;
+      }
+
+      .steps li::before {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        place-items: center;
+        color: var(--white);
+        background: var(--ink);
+        content: counter(steps, decimal-leading-zero);
+        font-family: var(--mono);
+        font-size: 9px;
+      }
+
+      .steps strong,
+      .steps span {
+        display: block;
+      }
+
+      .steps strong {
+        font-size: 13px;
+      }
+
+      .steps span {
+        margin-top: 3px;
+        color: var(--ink-muted);
+        font-size: 12px;
+      }
+
+      .code-panel {
+        overflow: hidden;
+        color: #dbe6e6;
+        background: var(--ink);
+        border: 1px solid var(--ink);
+        box-shadow: 10px 10px 0 var(--red);
+      }
+
+      .code-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 16px;
+        border-bottom: 1px solid #333b46;
+      }
+
+      .code-tabs {
+        display: flex;
+        gap: 6px;
+      }
+
+      .code-tab,
+      .copy-button {
+        padding: 7px 10px;
+        color: #96a1aa;
+        background: transparent;
+        border: 1px solid transparent;
+        cursor: pointer;
+        font-family: var(--mono);
+        font-size: 10px;
+      }
+
+      .code-tab[aria-selected="true"] {
+        color: #fff;
+        background: #2a333e;
+        border-color: #4b5863;
+      }
+
+      .copy-button {
+        color: #fff;
+        border-color: #5d6973;
+      }
+
+      .copy-button:hover,
+      .code-tab:hover {
+        color: #fff;
+        border-color: var(--cyan);
+      }
+
+      .code-output {
+        min-height: 265px;
+        margin: 0;
+        padding: 22px;
+        overflow: auto;
+        color: #d8e1e5;
+        font-family: var(--mono);
+        font-size: 11px;
+        line-height: 1.8;
+        white-space: pre-wrap;
+      }
+
+      .endpoint-list {
+        display: grid;
+        gap: 0;
+        padding: 0 16px 16px;
+      }
+
+      .endpoint-row {
+        display: grid;
+        grid-template-columns: minmax(130px, 0.55fr) 1fr;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 0;
+        border-top: 1px solid #333b46;
+        font-size: 12px;
+      }
+
+      .endpoint-row strong {
+        color: #fff;
+      }
+
+      .endpoint-row code {
+        color: #8adce0;
+        font-family: var(--mono);
+        font-size: 10px;
+        overflow-wrap: anywhere;
+      }
+
+      .docs-section {
+        color: var(--white);
+        background: var(--red);
+      }
+
+      .docs-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+        gap: 64px;
+        align-items: start;
+      }
+
+      .docs-section .section-index {
+        color: #ffd4cb;
+      }
+
+      .docs-section h2 {
+        max-width: 600px;
+      }
+
+      .docs-copy p {
+        max-width: 520px;
+        color: #ffe4dd;
+        font-size: 14px;
+      }
+
+      .docs-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 26px;
+      }
+
+      .docs-list {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1px;
+        border: 1px solid rgba(255, 255, 255, 0.38);
+      }
+
+      .docs-list div {
+        min-height: 120px;
+        padding: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.28);
+      }
+
+      .docs-list strong,
+      .docs-list span {
+        display: block;
+      }
+
+      .docs-list strong {
+        font-family: var(--serif);
+        font-size: 21px;
+      }
+
+      .docs-list span {
+        margin-top: 8px;
+        color: #ffd9d2;
+        font-size: 11px;
+      }
+
+      .faq-section {
+        background: var(--paper);
+      }
+
+      .faq-list {
+        width: min(760px, 100%);
+        margin: 0 auto;
+      }
+
+      details {
+        background: var(--white);
+        border: 1px solid var(--line);
+        border-bottom: 0;
+      }
+
+      details:last-child {
+        border-bottom: 1px solid var(--line);
+      }
+
+      summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 17px 20px;
+        cursor: pointer;
+        list-style: none;
+        font-size: 13px;
+        font-weight: 750;
+      }
+
+      summary::-webkit-details-marker {
+        display: none;
+      }
+
+      summary::after {
+        color: var(--red);
+        content: "+";
+        font-family: var(--mono);
+        font-size: 18px;
+        font-weight: 400;
+      }
+
+      details[open] summary::after {
+        content: "−";
+      }
+
+      .faq-answer {
+        padding: 0 20px 18px;
+        color: var(--ink-muted);
+        font-size: 12px;
+      }
+
+      .faq-answer p {
+        margin: 0;
+      }
+
+      .faq-answer code {
+        padding: 2px 5px;
+        color: var(--red-dark);
+        background: #f5e7e3;
+        font-family: var(--mono);
+        font-size: 10px;
+      }
+
+      .final-cta {
+        color: var(--white);
+        background:
+          linear-gradient(90deg, transparent 0 70%, rgba(39, 171, 181, 0.1) 70% 70.15%, transparent 70.15%),
+          var(--ink);
+        border-bottom: 3px solid var(--cyan);
+      }
+
+      .final-cta-inner {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 40px;
+        padding-top: 84px;
+        padding-bottom: 84px;
+      }
+
+      .final-cta h2 {
+        max-width: 680px;
+        margin: 18px 0 12px;
+        font-family: var(--serif);
+        font-size: clamp(36px, 4.6vw, 58px);
+        line-height: 1.1;
+      }
+
+      .final-cta p {
+        max-width: 620px;
+        margin: 0;
+        color: #b9c3ca;
+        font-size: 13px;
+      }
+
+      .final-cta-actions {
+        display: flex;
+        flex-shrink: 0;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+      }
+
+      .site-footer {
+        color: #a3acb4;
+        background: #090c11;
+      }
+
+      .footer-grid {
+        display: grid;
+        grid-template-columns: 1.6fr repeat(3, 0.7fr);
+        gap: 40px;
+        padding-top: 58px;
+        padding-bottom: 52px;
+      }
+
+      .footer-brand .brand {
+        color: #fff;
+      }
+
+      .footer-brand .brand-copy small {
+        color: #7c878f;
+      }
+
+      .footer-brand p {
+        max-width: 300px;
+        margin: 20px 0 0;
+        color: #7c878f;
+        font-size: 11px;
+      }
+
+      .footer-column {
+        display: grid;
+        align-content: start;
+        gap: 8px;
+      }
+
+      .footer-column h3 {
+        margin: 0 0 8px;
+        color: #fff;
+        font-size: 12px;
+      }
+
+      .footer-column a,
+      .footer-column span {
+        color: #7c878f;
+        font-size: 11px;
+      }
+
+      .footer-column a:hover {
+        color: #fff;
+      }
+
+      .footer-bottom {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 18px 0 22px;
+        border-top: 1px solid #252b33;
+        color: #66717a;
+        font-family: var(--mono);
+        font-size: 9px;
+      }
+
+      /*
+       * NewAPI applies its selected theme to the document root. Keep this
+       * product homepage on its authored palette even when it is embedded
+       * inside a dark or light NewAPI shell.
+       */
+      #thq-video-page#thq-video-page {
+        --ink: #11141b !important;
+        --ink-soft: #1c222b !important;
+        --ink-muted: #626a73 !important;
+        --paper: #f7f8f6 !important;
+        --white: #ffffff !important;
+        --line: #d7dde0 !important;
+        --red: #ca3c33 !important;
+        --red-dark: #8e2924 !important;
+        --cyan: #27abb5 !important;
+        --cyan-pale: #dff2f3 !important;
+        --gold: #d3a64a !important;
+        --green: #25866a !important;
+        color: #11141b !important;
+        color-scheme: only light !important;
+        background-color: #f7f8f6 !important;
+        border-color: #11141b !important;
+      }
+
+      #thq-video-page#thq-video-page main {
+        color: #11141b !important;
+        background-color: transparent !important;
+        border-color: #11141b !important;
+      }
+
+      #thq-video-page#thq-video-page
+        :where(h1, h2, h3, p, span, strong, small, dt, dd, code, pre) {
+        background-color: transparent !important;
+      }
+
+      #thq-video-page#thq-video-page .brand,
+      #thq-video-page#thq-video-page .brand-copy strong {
+        color: #11141b !important;
+        background-color: transparent !important;
+      }
+
+      #thq-video-page#thq-video-page .brand-mark {
+        color: #ffffff !important;
+        background-color: #ca3c33 !important;
+        border-color: #11141b !important;
+      }
+
+      #thq-video-page#thq-video-page .brand-copy small {
+        color: #626a73 !important;
+      }
+
+      #thq-video-page#thq-video-page .hero {
+        color: #ffffff !important;
+        background-color: #11141b !important;
+        background-image:
+          radial-gradient(circle at 78% 24%, rgba(39, 171, 181, 0.18), transparent 25%),
+          linear-gradient(135deg, #11141b 0%, #1d222b 62%, #2c272b 100%) !important;
+        border-color: #ffffff !important;
+      }
+
+      #thq-video-page#thq-video-page .hero h1,
+      #thq-video-page#thq-video-page .hero-stats dd,
+      #thq-video-page#thq-video-page .endpoint {
+        color: #ffffff !important;
+      }
+
+      #thq-video-page#thq-video-page .hero h1 span {
+        color: #f3f4ef !important;
+      }
+
+      #thq-video-page#thq-video-page .hero-description {
+        color: #c6cbd0 !important;
+      }
+
+      #thq-video-page#thq-video-page .hero-stats dt {
+        color: #8f9aa3 !important;
+      }
+
+      #thq-video-page#thq-video-page .eyebrow,
+      #thq-video-page#thq-video-page .section-index {
+        color: #27abb5 !important;
+      }
+
+      #thq-video-page#thq-video-page .api-stage {
+        color: #ffffff !important;
+        background-color: transparent !important;
+        border-color: #27abb5 !important;
+      }
+
+      #thq-video-page#thq-video-page .api-panel {
+        color: #ffffff !important;
+        background-color: #222832 !important;
+        border-color: #4b555f !important;
+      }
+
+      #thq-video-page#thq-video-page .api-panel-head,
+      #thq-video-page#thq-video-page .code-head {
+        color: #aeb8c1 !important;
+      }
+
+      #thq-video-page#thq-video-page .api-panel-head > span {
+        color: #aeb8c1 !important;
+      }
+
+      #thq-video-page#thq-video-page .status {
+        color: #82e2b4 !important;
+      }
+
+      #thq-video-page#thq-video-page .api-panel-head > .status {
+        color: #82e2b4 !important;
+      }
+
+      #thq-video-page#thq-video-page .endpoint > span:last-child {
+        color: #ffffff !important;
+      }
+
+      #thq-video-page#thq-video-page .method {
+        color: #ffffff !important;
+        background-color: #ca3c33 !important;
+        border-color: #ca3c33 !important;
+      }
+
+      #thq-video-page#thq-video-page .api-code {
+        color: #d9e5e3 !important;
+        background-color: #11141b !important;
+        border-color: #27abb5 !important;
+      }
+
+      #thq-video-page#thq-video-page .api-code code {
+        color: #d9e5e3 !important;
+      }
+
+      #thq-video-page#thq-video-page .code-key {
+        color: #71d6d4 !important;
+      }
+
+      #thq-video-page#thq-video-page .code-string {
+        color: #f2cf7b !important;
+      }
+
+      #thq-video-page#thq-video-page .frame {
+        color: rgba(255, 255, 255, 0.82) !important;
+        border-color: #56616a !important;
+      }
+
+      #thq-video-page#thq-video-page .frame span {
+        color: rgba(255, 255, 255, 0.82) !important;
+      }
+
+      #thq-video-page#thq-video-page .model-ribbon {
+        color: #ffffff !important;
+        background-color: #ca3c33 !important;
+        border-color: #ffffff !important;
+      }
+
+      #thq-video-page#thq-video-page .model-ribbon strong {
+        color: #ffffff !important;
+      }
+
+      #thq-video-page#thq-video-page .model-ribbon-list {
+        color: #fff2e8 !important;
+      }
+
+      #thq-video-page#thq-video-page .model-ribbon-list span {
+        color: #fff2e8 !important;
+      }
+
+      #thq-video-page#thq-video-page .models {
+        color: #11141b !important;
+        background-color: #ffffff !important;
+        border-color: #11141b !important;
+      }
+
+      #thq-video-page#thq-video-page .models h2,
+      #thq-video-page#thq-video-page .capabilities h2,
+      #thq-video-page#thq-video-page .quick-start h2,
+      #thq-video-page#thq-video-page .faq-section h2 {
+        color: #11141b !important;
+      }
+
+      #thq-video-page#thq-video-page .model-card {
+        color: #11141b !important;
+        background-color: #ffffff !important;
+        border-color: #d7dde0 !important;
+      }
+
+      #thq-video-page#thq-video-page .model-card.primary {
+        color: #ffffff !important;
+        background-color: #11141b !important;
+        border-color: #11141b !important;
+      }
+
+      #thq-video-page#thq-video-page .model-card.fast {
+        color: #11141b !important;
+        background-color: #fffdf8 !important;
+        border-color: #d3a64a #d7dde0 #d7dde0 !important;
+      }
+
+      #thq-video-page#thq-video-page .model-card h3,
+      #thq-video-page#thq-video-page .model-price {
+        color: inherit !important;
+      }
+
+      #thq-video-page#thq-video-page .model-card p,
+      #thq-video-page#thq-video-page .section-heading > p,
+      #thq-video-page#thq-video-page .quick-copy > p,
+      #thq-video-page#thq-video-page .steps span,
+      #thq-video-page#thq-video-page .faq-answer {
+        color: #626a73 !important;
+      }
+
+      #thq-video-page#thq-video-page .model-card.primary p {
+        color: #b6c0c6 !important;
+      }
+
+      #thq-video-page#thq-video-page .model-number {
+        color: #ca3c33 !important;
+      }
+
+      #thq-video-page#thq-video-page .model-card.primary .model-number,
+      #thq-video-page#thq-video-page .model-card.primary .model-id {
+        color: #27abb5 !important;
+      }
+
+      #thq-video-page#thq-video-page .model-id {
+        background-color: rgba(39, 171, 181, 0.1) !important;
+        border-color: currentColor !important;
+      }
+
+      #thq-video-page#thq-video-page .model-card.fast .model-id {
+        color: #ca3c33 !important;
+        background-color: rgba(202, 60, 51, 0.06) !important;
+      }
+
+      #thq-video-page#thq-video-page .capabilities,
+      #thq-video-page#thq-video-page .faq-section {
+        color: #11141b !important;
+        background-color: #f7f8f6 !important;
+        border-color: #11141b !important;
+      }
+
+      #thq-video-page#thq-video-page .capability {
+        color: #11141b !important;
+        background-color: #ffffff !important;
+        border-color: #d7dde0 !important;
+      }
+
+      #thq-video-page#thq-video-page .capability-label {
+        color: #ca3c33 !important;
+      }
+
+      #thq-video-page#thq-video-page .capability h3 {
+        color: #11141b !important;
+      }
+
+      #thq-video-page#thq-video-page .capability p {
+        color: #626a73 !important;
+      }
+
+      #thq-video-page#thq-video-page .capability:nth-child(5) {
+        color: #ffffff !important;
+        background-color: #ca3c33 !important;
+        border-color: #ca3c33 !important;
+      }
+
+      #thq-video-page#thq-video-page .capability:nth-child(5) .capability-label {
+        color: #ffd5cd !important;
+      }
+
+      #thq-video-page#thq-video-page .capability:nth-child(5) h3 {
+        color: #ffffff !important;
+      }
+
+      #thq-video-page#thq-video-page .capability:nth-child(5) p {
+        color: #ffe8e2 !important;
+      }
+
+      #thq-video-page#thq-video-page .quick-start {
+        color: #11141b !important;
+        background-color: #dff2f3 !important;
+        border-color: #11141b !important;
+      }
+
+      #thq-video-page#thq-video-page .steps strong {
+        color: #11141b !important;
+      }
+
+      #thq-video-page#thq-video-page .steps li::before {
+        color: #ffffff !important;
+        background-color: #11141b !important;
+      }
+
+      #thq-video-page#thq-video-page .code-panel {
+        color: #dbe6e6 !important;
+        background-color: #11141b !important;
+        border-color: #11141b !important;
+      }
+
+      #thq-video-page#thq-video-page .code-toolbar,
+      #thq-video-page#thq-video-page .endpoint-row {
+        color: #dbe6e6 !important;
+        background-color: transparent !important;
+        border-color: #333b46 !important;
+      }
+
+      #thq-video-page#thq-video-page .code-tab,
+      #thq-video-page#thq-video-page .copy-button {
+        color: #96a1aa !important;
+        background-color: transparent !important;
+        border-color: transparent !important;
+      }
+
+      #thq-video-page#thq-video-page .code-tab[aria-selected="true"] {
+        color: #ffffff !important;
+        background-color: #2a333e !important;
+        border-color: #4b5863 !important;
+      }
+
+      #thq-video-page#thq-video-page .copy-button {
+        color: #ffffff !important;
+        border-color: #5d6973 !important;
+      }
+
+      #thq-video-page#thq-video-page .code-output {
+        color: #d8e1e5 !important;
+        background-color: #11141b !important;
+        border-color: #d8e1e5 !important;
+      }
+
+      #thq-video-page#thq-video-page .code-output code {
+        color: #d8e1e5 !important;
+      }
+
+      #thq-video-page#thq-video-page .endpoint-row strong {
+        color: #ffffff !important;
+      }
+
+      #thq-video-page#thq-video-page .endpoint-row code {
+        color: #8adce0 !important;
+      }
+
+      #thq-video-page#thq-video-page .docs-section {
+        color: #ffffff !important;
+        background-color: #ca3c33 !important;
+        border-color: #ffffff !important;
+      }
+
+      #thq-video-page#thq-video-page .docs-section .section-index {
+        color: #ffd4cb !important;
+      }
+
+      #thq-video-page#thq-video-page .docs-section h2,
+      #thq-video-page#thq-video-page .docs-list strong {
+        color: #ffffff !important;
+      }
+
+      #thq-video-page#thq-video-page .docs-copy p {
+        color: #ffe4dd !important;
+      }
+
+      #thq-video-page#thq-video-page .docs-list,
+      #thq-video-page#thq-video-page .docs-list div {
+        color: #ffffff !important;
+        background-color: transparent !important;
+        border-color: rgba(255, 255, 255, 0.38) !important;
+      }
+
+      #thq-video-page#thq-video-page .docs-list span {
+        color: #ffd9d2 !important;
+      }
+
+      #thq-video-page#thq-video-page .faq-list details {
+        color: #11141b !important;
+        background-color: #ffffff !important;
+        border-color: #d7dde0 !important;
+      }
+
+      #thq-video-page#thq-video-page .faq-list summary {
+        color: #11141b !important;
+        background-color: transparent !important;
+        border-color: #11141b !important;
+      }
+
+      #thq-video-page#thq-video-page .faq-answer code {
+        color: #8e2924 !important;
+        background-color: #f5e7e3 !important;
+        border-color: #8e2924 !important;
+      }
+
+      #thq-video-page#thq-video-page .faq-answer p {
+        color: #626a73 !important;
+      }
+
+      #thq-video-page#thq-video-page .final-cta {
+        color: #ffffff !important;
+        background-color: #11141b !important;
+        background-image: linear-gradient(
+          90deg,
+          transparent 0 70%,
+          rgba(39, 171, 181, 0.1) 70% 70.15%,
+          transparent 70.15%
+        ) !important;
+        border-color: #27abb5 !important;
+      }
+
+      #thq-video-page#thq-video-page .final-cta h2 {
+        color: #ffffff !important;
+      }
+
+      #thq-video-page#thq-video-page .final-cta p {
+        color: #b9c3ca !important;
+      }
+
+      #thq-video-page#thq-video-page .site-footer {
+        color: #a3acb4 !important;
+        background-color: #090c11 !important;
+        border-color: #a3acb4 !important;
+      }
+
+      #thq-video-page#thq-video-page .site-footer .brand,
+      #thq-video-page#thq-video-page .site-footer .brand-copy strong,
+      #thq-video-page#thq-video-page .footer-column h3 {
+        color: #ffffff !important;
+      }
+
+      #thq-video-page#thq-video-page .site-footer .brand-copy small,
+      #thq-video-page#thq-video-page .footer-brand p,
+      #thq-video-page#thq-video-page .footer-column a,
+      #thq-video-page#thq-video-page .footer-column span {
+        color: #7c878f !important;
+        background-color: transparent !important;
+      }
+
+      #thq-video-page#thq-video-page .footer-bottom {
+        color: #66717a !important;
+        background-color: transparent !important;
+        border-color: #252b33 !important;
+      }
+
+      #thq-video-page#thq-video-page .footer-bottom span {
+        color: #66717a !important;
+      }
+
+      #thq-video-page#thq-video-page .button {
+        background-image: none !important;
+      }
+
+      #thq-video-page#thq-video-page .button-primary {
+        color: #ffffff !important;
+        background-color: #ca3c33 !important;
+        border-color: #ca3c33 !important;
+      }
+
+      #thq-video-page#thq-video-page .button-dark {
+        color: #ffffff !important;
+        background-color: #11141b !important;
+        border-color: #11141b !important;
+      }
+
+      #thq-video-page#thq-video-page .button-light {
+        color: #11141b !important;
+        background-color: #ffffff !important;
+        border-color: #d7dde0 !important;
+      }
+
+      #thq-video-page#thq-video-page .button-outline {
+        color: #ffffff !important;
+        background-color: transparent !important;
+        border-color: rgba(255, 255, 255, 0.5) !important;
+      }
+
+      @media (max-width: 980px) {
+        .hero-inner,
+        .quick-grid,
+        .docs-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .hero-inner {
+          min-height: auto;
+          gap: 54px;
+        }
+
+        .api-stage {
+          max-width: 760px;
+          width: 100%;
+          margin: 0 auto;
+        }
+
+        .model-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .capability-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+
+        .docs-grid {
+          gap: 40px;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .container {
+          width: min(calc(100% - 28px), var(--max));
+        }
+
+        .hero-inner {
+          padding-top: 62px;
+          padding-bottom: 62px;
+        }
+
+        .hero h1 {
+          font-size: 50px;
+        }
+
+        .hero h1 span {
+          font-size: 18px;
+        }
+
+        .hero-description {
+          font-size: 14px;
+        }
+
+        .hero-stats {
+          gap: 8px;
+          margin-top: 38px;
+        }
+
+        .hero-stats dd {
+          font-size: 17px;
+        }
+
+        .api-stage {
+          min-height: 0;
+          padding: 10px;
+          box-shadow: 6px 6px 0 var(--red);
+        }
+
+        .api-panel {
+          min-height: 0;
+          padding: 14px;
+        }
+
+        .frame {
+          min-height: 54px;
+        }
+
+        .model-ribbon-inner {
+          display: grid;
+          gap: 4px;
+          padding: 14px 0;
+        }
+
+        .model-ribbon-list {
+          justify-content: space-between;
+          gap: 12px;
+          font-size: 15px;
+        }
+
+        .section {
+          padding: 66px 0;
+        }
+
+        .section-heading {
+          display: block;
+          margin-bottom: 28px;
+        }
+
+        .section-heading > p {
+          margin-top: 16px;
+        }
+
+        .section h2 {
+          font-size: 38px;
+        }
+
+        .model-card {
+          min-height: 300px;
+          padding: 22px;
+        }
+
+        .model-price {
+          right: 22px;
+          bottom: 18px;
+        }
+
+        .capability-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .capability {
+          min-height: 0;
+        }
+
+        .code-panel {
+          box-shadow: 6px 6px 0 var(--red);
+        }
+
+        .code-toolbar {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .code-tabs {
+          overflow-x: auto;
+        }
+
+        .copy-button {
+          align-self: flex-start;
+        }
+
+        .code-output {
+          min-height: 300px;
+          padding: 16px;
+          font-size: 10px;
+        }
+
+        .endpoint-row {
+          grid-template-columns: 1fr;
+          gap: 4px;
+        }
+
+        .docs-list {
+          grid-template-columns: 1fr;
+        }
+
+        .final-cta-inner {
+          display: block;
+          padding-top: 66px;
+          padding-bottom: 66px;
+        }
+
+        .final-cta-actions {
+          width: min(240px, 100%);
+          margin-top: 26px;
+        }
+
+        .footer-grid {
+          grid-template-columns: repeat(2, 1fr);
+          gap: 34px 20px;
+        }
+
+        .footer-brand {
+          grid-column: 1 / -1;
+        }
+
+        .footer-bottom {
+          display: grid;
+          gap: 5px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+
+        *,
+        *::before,
+        *::after {
+          transition-duration: 0.01ms !important;
+          animation-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="thq-video-page">
+      <a class="skip-link" href="#main-content">跳转到主要内容</a>
+
+      <main id="main-content">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="container hero-inner">
+          <div class="hero-copy">
+            <span class="eyebrow">THQLLM / AI VIDEO STUDIO + API</span>
+            <h1 id="hero-title">
+              AI 视频创作
+              <span>从分镜、素材到成片</span>
+            </h1>
+            <p class="hero-description">
+              用分镜和画布串联文本、图片与视频，复用角色和场景参考，生成镜头并导出成片。
+              同时提供视频模型 API，方便接入产品与自动化工作流。
+            </p>
+            <div class="hero-actions">
+              <a class="button button-primary" href="https://new.thqllm.com/studio">开始视频创作</a>
+              <a class="button button-outline" href="https://thqllm.com/docs/thq-video-api/">查看开发文档</a>
+            </div>
+            <dl class="hero-stats" aria-label="服务概览">
+              <div>
+                <dt>Workflow</dt>
+                <dd>分镜＋画布</dd>
+              </div>
+              <div>
+                <dt>API</dt>
+                <dd>模型接入</dd>
+              </div>
+              <div>
+                <dt>Format</dt>
+                <dd>MP4</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="api-stage" aria-label="THQ Video API 请求示意">
+            <div class="api-panel">
+              <div class="api-panel-head">
+                <span>THQ VIDEO STUDIO + API</span>
+                <span class="status">READY</span>
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span>
+                <span>/v1/videos</span>
+              </div>
+              <pre class="api-code"><code><span class="code-key">"model"</span>: <span class="code-string">"YOUR_VIDEO_MODEL_ID"</span>,
+<span class="code-key">"prompt"</span>: <span class="code-string">"雨后的城市街道，镜头向前移动"</span>,
+<span class="code-key">"seconds"</span>: <span class="code-string">"5"</span></code></pre>
+              <div class="api-panel-head">
+                <span>GENERATED FRAMES</span>
+                <span>5 SEC / 720P</span>
+              </div>
+              <div class="frame-strip" aria-label="视频帧预览">
+                <div class="frame"><span>00:01</span></div>
+                <div class="frame"><span>00:02</span></div>
+                <div class="frame"><span>00:03</span></div>
+                <div class="frame"><span>00:04</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="model-ribbon" aria-label="视频创作流程">
+        <div class="container model-ribbon-inner">
+          <strong>CREATIVE WORKFLOW</strong>
+          <div class="model-ribbon-list">
+            <span>文本与图片</span>
+            <span>分镜与画布</span>
+            <span>角色与场景</span>
+            <span>视频 API</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section models" id="models" aria-labelledby="models-title">
+        <div class="container">
+          <div class="section-heading">
+            <div>
+              <span class="section-index">01 / CREATE + BUILD</span>
+              <h2 id="models-title">创作视频，或接入你的应用</h2>
+            </div>
+            <p>
+              创作者在浏览器中组织分镜与素材，开发者用 API 连接产品与自动化流程。
+              视频模型、参数与价格以当前控制台展示为准。
+            </p>
+          </div>
+
+          <div class="model-grid">
+            <article class="model-card primary">
+              <span class="model-number">WORKSPACE / CREATORS</span>
+              <h3>AI 视频创作工作台</h3>
+              <p>
+                从脚本与参考图片开始，用分镜表和画布连接生成步骤，管理角色、场景和镜头版本，
+                再按顺序拼接导出 MP4，适合短视频、产品展示和 AI 短剧创作。
+              </p>
+              <code class="model-id">new.thqllm.com/studio</code>
+              <div class="model-price">开始创作 <small>分镜与画布</small></div>
+            </article>
+
+            <article class="model-card fast">
+              <span class="model-number">API / DEVELOPERS</span>
+              <h3>视频模型 API</h3>
+              <p>
+                通过 API 创建视频任务、查询状态并下载结果，接入自有应用、后端服务和自动化工作流。
+                按账号可用分组选择模型，具体能力与价格以控制台为准。
+              </p>
+              <code class="model-id">new.thqllm.com/v1</code>
+              <div class="model-price">按模型计费 <small>控制台实时展示</small></div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section capabilities" aria-labelledby="capabilities-title">
+        <div class="container">
+          <div class="section-heading">
+            <div>
+              <span class="section-index">02 / CAPABILITIES</span>
+              <h2 id="capabilities-title">从想法与素材，到可交付的成片</h2>
+            </div>
+            <p>
+              把分镜、参考素材、生成任务和成片导出放在一个创作流程中，按需使用 AI 辅助。
+            </p>
+          </div>
+
+          <div class="capability-grid">
+            <article class="capability">
+              <span class="capability-label">FEATURE 01</span>
+              <h3>文本与图片</h3>
+              <p>直接输入文本、上传图片，也可配置自己的文本与图片服务 URL 和 Key 来生成。</p>
+            </article>
+            <article class="capability">
+              <span class="capability-label">FEATURE 02</span>
+              <h3>分镜与画布</h3>
+              <p>按镜头组织脚本、首帧和视频，用可视化连线串起创作步骤。</p>
+            </article>
+            <article class="capability">
+              <span class="capability-label">FEATURE 03</span>
+              <h3>角色与场景参考</h3>
+              <p>建立角色、场景与风格卡片，复用描述和参考图，并锁定需要保持的素材版本。</p>
+            </article>
+            <article class="capability">
+              <span class="capability-label">FEATURE 04</span>
+              <h3>视频生成与续创</h3>
+              <p>选择本站视频分组和模型，使用提示词、首帧或视频参考继续创作镜头。</p>
+            </article>
+            <article class="capability">
+              <span class="capability-label">FEATURE 05</span>
+              <h3>版本与任务管理</h3>
+              <p>跟踪生成状态，预览并选择镜头版本，保留已有结果再尝试新的创作方向。</p>
+            </article>
+            <article class="capability">
+              <span class="capability-label">FEATURE 06</span>
+              <h3>MP4 成片导出</h3>
+              <p>按分镜顺序裁剪、调整转场和音频，在浏览器本地拼接成片；项目也可导出 ZIP 备份。</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section quick-start" id="quick-start" aria-labelledby="quick-title">
+        <div class="container quick-grid">
+          <div class="quick-copy">
+            <span class="section-index">03 / QUICK START</span>
+            <h2 id="quick-title">开发者三步接入 API</h2>
+            <p>
+              浏览器创作可直接进入工作台；开发者创建 API Key 后提交视频任务，再查询状态与下载结果。
+              以下为基础请求示例，请将模型 ID 和参数替换为当前账号可用配置。
+            </p>
+            <ol class="steps">
+              <li>
+                <div>
+                  <strong>注册 THQ Video API 账号</strong>
+                  <span>登录 new.thqllm.com 控制台并完成账号创建。</span>
+                </div>
+              </li>
+              <li>
+                <div>
+                  <strong>创建视频 API Key</strong>
+                  <span>为不同应用或环境分配独立的调用密钥。</span>
+                </div>
+              </li>
+              <li>
+                <div>
+                  <strong>提交任务并轮询</strong>
+                  <span>保存任务 ID，查询完成状态后获取视频结果。</span>
+                </div>
+              </li>
+            </ol>
+          </div>
+
+          <div class="code-panel">
+            <div class="code-toolbar">
+              <div class="code-tabs" role="tablist" aria-label="代码示例">
+                <button class="code-tab" type="button" role="tab" aria-selected="true" data-code="curl">cURL</button>
+                <button class="code-tab" type="button" role="tab" aria-selected="false" data-code="python">Python</button>
+                <button class="code-tab" type="button" role="tab" aria-selected="false" data-code="node">Node.js</button>
+              </div>
+              <button class="copy-button" type="button" id="copy-code">复制代码</button>
+            </div>
+            <pre class="code-output"><code id="code-example"></code></pre>
+            <div class="endpoint-list">
+              <div class="endpoint-row">
+                <strong>创建任务</strong>
+                <code>POST https://new.thqllm.com/v1/videos</code>
+              </div>
+              <div class="endpoint-row">
+                <strong>查询任务</strong>
+                <code>GET /v1/videos/{task_id}</code>
+              </div>
+              <div class="endpoint-row">
+                <strong>下载视频</strong>
+                <code>GET /v1/videos/{task_id}/content</code>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section docs-section" id="docs" aria-labelledby="docs-title">
+        <div class="container docs-grid">
+          <div class="docs-copy">
+            <span class="section-index">04 / DOCUMENTATION</span>
+            <h2 id="docs-title">创作流程与 API 接入，一起了解</h2>
+            <p>
+              从分镜和素材参考开始，了解手动输入、外接文本与图片服务、视频模型选择、
+              本地成片导出，以及开发者账号与 API 接入方式。
+            </p>
+            <div class="docs-actions">
+              <a class="button button-light" href="https://thqllm.com/docs/thq-video-api/">阅读完整文档</a>
+              <a class="button button-outline" href="https://new.thqllm.com/">进入控制台</a>
+            </div>
+          </div>
+          <div class="docs-list" aria-label="文档内容">
+            <div>
+              <strong>API 参考</strong>
+              <span>路径、请求方法、鉴权和响应字段</span>
+            </div>
+            <div>
+              <strong>创作流程</strong>
+              <span>分镜、画布、生成版本与成片导出</span>
+            </div>
+            <div>
+              <strong>参考素材</strong>
+              <span>角色、场景、风格与素材版本</span>
+            </div>
+            <div>
+              <strong>错误排查</strong>
+              <span>状态码、轮询策略与失败任务处理</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section faq-section" id="faq" aria-labelledby="faq-title">
+        <div class="container">
+          <div class="section-heading">
+            <div>
+              <span class="section-index">05 / FAQ</span>
+              <h2 id="faq-title">关于 AI 视频创作与 API</h2>
+            </div>
+            <p>了解创作方式、模型选择和项目保存；具体模型参数请以控制台为准。</p>
+          </div>
+
+          <div class="faq-list">
+            <details>
+              <summary>THQ Video API 支持哪些视频模型？</summary>
+              <div class="faq-answer">
+                <p>
+                  按本站账号可用分组选择视频模型。模型名称、参数与价格会随渠道调整，以控制台当前模型广场为准。
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>视频 API 的 Base URL 是什么？</summary>
+              <div class="faq-answer">
+                <p>
+                  控制台和 API 基址均为 <code>https://new.thqllm.com</code>，视频任务接口从
+                  <code>/v1</code> 开始，例如 <code>POST /v1/videos</code>。
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>文本与图片必须调用模型吗？</summary>
+              <div class="faq-answer">
+                <p>
+                  可以直接输入文本或上传图片，不调用对应模型。需要 AI 辅助时，每位用户可配置自己的文本或图片服务 URL 和 Key。
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>视频模型如何计费？</summary>
+              <div class="faq-answer">
+                <p>
+                  视频模型价格以控制台模型广场和任务记录为准。
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>项目和素材保存在哪里？</summary>
+              <div class="faq-answer">
+                <p>
+                  项目、画布与已保存素材在当前浏览器中保存，可导出 ZIP 备份并在其他设备导入继续创作。暂不提供项目自动跨设备同步。
+                </p>
+              </div>
+            </details>
+            <details>
+              <summary>遇到生成失败应该怎么处理？</summary>
+              <div class="faq-answer">
+                <p>
+                  先停止轮询并记录脱敏后的错误信息，确认模型权限、余额和请求参数后再重试。
+                  已确认失败的任务按平台规则处理退款。
+                </p>
+              </div>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section class="final-cta" aria-labelledby="cta-title">
+        <div class="container final-cta-inner">
+          <div>
+            <span class="eyebrow">START CREATING WITH THQ VIDEO API</span>
+            <h2 id="cta-title">从第一个分镜，开始视频创作</h2>
+            <p>打开工作台组织文本、图片与参考素材，生成镜头并导出成片；也可用视频 API 接入自己的应用。</p>
+          </div>
+          <div class="final-cta-actions">
+            <a class="button button-primary" href="https://new.thqllm.com/studio">打开创作工作台</a>
+            <a class="button button-outline" href="https://new.thqllm.com/">进入控制台</a>
+          </div>
+        </div>
+      </section>
+      </main>
+
+      <footer class="site-footer">
+        <div class="container footer-grid">
+          <div class="footer-brand">
+            <a class="brand" href="/" aria-label="THQ Video API 首页">
+              <span class="brand-mark" aria-hidden="true">THQ</span>
+              <span class="brand-copy">
+                <strong>THQ Video API</strong>
+                <small>AI Video Studio &amp; API</small>
+              </span>
+            </a>
+            <p>
+              THQLLM 旗下 AI 视频创作工作台与视频模型 API 服务，从分镜、素材参考到镜头生成与成片导出，连接创作者和开发者。
+            </p>
+          </div>
+          <div class="footer-column">
+            <h3>产品</h3>
+            <a href="https://new.thqllm.com/">控制台</a>
+            <a href="https://new.thqllm.com/studio">创作工作台</a>
+            <a href="#quick-start">快速开始</a>
+          </div>
+          <div class="footer-column">
+            <h3>文档</h3>
+            <a href="https://thqllm.com/docs/thq-video-api/">视频 API 概览</a>
+            <a href="https://thqllm.com/docs/thq-video-api/">创作与 API 使用说明</a>
+            <a href="https://thqllm.com/">THQLLM 官网</a>
+          </div>
+          <div class="footer-column">
+            <h3>关于</h3>
+            <a href="https://tohoqing.com/">THQ 博客</a>
+            <a href="https://github.com/TouHouQing">GitHub</a>
+            <span>QQ群：242080189</span>
+          </div>
+        </div>
+        <div class="container footer-bottom">
+          <span>Copyright © <span id="current-year">2026</span> THQ / THQLLM</span>
+          <span>new.thqllm.com</span>
+        </div>
+      </footer>
+    </div>
+
+    <script>
+      const codeSamples = {
+        curl: `curl -sS https://new.thqllm.com/v1/videos \\
+  -H "Authorization: Bearer YOUR_THQ_VIDEO_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "YOUR_VIDEO_MODEL_ID",
+    "prompt": "雨后的城市街道，镜头平稳向前移动",
+    "seconds": "5"
+  }'`,
+        python: `import time
+import requests
+
+BASE_URL = "https://new.thqllm.com"
+API_KEY = "YOUR_THQ_VIDEO_API_KEY"
+headers = {"Authorization": f"Bearer {API_KEY}"}
+
+response = requests.post(
+    f"{BASE_URL}/v1/videos",
+    headers=headers,
+    json={
+        "model": "YOUR_VIDEO_MODEL_ID",
+        "prompt": "A steady cinematic tracking shot through a rainy city street",
+        "seconds": "5",
+    },
+    timeout=120,
+)
+response.raise_for_status()
+task_id = response.json()["id"]
+
+print(f"Task created: {task_id}")`,
+        node: `const response = await fetch(
+  "https://new.thqllm.com/v1/videos",
+  {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer YOUR_THQ_VIDEO_API_KEY",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: "YOUR_VIDEO_MODEL_ID",
+      prompt: "A steady cinematic tracking shot through a rainy city street",
+      seconds: "5"
+    })
+  }
+);
+
+const task = await response.json();
+console.log(task.id);`
+      };
+
+      const codeOutput = document.querySelector("#code-example");
+      const codeTabs = document.querySelectorAll(".code-tab");
+      const copyButton = document.querySelector("#copy-code");
+
+      function showCode(name) {
+        codeOutput.textContent = codeSamples[name];
+        codeTabs.forEach((tab) => {
+          tab.setAttribute("aria-selected", String(tab.dataset.code === name));
+        });
+        copyButton.textContent = "复制代码";
+      }
+
+      showCode("curl");
+
+      codeTabs.forEach((tab) => {
+        tab.addEventListener("click", () => showCode(tab.dataset.code));
+      });
+
+      copyButton.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(codeOutput.textContent);
+          copyButton.textContent = "已复制";
+        } catch {
+          copyButton.textContent = "复制失败";
+        }
+
+        window.setTimeout(() => {
+          copyButton.textContent = "复制代码";
+        }, 1600);
+      });
+
+      document.querySelector("#current-year").textContent = new Date().getFullYear();
+    </script>
+  </body>
+</html>

@@ -73,6 +73,9 @@ async function openDeterministicMobileHome(page: Page) {
       }),
     );
   });
+  const canvas = page.getByTestId('danmaku-canvas');
+  await expect(canvas).toHaveAttribute('data-motion', 'reduced');
+  await expect(canvas).toHaveAttribute('data-danmaku-frame', /^\[/);
 }
 
 async function enlargeDocumentText(page: Page, selector: string, normalFontSize: number) {

@@ -1,12 +1,12 @@
 ---
 title: 关于 THQLLM｜AI 大模型中转站与 THQ 产品
-description: 了解 THQ、THQLLM、AI 大模型 API、AI 大模型中转站、Codex/GPT/Claude 中转服务与未来产品方向。
+description: 了解 THQ、THQLLM、AI 大模型 API、AI 视频创作、视频模型 API、Codex/GPT/Claude 中转服务与未来产品方向。
 sidebar: false
 ---
 
 # 关于 THQLLM
 
-THQLLM 是 THQ 围绕 LLM API 实际使用场景延伸出的产品集合，覆盖 AI 大模型 API、AI 大模型中转站、AI 中转站、AI 编程、知识管理和图像创作。
+THQLLM 是 THQ 围绕 LLM API 实际使用场景延伸出的产品集合，覆盖 AI 大模型 API、AI 大模型中转站、AI 中转站、AI 编程、知识管理、图像创作和 AI 视频创作。
 它关注的不只是模型调用本身，也关注模型如何进入日常开发、团队协作和个人工作流。
 
 THQ 持续记录技术实践与个人项目。博客：[tohoqing.com](https://tohoqing.com/)；GitHub：[touhouqing](https://github.com/touhouqing)。
@@ -24,11 +24,13 @@ THQ API 是 THQLLM 的 AI 大模型中转站和企业级 API 网关，提供 Cod
 
 ### THQ Video API
 
-THQ Video API 是面向视频生成场景的模型 API 中转服务，独立服务于 `new.thqllm.com`。
-它提供 SD2、SD2-fast、SD2 官方满血与 Seedance 2.0 0826 等视频模型分组，
-覆盖文生视频、图生视频、多图参考、分镜成片和任务轮询接口，适合接入短视频、
-产品展示、广告素材和自动化视频工作流。
-其中 `seedance-2.0-0826-720p` 等模型属于 SD2 官方满血分组。
+THQ Video API 在 `new.thqllm.com` 提供 AI 视频创作工作台与视频模型 API 服务。
+创作者可以用分镜表和画布串联文本、图片、视频，复用角色、场景与风格参考，选择镜头版本，
+再按顺序拼接导出 MP4，适合短视频、产品展示和 AI 短剧的创作流程。
+
+文本可以手动输入，图片可以直接上传，也可以使用每位用户自行配置的文本或图片服务生成。
+视频使用本站账号可用的分组与模型；开发者可通过 API 接入自己的应用和自动化工作流。
+可用模型、参数与价格以控制台当前展示为准。
 
 项目地址：[new.thqllm.com](https://new.thqllm.com/)
 
@@ -57,6 +59,7 @@ THQLLM 会继续沿着实际使用场景完善产品：
 - 让模型接入、客户端配置和账户管理更直接、更少出错。
 - 为 AI 编程、Agent 与知识管理提供更连贯的工具协作方式。
 - 持续扩展图像生成、编辑与创作工作流。
+- 完善从分镜、素材参考、视频生成到成片导出的 AI 视频创作流程。
 - 把可复用的经验整理为清晰的使用文档和工具能力。
 
 ## 联系与交流
