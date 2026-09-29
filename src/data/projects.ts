@@ -60,7 +60,7 @@ export const projects = projectListSchema.parse([
     stageLabel: 'STAGE 02',
     categoryLabel: 'AI VIDEO STUDIO + API',
     description:
-      'AI 视频创作工作台与视频模型 API 服务，串联文本、图片、分镜、角色与场景参考、视频生成和成片导出，兼顾浏览器创作与开发者 API 接入。',
+      '集文本、图像生成与参考图编辑、分镜画布、角色与场景素材、视频生成和成片导出于一体的 AI 创作工作台，同时提供视频模型 API 接入。',
     externalUrl: 'https://new.thqllm.com/',
     docs: {
       basePath: '/docs/thq-video-api/',
@@ -69,14 +69,29 @@ export const projects = projectListSchema.parse([
           text: '开始使用',
           items: [
             { text: '创作与 API 概览', slug: 'index' },
-            { text: 'SD2', slug: 'firefly-video-v2' },
-            { text: 'SD2 官方满血', slug: 'sd2-official' },
+            { text: '生成第一条视频', slug: 'quick-start' },
+          ],
+        },
+        {
+          text: '创作工作台',
+          items: [
+            { text: '文本、图片与外接服务', slug: 'text-images' },
+            { text: '分镜、画布与镜头续创', slug: 'storyboard' },
+            { text: '素材管理与成片导出', slug: 'projects' },
+          ],
+        },
+        {
+          text: '模型与开发者接入',
+          items: [
+            { text: '视频分组与模型选择', slug: 'models' },
+            { text: '视频 API 接入教程', slug: 'video-api' },
+            { text: '常见问题', slug: 'faq' },
           ],
         },
       ],
     },
     accent: 'sakura',
-    tags: ['AI 视频创作', '分镜 / 画布', '角色 / 场景参考', '视频模型 API'],
+    tags: ['文本 / 图像 / 视频', '分镜 / 画布', '角色 / 场景素材', '视频模型 API'],
     order: 2,
     featured: true,
   },
@@ -106,34 +121,6 @@ export const projects = projectListSchema.parse([
     accent: 'vermilion',
     tags: ['知识图谱', 'MCP', 'Agent'],
     order: 3,
-    featured: true,
-  },
-  {
-    id: 'toho-image-studio',
-    name: 'Toho Image Studio',
-    stageLabel: 'EXTRA STAGE',
-    categoryLabel: 'IMAGE WORKSPACE',
-    description: '面向图像生成与编辑工作流的浏览器创作空间。',
-    externalUrl: 'https://img.thqllm.com/',
-    docs: {
-      basePath: '/docs/toho-image-studio/',
-      sections: [
-        {
-          text: '开始',
-          items: [
-            { text: '概览', slug: 'index' },
-            { text: '快速开始', slug: 'quick-start' },
-          ],
-        },
-        {
-          text: '参考',
-          items: [{ text: '常见问题', slug: 'faq' }],
-        },
-      ],
-    },
-    accent: 'gold',
-    tags: ['图像生成', '图像编辑', '提示词'],
-    order: 4,
     featured: true,
   },
 ]);

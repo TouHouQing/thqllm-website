@@ -21,7 +21,7 @@ function getProject(projectId: string) {
 
 const fluctgraph = getProject('fluctgraph');
 const thqApi = getProject('thq-api');
-const tohoImageStudio = getProject('toho-image-studio');
+const videoApi = getProject('thq-video-api');
 
 const fourthProject: ProjectDefinition = {
   ...fluctgraph,
@@ -35,7 +35,7 @@ const fourthProject: ProjectDefinition = {
 };
 
 function createFixture() {
-  return [tohoImageStudio, fourthProject, fluctgraph, thqApi];
+  return [videoApi, fourthProject, fluctgraph, thqApi];
 }
 
 afterEach(cleanup);

@@ -15,7 +15,7 @@ function getProject(projectId: string) {
 
 const fluctgraph = getProject('fluctgraph');
 const thqApi = getProject('thq-api');
-const tohoImageStudio = getProject('toho-image-studio');
+const videoApi = getProject('thq-video-api');
 const fluctgraphDocs = fluctgraph.docs;
 
 if (!fluctgraphDocs) {
@@ -27,12 +27,12 @@ describe('project navigation helpers', () => {
     const fixture = [
       { ...fluctgraph, order: 30, featured: true },
       { ...thqApi, order: 20, featured: false },
-      { ...tohoImageStudio, order: 10, featured: true },
+      { ...videoApi, order: 10, featured: true },
     ];
     const originalFixture = structuredClone(fixture);
 
     expect(getFeaturedProjects(fixture).map((project) => project.id)).toEqual([
-      'toho-image-studio',
+      'thq-video-api',
       'fluctgraph',
     ]);
     expect(fixture).toEqual(originalFixture);

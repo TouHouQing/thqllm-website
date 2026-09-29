@@ -292,15 +292,15 @@ test('documentation project names treat regex punctuation as literal text', asyn
   await expect(getProjectHeading(page, 'C++ Tools')).toHaveCount(1);
 });
 
-test('FluctGraph full-text search finds the Toho Image Studio overview', async ({ page }) => {
+test('FluctGraph full-text search finds the integrated image creation guide', async ({ page }) => {
   await page.goto('/docs/fluctgraph/');
 
   await page.keyboard.press('ControlOrMeta+k');
   const searchInput = page.getByLabel('SearchPanelInput');
   await expect(searchInput).toBeVisible();
-  await searchInput.fill('Toho Image Studio');
+  await searchInput.fill('文本、图片与外接服务');
 
-  await expect(page.getByText(/Toho Image Studio 概览/).first()).toBeVisible();
+  await expect(page.getByText(/文本、图片与外接服务/).first()).toBeVisible();
 });
 
 test('THQ API endpoint reference distinguishes all protocols', async ({ page }) => {
@@ -413,7 +413,7 @@ test('SearchPanel keeps Enter safe without breaking keyboard navigation', async 
   await page.keyboard.press('ControlOrMeta+k');
   await expect(searchInput).toBeVisible();
   expectNoPageErrors('reopening search with the keyboard shortcut');
-  await searchInput.fill('Toho Image Studio 概览');
+  await searchInput.fill('文本、图片与外接服务');
 
   const currentSuggestion = page.locator('.rp-suggest-item--current .rp-suggest-item__link');
   await expect(currentSuggestion).toBeVisible();
@@ -460,7 +460,7 @@ test('SearchPanel does not navigate stale suggestions while a new query is pendi
   const originalUrl = page.url();
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    await searchInput.fill('Toho Image Studio 概览');
+    await searchInput.fill('文本、图片与外接服务');
     await expect(page.locator('.rp-suggest-item--current .rp-suggest-item__link')).toBeVisible();
 
     const pendingQuery = `zzzzqv-stale-query-${attempt}-7f3a9b2c`;
@@ -788,7 +788,7 @@ for (const key of ['Tab', 'Shift+Tab'] as const) {
     test.skip(!isMobile, 'Mobile documentation controls only');
     await page.setViewportSize({ width: 390, height: 320 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto('/docs/toho-image-studio/quick-start/');
+    await page.goto('/docs/thq-video-api/quick-start/');
     await page.addStyleTag({
       content: 'html { font-size: 200% !important; }',
     });
@@ -885,7 +885,7 @@ for (const panel of [
     const searchModal = page.locator('.rp-search-panel__modal');
     await expect(searchInput).toBeVisible();
     await expect(searchInput).toBeFocused();
-    await searchInput.fill('Toho Image Studio 概览');
+    await searchInput.fill('文本、图片与外接服务');
     await expect(page.locator('.rp-suggest-item--current .rp-suggest-item__link')).toBeVisible();
 
     await page.keyboard.press('Tab');
@@ -1275,7 +1275,7 @@ test('mobile hash navigation closes the outline but keeps the sidebar open', asy
 }) => {
   test.skip(!isMobile, 'Mobile documentation controls only');
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/docs/toho-image-studio/quick-start/');
+  await page.goto('/docs/thq-video-api/quick-start/');
 
   const menuButton = page.getByRole('button', { name: '菜单', exact: true });
   const outlineButton = page.getByRole('button', { name: '目录', exact: true });
@@ -1573,7 +1573,7 @@ test('short mobile documentation panels track the sticky menu and keep internal 
   test.skip(!isMobile, 'Short mobile documentation panels only');
   await page.setViewportSize({ width: 390, height: 320 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/docs/toho-image-studio/quick-start/');
+  await page.goto('/docs/thq-video-api/quick-start/');
   await page.locator('html').evaluate((element) => {
     element.style.fontSize = '200%';
   });
@@ -1642,8 +1642,10 @@ test('short mobile documentation panels track the sticky menu and keep internal 
   await expect(outline).not.toHaveClass(/rp-doc-layout__outline--open/);
   await expect(outline).toHaveCSS('visibility', 'hidden');
 
-  await page.getByRole('link', { name: /^下一页(?:\s|$)/ }).click();
-  await expect(page).toHaveURL(/\/docs\/toho-image-studio\/(?:index\.html)?$/);
+  const nextPage = page.getByRole('link', { name: /^下一页(?:\s|$)/ });
+  const nextUrl = new URL((await nextPage.getAttribute('href')) ?? '', page.url());
+  await nextPage.click();
+  await expect(page).toHaveURL(nextUrl.href);
 });
 
 test('documentation panels follow live menu reflow without leaking into desktop layout', async ({
@@ -1862,9 +1864,9 @@ test('project switcher keeps the active tab visible after client navigation and 
       originalScrollIntoView.call(this, options);
     };
   });
-  await page.goto('/docs/fluctgraph/quick-start/');
+  await page.goto('/docs/thq-video-api/quick-start/');
 
-  const target = page.getByRole('link', { name: 'Toho Image Studio 文档' });
+  const target = page.getByRole('link', { name: 'FluctGraph 文档' });
   await page.evaluate(() => {
     const marker = document.createComment('project-switcher-client-route');
     (
@@ -1880,7 +1882,7 @@ test('project switcher keeps the active tab visible after client navigation and 
   });
 
   await target.click();
-  await expect(page).toHaveURL(/\/docs\/toho-image-studio\/$/);
+  await expect(page).toHaveURL(/\/docs\/fluctgraph\/$/);
   await expect
     .poll(() =>
       page.evaluate(() => {
@@ -1909,7 +1911,7 @@ test('project switcher keeps the active tab visible after client navigation and 
   const switcher = page.getByRole('navigation', { name: '切换项目文档' });
   const activeTab = switcher.locator('[aria-current="page"]');
   const tabs = activeTab.locator('..');
-  await expect(activeTab).toHaveText('Toho Image Studio');
+  await expect(activeTab).toHaveText('FluctGraph');
   await expect
     .poll(() =>
       tabs.evaluate((element) => {
@@ -1927,8 +1929,8 @@ test('project switcher keeps the active tab visible after client navigation and 
   await expect.poll(() => tabs.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
 
   const scrollLeftBeforeReflow = await tabs.evaluate((element) => element.scrollLeft);
-  const fluctGraphTab = switcher.getByRole('link', { name: 'FluctGraph 文档' });
-  await fluctGraphTab.evaluate((element) => {
+  const precedingTab = switcher.getByRole('link', { name: 'THQ API 文档' });
+  await precedingTab.evaluate((element) => {
     element.style.minWidth = `${element.getBoundingClientRect().width + 160}px`;
   });
 

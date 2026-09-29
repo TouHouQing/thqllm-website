@@ -48,145 +48,95 @@ async function readVideoDocs() {
 }
 
 describe('THQ Video API documentation contract', () => {
-  it('publishes exactly the registered overview and video tutorial groups', async () => {
-    expect(registeredFiles).toEqual(['index.mdx', 'firefly-video-v2.mdx', 'sd2-official.mdx']);
-    expect(registeredRoutes).toEqual([
-      '/docs/thq-video-api/',
-      '/docs/thq-video-api/firefly-video-v2',
-      '/docs/thq-video-api/sd2-official',
+  it('publishes the combined creation and developer documentation', async () => {
+    expect(registeredFiles).toEqual([
+      'index.mdx',
+      'quick-start.mdx',
+      'text-images.mdx',
+      'storyboard.mdx',
+      'projects.mdx',
+      'models.mdx',
+      'video-api.mdx',
+      'faq.mdx',
     ]);
     expect(await collectMdxFiles(docsRoot)).toEqual([...registeredFiles].toSorted());
+    expect(registeredRoutes).not.toContain('/docs/thq-video-api/firefly-video-v2');
+    expect(projects.some((project) => project.id === 'toho-image-studio')).toBe(false);
   });
 
-  it('rewrites the source guide to the THQ video service without legacy branding', async () => {
-    const docs = await readVideoDocs();
-    const combinedContent = docs.map(({ content }) => content).join('\n');
-
-    expect(combinedContent).toContain('https://new.thqllm.com');
-    expect(combinedContent).toContain('THQ Video API');
-    expect(combinedContent).toContain('YOUR_THQ_VIDEO_API_KEY');
-    expect(combinedContent).not.toMatch(/ycyapi\.cn/i);
-    expect(combinedContent).not.toMatch(/YCYAPI|Adobe2API|192\.6\.121\.6|22-视频-官方API/i);
+  it('removes obsolete model IDs, fixed pricing tables and separate image branding', async () => {
+    const combined = (await readVideoDocs()).map(({ content }) => content).join('\n');
+    expect(combined).not.toMatch(
+      /firefly-video-v2|leonardo-seedance|seedance-2\.0-0826|img\.thqllm\.com|Toho Image Studio/,
+    );
+    expect(combined).not.toMatch(/ycyapi\.cn|YCYAPI|Adobe2API/i);
+    expect(combined).toContain('Seedance 2.0');
+    expect(combined).toContain('Seedance 2.5');
+    expect(combined).toContain('MiniMax-H3');
   });
 
-  it('introduces the creative workflow alongside developer API access', async () => {
-    const content = await readFile(path.join(docsRoot, 'index.mdx'), 'utf8');
-
-    for (const requiredText of [
-      'AI 视频创作工作台与视频模型 API 服务',
-      '分镜表与画布创作',
-      '文本和图片都可以不调用模型',
-      '角色、场景与风格卡片',
-      '本地合成 MP4',
-      '项目 ZIP 导出备份',
-      '开发者 API 接入',
-      'SD2 官方满血',
-      '/docs/thq-video-api/sd2-official',
+  it('documents manual inputs, per-user providers and reference image editing', async () => {
+    const content = await readFile(path.join(docsRoot, 'text-images.mdx'), 'utf8');
+    for (const phrase of [
+      '手动输入',
+      '上传图片',
+      '当前登录用户',
+      'Key 在服务器加密保存',
+      '参考图编辑图片',
+      '/images/edits',
+      '模型列表',
     ]) {
-      expect(content, `Video API overview is missing ${requiredText}`).toContain(requiredText);
+      expect(content).toContain(phrase);
     }
+    expect(content).not.toContain('STUDIO_PROVIDER_ENCRYPTION_KEY');
   });
 
-  it('keeps the SD2 tutorial organized around a first successful task', async () => {
-    const content = await readFile(path.join(docsRoot, 'firefly-video-v2.mdx'), 'utf8');
-
-    for (const requiredText of [
-      '先看懂 4 步调用流程',
-      '选择模型',
-      '准备 API Key',
-      '创建第一条视频',
-      '等待视频生成完成',
-      '下载视频',
-      '进阶：使用参考图、视频或音频',
-      '进阶：使用分镜生成连续画面',
-      '价格说明',
-      '常见问题',
-      '上线前检查',
-      'firefly-video-v2',
-      'firefly-video-v2-fast',
-      'leonardo-seedance-2.0',
-      'leonardo-seedance-2.0-fast',
-      '满血 SD2',
-      'SD2-fast',
-      'Leonardo Seedance 2.0',
+  it('documents the asynchronous API lifecycle and string duration', async () => {
+    const content = await readFile(path.join(docsRoot, 'video-api.mdx'), 'utf8');
+    const example = content.match(/```json\n([\s\S]*?)```/);
+    expect(example).not.toBeNull();
+    const request = JSON.parse(example?.[1] ?? '{}');
+    expect(typeof request.seconds).toBe('string');
+    expect(request.model).toBeTruthy();
+    for (const phrase of [
       '/v1/models',
       '/v1/videos',
-      '/v1/videos/{task_id}',
-      'multipart/form-data',
-      'first_frame',
-      'last_frame',
-      'generate_audio',
-      'download_url',
-      'status',
+      '/content',
+      'queued',
+      'in_progress',
       'completed',
       'failed',
-      'generation_failed',
-      '避免这些常见错误',
-      '远程素材 URL',
-      'JSON Base64',
-      '跳过 TLS',
-      '14 秒',
-      '1080p',
+      '保存返回的',
+      '不要自动重发创建请求',
     ]) {
-      expect(content, `Firefly guide is missing ${requiredText}`).toContain(requiredText);
+      expect(content).toContain(phrase);
     }
   });
 
-  it('publishes the current per-second pricing for the Firefly Video v2 model group', async () => {
-    const firefly = await readFile(path.join(docsRoot, 'firefly-video-v2.mdx'), 'utf8');
-
-    expect(firefly).toContain('| `firefly-video-v2-fast` | 0.15 / 秒 | 0.18 / 秒 | 不支持 |');
-    expect(firefly).toContain('| `firefly-video-v2` | 0.18 / 秒 | 0.25 / 秒 | 0.5 / 秒 |');
-    expect(firefly).toContain('| `leonardo-seedance-2.0-fast` | 0.15 / 秒 | 0.18 / 秒 | 不支持 |');
-    expect(firefly).toContain('| `leonardo-seedance-2.0` | 0.18 / 秒 | 0.25 / 秒 | 不支持 |');
-    expect(firefly).not.toContain('`leonardo-seedance-2.0` | 0.18 / 秒 | 0.25 / 秒 | 0.5 / 秒');
+  it('distinguishes browser-local projects and local assembly from billed AI continuation', async () => {
+    const content = await readFile(path.join(docsRoot, 'projects.mdx'), 'utf8');
+    expect(content).toContain('当前浏览器');
+    expect(content).toContain('不自动跨设备同步');
+    expect(content).toContain('项目 ZIP');
+    expect(content).toContain('不会额外调用视频模型');
+    expect(content).toContain('新的模型生成');
   });
 
-  it('keeps the SD2 official full guide focused on the official 15-second workflow', async () => {
-    const official = await readFile(path.join(docsRoot, 'sd2-official.mdx'), 'utf8');
-
-    for (const requiredText of [
-      'SD2 官方满血',
-      '先看懂 4 步调用流程',
-      '选择模型',
-      '准备 API Key',
-      '创建第一条视频',
-      '等待视频生成完成',
-      '下载视频',
-      'seconds',
-      '"seconds": "15"',
-      'Idempotency-Key',
-      'references',
-      'data:',
-      'download_url',
-      '不要自己拼下载地址',
-      'seedance-2.0-0826-480p',
-      'seedance-2.0-0826-720p',
-      'seedance-2.0-fast-0826-480p',
-      'seedance-2.0-fast-0826-720p',
-      'result_not_ready',
-      'QuotaExceeded',
-      '上线前检查',
-    ]) {
-      expect(official, `SD2 official guide is missing ${requiredText}`).toContain(requiredText);
+  it('redirects retired image and model guides to registered replacement documents', async () => {
+    const content = await readFile(path.join(repoRoot, 'site/public/_redirects'), 'utf8');
+    const rules = content.split('\n').filter((line) => line && !line.startsWith('#'));
+    expect(rules.some((line) => line.startsWith('/docs/toho-image-studio/quick-start '))).toBe(
+      true,
+    );
+    expect(rules.some((line) => line.startsWith('/docs/thq-video-api/firefly-video-v2 '))).toBe(
+      true,
+    );
+    expect(rules.some((line) => line.startsWith('/docs/thq-video-api/sd2-official '))).toBe(true);
+    for (const rule of rules) {
+      const [, destination, status] = rule.split(/\s+/);
+      expect(registeredRoutes).toContain(destination);
+      expect(status).toBe('301');
     }
-  });
-
-  it('publishes the current per-second pricing for the SD2 official full group', async () => {
-    const official = await readFile(path.join(docsRoot, 'sd2-official.mdx'), 'utf8');
-
-    expect(official).toContain(
-      '| `seedance-2.0-0826-480p` | 标准质量，480p | 480p | 0.25 / 秒 | 3.75 / 条 |',
-    );
-    expect(official).toContain(
-      '| `seedance-2.0-0826-720p` | 标准质量，720p | 720p | 0.35 / 秒 | 5.25 / 条 |',
-    );
-    expect(official).toContain(
-      '| `seedance-2.0-fast-0826-480p` | 快速生成，480p | 480p | 0.20 / 秒 | 3.00 / 条 |',
-    );
-    expect(official).toContain(
-      '| `seedance-2.0-fast-0826-720p` | 快速生成，720p | 720p | 0.30 / 秒 | 4.50 / 条 |',
-    );
   });
 
   it('does not publish references to missing local documents', async () => {

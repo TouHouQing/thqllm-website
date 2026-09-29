@@ -1,0 +1,13 @@
+# Image creation now belongs to the THQ Video API workspace.
+/docs/toho-image-studio/quick-start /docs/thq-video-api/text-images 301
+/docs/toho-image-studio/quick-start/ /docs/thq-video-api/text-images 301
+/docs/toho-image-studio/faq /docs/thq-video-api/faq 301
+/docs/toho-image-studio/faq/ /docs/thq-video-api/faq 301
+/docs/thq-video-api/firefly-video-v2 /docs/thq-video-api/video-api 301
+/docs/thq-video-api/firefly-video-v2/ /docs/thq-video-api/video-api 301
+/docs/thq-video-api/sd2-official /docs/thq-video-api/models 301
+/docs/thq-video-api/sd2-official/ /docs/thq-video-api/models 301
+/docs/thq-video-api/video-v1 /docs/thq-video-api/video-api 301
+/docs/thq-video-api/video-v1/ /docs/thq-video-api/video-api 301
+/docs/toho-image-studio /docs/thq-video-api/ 301
+/docs/toho-image-studio/* /docs/thq-video-api/ 301

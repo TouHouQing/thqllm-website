@@ -38,6 +38,9 @@ const responsivePaths = [
   '/projects/',
   '/docs/fluctgraph/',
   '/docs/thq-api/clients/codex',
+  '/docs/thq-video-api/text-images',
+  '/docs/thq-video-api/models',
+  '/docs/thq-video-api/video-api',
 ] as const;
 const topLevelRoutes = [
   { path: '/projects/', heading: '项目' },

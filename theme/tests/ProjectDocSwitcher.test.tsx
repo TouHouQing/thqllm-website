@@ -149,12 +149,12 @@ describe('ProjectDocSwitcher', () => {
     });
 
     render(
-      <MemoryRouter initialEntries={['/docs/toho-image-studio/']}>
+      <MemoryRouter initialEntries={['/docs/thq-video-api/']}>
         <ProjectDocSwitcher />
       </MemoryRouter>,
     );
 
-    const activeTab = screen.getByText('Toho Image Studio', {
+    const activeTab = screen.getByText('THQ Video API', {
       selector: '[aria-current="page"]',
     });
     const tabContainer = activeTab.parentElement;
@@ -237,12 +237,12 @@ describe('ProjectDocSwitcher', () => {
     });
 
     render(
-      <MemoryRouter initialEntries={['/docs/toho-image-studio/']}>
+      <MemoryRouter initialEntries={['/docs/thq-video-api/']}>
         <ProjectDocSwitcher />
       </MemoryRouter>,
     );
 
-    const activeTab = screen.getByText('Toho Image Studio', {
+    const activeTab = screen.getByText('THQ Video API', {
       selector: '[aria-current="page"]',
     });
     const tabContainer = activeTab.parentElement;
@@ -370,7 +370,7 @@ describe('ProjectDocSwitcher', () => {
 
   it('uses complete project names for every tab', () => {
     render(
-      <MemoryRouter initialEntries={['/docs/toho-image-studio/']}>
+      <MemoryRouter initialEntries={['/docs/thq-video-api/']}>
         <ProjectDocSwitcher />
       </MemoryRouter>,
     );

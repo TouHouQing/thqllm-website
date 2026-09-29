@@ -1,0 +1,164 @@
+---
+title: 视频 API 接入教程｜THQ Video API
+description: 用当前账号可调用的模型 ID 接入 THQ Video API，完成模型列表获取、异步视频任务提交、状态查询与结果下载，支持 Seedance 和 MiniMax 相关渠道。
+---
+
+# 视频 API 接入教程
+
+工作台适合直接创作，API 适合接入自己的应用和脚本。两者都使用本站视频模型，但 API 使用你创建的 Key 及其分组权限。
+先阅读[视频分组与模型选择](/docs/thq-video-api/models)，确认当前模型、参数与价格。
+
+## 地址与认证
+
+| 用途 | 地址 |
+| --- | --- |
+| 控制台 | `https://new.thqllm.com` |
+| API Base URL | `https://new.thqllm.com/v1` |
+| 获取模型 | `GET /models` |
+| 创建视频 | `POST /videos` |
+| 查询任务 | `GET /videos/{task_id}` |
+| 下载视频 | `GET /videos/{task_id}/content` |
+
+完整创建地址为 `https://new.thqllm.com/v1/videos`，避免重复拼接 `/v1`。
+所有本站 API 请求使用 `Authorization: Bearer YOUR_THQ_VIDEO_API_KEY`。
+
+创建 Key 时选择正确分组，并检查余额与模型限制。Key 放在可信后端或本地环境变量中。
+下面的命令读取环境变量，不在示例中填写真实密钥：
+
+```bash
+read -r -s THQ_VIDEO_API_KEY
+export THQ_VIDEO_API_KEY
+```
+
+## 1. 获取并确认模型
+
+```bash
+curl -fsS https://new.thqllm.com/v1/models \
+  -H "Authorization: Bearer $THQ_VIDEO_API_KEY"
+```
+
+从 `data[].id` 中选择当前 Key 能调用的完整 ID。
+下面用公开目录中的 `sd4-seedance2.5-720p` 演示请求结构；如果你的分组没有这个 ID，请替换为实际 ID，并按该渠道说明修改时长和其他参数。
+
+## 2. 提交视频任务
+
+将以下内容保存为 `video-request.json`：
+
+```json
+{
+  "model": "sd4-seedance2.5-720p",
+  "prompt": "雨后的城市街道，人物缓慢向前走，镜头平稳跟随，柔和自然光",
+  "seconds": "5"
+}
+```
+
+```bash
+curl -fsS --max-time 120 https://new.thqllm.com/v1/videos \
+  -H "Authorization: Bearer $THQ_VIDEO_API_KEY" \
+  -H "Content-Type: application/json" \
+  --data-binary @video-request.json \
+  -o task.json
+```
+
+`seconds` 使用字符串，例如 `"5"`；不能写成数字 `5`。
+示例不规定所有模型都支持 5 秒；固定时长渠道需要填写对应时长。
+分辨率、比例、参考素材等附加字段由渠道决定，按当前模型说明添加。
+
+保存返回的 `id` 作为任务 ID。部分兼容响应提供 `task_id`，请以实际响应为准。
+视频生成是异步任务，创建响应不代表视频已经完成。
+
+## 3. 查询已有任务
+
+将返回的任务 ID 设置为变量，再查询：
+
+```bash
+export THQ_VIDEO_TASK_ID='COPY_THE_RETURNED_TASK_ID'
+curl -fsS "https://new.thqllm.com/v1/videos/$THQ_VIDEO_TASK_ID" \
+  -H "Authorization: Bearer $THQ_VIDEO_API_KEY"
+```
+
+| 状态 | 下一步 |
+| --- | --- |
+| `queued` | 等待排队，继续查询同一个任务 |
+| `in_progress` | 查看 `progress`，隔一段时间再查询 |
+| `completed` | 获取或下载结果 |
+| `failed` | 读取 `error`，确认原因后决定是否创建新任务 |
+
+建议间隔 5–10 秒查询，避免高频轮询。请求超时、522 或连接中断时，先查本站任务记录；
+已获得任务 ID 就继续查询该任务，不要自动重发创建请求。
+
+## 4. 下载完成视频
+
+```bash
+curl -fSL --max-time 120 \
+  "https://new.thqllm.com/v1/videos/$THQ_VIDEO_TASK_ID/content" \
+  -H "Authorization: Bearer $THQ_VIDEO_API_KEY" \
+  -o output.mp4
+```
+
+有些渠道会在任务响应中提供 `download_url` 或结果 URL，可以使用返回地址下载。
+下载地址和有效期以响应为准；本站 API Key 仅发给本站 API，不要附加到第三方素材域名。
+未完成的任务不能下载成片。
+
+## Node.js 提交与轮询
+
+以下使用 Node.js 内置 `fetch`。运行前设置 `THQ_VIDEO_API_KEY`、`THQ_VIDEO_MODEL` 和该模型支持的 `THQ_VIDEO_SECONDS`。
+
+```js
+const base = 'https://new.thqllm.com/v1';
+const key = process.env.THQ_VIDEO_API_KEY;
+const model = process.env.THQ_VIDEO_MODEL;
+const seconds = process.env.THQ_VIDEO_SECONDS;
+if (!key || !model || !seconds) {
+  throw new Error('Set THQ_VIDEO_API_KEY, THQ_VIDEO_MODEL and THQ_VIDEO_SECONDS');
+}
+const headers = { Authorization: `Bearer ${key}` };
+
+async function request(path, options = {}) {
+  const response = await fetch(`${base}${path}`, {
+    ...options,
+    headers: { ...headers, ...options.headers },
+    signal: AbortSignal.timeout(120_000),
+  });
+  const text = await response.text();
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${text}`);
+  return JSON.parse(text);
+}
+
+const created = await request('/videos', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ model, prompt: '雨后的街道，镜头缓慢前进', seconds }),
+});
+const id = created.id || created.task_id;
+if (!id) throw new Error('The create response has no task ID');
+console.log('Save this task ID:', id);
+
+let completed = false;
+for (let attempt = 0; attempt < 60; attempt += 1) {
+  const task = await request(`/videos/${encodeURIComponent(id)}`);
+  console.log(task.status, task.progress);
+  if (task.status === 'failed') throw new Error(JSON.stringify(task.error));
+  if (task.status === 'completed') {
+    completed = true;
+    console.log('Download from:', `${base}/videos/${encodeURIComponent(id)}/content`);
+    break;
+  }
+  await new Promise((resolve) => setTimeout(resolve, 10_000));
+}
+if (!completed) {
+  console.log('Still pending. Continue querying this ID; do not create it again:', id);
+}
+```
+
+此示例只创建一次任务。轮询或网络请求失败后，保留已输出的任务 ID，查询状态后再决定下一步。
+
+## 图片、视频参考与渠道参数
+
+不同渠道的媒体字段可能使用 `input_reference`、`images`、`references`、`metadata.content` 或 multipart 文件上传。
+不要把一个渠道的字段组合直接套用到所有 Seedance 或 MiniMax 模型。
+
+工作台会自动组织媒体请求格式。使用 API 时，按当前渠道说明和工作台的请求预览确认字段、素材角色与数量，
+先跑通最小文本请求，再增加首帧、参考图片或视频。参考素材本身应能读取，数据格式和大小须符合该渠道要求。
+
+更多参数与权限问题见[常见问题](/docs/thq-video-api/faq)。

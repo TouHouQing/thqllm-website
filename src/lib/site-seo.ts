@@ -23,8 +23,9 @@ const SITE_KEYWORDS = [
   '视频创作工作台',
   '视频生成 API',
   '图生视频 API',
-  'SD2',
-  'SD2-fast',
+  '图像创作',
+  'Seedance',
+  'MiniMax',
   'AI 代充',
 ];
 
@@ -108,9 +109,7 @@ function createProjectDirectoryData(projectRegistry: readonly ProjectDefinition[
       item: {
         '@type': 'WebApplication',
         applicationCategory:
-          project.id === 'toho-image-studio' || project.id === 'thq-video-api'
-            ? 'MultimediaApplication'
-            : 'DeveloperApplication',
+          project.id === 'thq-video-api' ? 'MultimediaApplication' : 'DeveloperApplication',
         description: project.description,
         name: project.name,
         operatingSystem: 'Web',

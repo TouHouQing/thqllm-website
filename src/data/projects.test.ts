@@ -90,13 +90,8 @@ describe('project registry', () => {
         expect.objectContaining({
           id: 'thq-video-api',
           name: 'THQ Video API',
-          description: expect.stringContaining('AI 视频创作工作台'),
+          description: expect.stringContaining('图像生成与参考图编辑'),
           externalUrl: 'https://new.thqllm.com/',
-        }),
-        expect.objectContaining({
-          id: 'toho-image-studio',
-          name: 'Toho Image Studio',
-          externalUrl: 'https://img.thqllm.com/',
         }),
       ]),
     );
@@ -107,14 +102,12 @@ describe('project registry', () => {
       'thq-api',
       'thq-video-api',
       'fluctgraph',
-      'toho-image-studio',
     ]);
-    expect(projects.map((project) => project.order)).toEqual([1, 2, 3, 4]);
+    expect(projects.map((project) => project.order)).toEqual([1, 2, 3]);
     expect(projects.map((project) => project.stageLabel)).toEqual([
       'STAGE 01',
       'STAGE 02',
       'STAGE 03',
-      'EXTRA STAGE',
     ]);
   });
 
@@ -126,8 +119,23 @@ describe('project registry', () => {
         text: '开始使用',
         items: [
           { text: '创作与 API 概览', slug: 'index' },
-          { text: 'SD2', slug: 'firefly-video-v2' },
-          { text: 'SD2 官方满血', slug: 'sd2-official' },
+          { text: '生成第一条视频', slug: 'quick-start' },
+        ],
+      },
+      {
+        text: '创作工作台',
+        items: [
+          { text: '文本、图片与外接服务', slug: 'text-images' },
+          { text: '分镜、画布与镜头续创', slug: 'storyboard' },
+          { text: '素材管理与成片导出', slug: 'projects' },
+        ],
+      },
+      {
+        text: '模型与开发者接入',
+        items: [
+          { text: '视频分组与模型选择', slug: 'models' },
+          { text: '视频 API 接入教程', slug: 'video-api' },
+          { text: '常见问题', slug: 'faq' },
         ],
       },
     ]);
