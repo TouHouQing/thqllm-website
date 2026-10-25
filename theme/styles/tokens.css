@@ -27,5 +27,6 @@
 }
 
 :where(html:not(.rp-dark)) {
+  --shiki-token-comment: var(--thq-text-muted);
   --shiki-token-string: #247f4a;
 }

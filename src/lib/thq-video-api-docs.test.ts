@@ -1,6 +1,7 @@
 import { access, readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { parse } from 'yaml';
 import { projects } from '../data/projects';
 import { createProjectDocRoutePath } from './project-doc-routes';
 
@@ -57,6 +58,11 @@ describe('THQ Video API documentation contract', () => {
       'projects.mdx',
       'models.mdx',
       'video-api.mdx',
+      'parameters.mdx',
+      'media.mdx',
+      'tasks.mdx',
+      'examples.mdx',
+      'ai-integration.mdx',
       'faq.mdx',
     ]);
     expect(await collectMdxFiles(docsRoot)).toEqual([...registeredFiles].toSorted());
@@ -98,6 +104,8 @@ describe('THQ Video API documentation contract', () => {
     const request = JSON.parse(example?.[1] ?? '{}');
     expect(typeof request.seconds).toBe('string');
     expect(request.model).toBeTruthy();
+    expect(request.size).toBe('16:9');
+    expect(request.resolution).toBe('720p');
     for (const phrase of [
       '/v1/models',
       '/v1/videos',
@@ -110,6 +118,46 @@ describe('THQ Video API documentation contract', () => {
       '不要自动重发创建请求',
     ]) {
       expect(content).toContain(phrase);
+    }
+  });
+
+  it('publishes a valid downloadable THQ skill using the same API contract', async () => {
+    const content = await readFile(path.join(docsRoot, 'ai-integration.mdx'), 'utf8');
+    const downloadPath = content.match(/href="([^"]+\/SKILL\.md)"/)?.[1];
+    expect(downloadPath).toBe('/skills/thq-video-api/SKILL.md');
+    const skill = await readFile(
+      path.join(repoRoot, 'site/public', downloadPath?.slice(1) ?? ''),
+      'utf8',
+    );
+    const frontmatter = skill.match(/^---\r?\n([\s\S]+?)\r?\n---/);
+    expect(frontmatter).not.toBeNull();
+    expect(parse(frontmatter?.[1] ?? '')).toEqual(
+      expect.objectContaining({ name: 'thq-video-api', description: expect.any(String) }),
+    );
+    const example = JSON.parse(skill.match(/```json\n([\s\S]*?)```/)?.[1] ?? '{}');
+    expect(typeof example.seconds).toBe('string');
+    expect(example.size).toBe('16:9');
+    expect(example.resolution).toBe('720p');
+  });
+
+  it('keeps published service URLs under THQ domains or reserved example domains', async () => {
+    const documents = await readVideoDocs();
+    const skill = await readFile(
+      path.join(repoRoot, 'site/public/skills/thq-video-api/SKILL.md'),
+      'utf8',
+    );
+    for (const content of [...documents.map((document) => document.content), skill]) {
+      for (const [url] of content.matchAll(/https?:\/\/[a-zA-Z0-9.-]+/g)) {
+        const { hostname, protocol } = new URL(url);
+        expect(protocol).toBe('https:');
+        expect(
+          hostname === 'thqllm.com' ||
+            hostname.endsWith('.thqllm.com') ||
+            hostname === 'example.com' ||
+            hostname.endsWith('.example.com'),
+          `Unexpected published service domain: ${hostname}`,
+        ).toBe(true);
+      }
     }
   });
 

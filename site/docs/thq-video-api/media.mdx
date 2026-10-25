@@ -1,0 +1,97 @@
+---
+title: 参考图片、视频、音频与文件上传｜THQ Video API
+description: 使用 JSON HTTPS URL 数组提交视频生成参考素材，了解单图、多图、音视频参考、对象存储与单张本地图片 multipart 上传方式。
+---
+
+# 参考图片、视频与音频
+
+THQ Video API 推荐使用 JSON 和可读取的 HTTPS 素材 URL。
+是否支持多图、参考视频或参考音频，以及素材数量、时长与大小限制，都以[所选模型](/docs/thq-video-api/models)的说明为准。
+
+## 单张与多张参考图片
+
+一张图时，`images` 数组保留一个元素；多图时按希望的顺序放入多个 URL：
+
+```json
+{
+  "model": "MODEL_ID_FROM_V1_MODELS",
+  "prompt": "参考人物与街景图片，生成自然连贯的行走镜头",
+  "seconds": "5",
+  "size": "16:9",
+  "resolution": "720p",
+  "images": [
+    "https://media.example.com/subject.jpg",
+    "https://media.example.com/street.png"
+  ]
+}
+```
+
+`media.example.com` 仅为示例域名，运行前替换为自己的素材直链。
+不要使用两个同名 `images` 键，不要把数组写成字符串，也不要同时传 `images` 与 `image` / `input_reference` 等单图别名。
+多张素材不一定代表首尾帧配对；只有模型明确支持时才按其约定指定首帧、尾帧或其他用途。
+
+## 参考视频与参考音频
+
+模型支持多模态参考时，可组合图片、视频和音频 URL：
+
+```json
+{
+  "model": "MODEL_ID_FROM_V1_MODELS",
+  "prompt": "保持参考图中的主体，参考视频的运动方式与音频节奏创作短片",
+  "seconds": "5",
+  "size": "16:9",
+  "resolution": "720p",
+  "images": ["https://media.example.com/subject.jpg"],
+  "reference_videos": ["https://media.example.com/motion.mp4"],
+  "reference_audios": ["https://media.example.com/rhythm.mp3"]
+}
+```
+
+只保留当前模型支持的字段。`reference_videos`、`reference_audios` 是输入参考，
+不承诺输出带声音、逐帧复刻输入视频或实现视频延长。`input_video` / `input_audio` 是兼容用法，按具体模型说明使用。
+
+## 本地文件先取得可读取的 URL
+
+多素材接入时，由应用把本地文件上传到自己的对象存储或已经接入的素材服务，取得可读取的 HTTPS 对象 URL，
+再放入 `images`、`reference_videos` 或 `reference_audios`。存储服务的上传接口、认证和大小限制以该服务配置为准。
+
+素材 URL 需要满足：
+
+- 指向实际媒体文件，Content-Type 与图片、视频或音频的真实格式一致。
+- 在任务排队、拉取和生成期间持续可用；私有存储的签名有效期应覆盖整个过程。
+- 不需要访问者登录、Cookie 或只能在当前浏览器获得的权限。
+- 使用完整的原始 URL，保留签名参数，不自行拼接、裁剪或再次转义。
+
+本地磁盘路径、浏览器 `blob:` / `data:` 地址、对象存储控制台页面与需要登录的分享页，都不能当作可公开拉取的素材直链。
+存储凭据保留在服务端，THQ API Key 只发给 `new.thqllm.com` 的 API，不附带到素材域名。
+
+## 单张本地图片：multipart 兼容方式
+
+模型支持文件输入时，可直接提交一张本地参考图：
+
+```bash
+curl --fail-with-body -sS --max-time 180 \
+  'https://new.thqllm.com/v1/videos' \
+  -H "Authorization: Bearer $THQ_VIDEO_API_KEY" \
+  -F 'model=MODEL_ID_FROM_V1_MODELS' \
+  -F 'prompt=让参考图中的主体自然运动，镜头缓慢推进' \
+  -F 'seconds=5' \
+  -F 'size=16:9' \
+  -F 'resolution=720p' \
+  -F 'input_reference=@./reference.png;type=image/png'
+```
+
+这里只使用一个 `input_reference` 文件字段，不重复该字段，也不改成其他文件字段名。
+multipart 文本字段同样只出现一次；需要多张图或音视频参考时，改用 HTTPS URL 和 JSON 数组。
+
+不要手动填写 multipart 的 `Content-Type`，cURL 或 FormData 会生成含 boundary 的正确请求头。
+`-F 'seconds=5'` 是表单文本字段，与 JSON 中错误的数字 `"seconds": 5` 不同。
+
+## 在工作台中使用素材
+
+工作台可直接上传图片，也可用自己的图片服务生成或编辑参考图；通过画布连接素材时可指定支持的参考用途。
+工作台会组织媒体请求格式，模型仍需支持对应能力。
+
+- [文本、图片与外接服务](/docs/thq-video-api/text-images)
+- [分镜、画布与镜头续创](/docs/thq-video-api/storyboard)
+- [素材管理与成片导出](/docs/thq-video-api/projects)

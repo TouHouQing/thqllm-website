@@ -85,8 +85,16 @@ export const projects = projectListSchema.parse([
           items: [
             { text: '视频分组与模型选择', slug: 'models' },
             { text: '视频 API 接入教程', slug: 'video-api' },
-            { text: '常见问题', slug: 'faq' },
+            { text: '请求参数', slug: 'parameters' },
+            { text: '参考图片、视频与音频', slug: 'media' },
+            { text: '任务查询与结果下载', slug: 'tasks' },
+            { text: 'Python 与 Node.js 示例', slug: 'examples' },
+            { text: 'AI 接入与 Skill', slug: 'ai-integration' },
           ],
+        },
+        {
+          text: '排错与帮助',
+          items: [{ text: '常见问题与错误处理', slug: 'faq' }],
         },
       ],
     },

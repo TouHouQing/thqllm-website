@@ -1,0 +1,73 @@
+---
+title: 视频 API 请求参数｜THQ Video API
+description: THQ Video API 创建任务的参数说明，区分字符串时长 seconds、画面比例 size、独立清晰度 resolution，以及图片、视频和音频参考字段。
+---
+
+# 请求参数
+
+`POST https://new.thqllm.com/v1/videos` 推荐使用 JSON。以下是视频接口的字段约定，
+不表示每个模型都支持所有可选参数；实际取值需要符合当前账号、分组和模型说明。
+
+## 核心字段
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `model` | string | 是 | `/v1/models` 返回的完整模型 ID |
+| `prompt` | string | 是 | 非空提示词，描述主体、场景、动作、镜头与风格；长度和内容限制依模型而定 |
+| `seconds` | string | 按模型 | 秒数字符串，例如 `"5"`；固定时长渠道按其说明填写 |
+| `size` | string | 按模型 | 画面宽高比，例如 `"16:9"` 或 `"9:16"` |
+| `resolution` | string | 按模型 | 独立清晰度档位，例如 `"480p"`、`"720p"`、`"1080p"` |
+
+## 比例与清晰度分别设置
+
+```json
+{
+  "model": "MODEL_ID_FROM_V1_MODELS",
+  "prompt": "远山与湖泊，镜头缓慢向前推进",
+  "seconds": "5",
+  "size": "16:9",
+  "resolution": "1080p"
+}
+```
+
+`size: "16:9"` 只指定比例，不等于固定输出 `1280x720`。同一比例可搭配模型支持的不同清晰度，
+最终像素尺寸以实际视频文件为准。常见比例有 `16:9`、`9:16`、`1:1`、`4:3`、`3:4`、`21:9`，不是每个模型都全部支持。
+
+新接入直接传比例，不在客户端换算像素，不改用 `ratio`；清晰度统一使用 `resolution`，不使用 `resolution_name`。
+已有像素尺寸请求属于兼容用法，新代码优先使用比例和独立清晰度。JSON 与 multipart 使用相同字段名。
+
+## 参考素材字段
+
+| 字段 | 类型 | 用途 |
+| --- | --- | --- |
+| `images` | string[] | 推荐的参考图片 HTTPS URL 数组；一张图也可放入数组 |
+| `reference_videos` | string[] | 参考视频 HTTPS URL 数组，仅用于支持该能力的模型 |
+| `reference_audios` | string[] | 参考音频 HTTPS URL 数组，仅用于支持该能力的模型 |
+
+数组需要使用真正的 JSON 数组，不能写成含 JSON 的字符串。多张图片保持数组顺序，不使用重复 JSON 键。
+参考音频不代表一定输出带声音的视频；参考图也不自动等同于首帧或尾帧，素材用途仍由模型能力决定。
+组合示例与素材可访问性要求见[参考图片、视频与音频](/docs/thq-video-api/media)。
+
+## 兼容字段
+
+| 字段 | 类型 | 使用边界 |
+| --- | --- | --- |
+| `duration` | integer | 整数时长别名，例如 `5`；新请求优先使用字符串 `seconds`，不要传入相互冲突的时长 |
+| `image` / `input_reference` | string | JSON 单图 URL 兼容字段；不要与 `images` 混用 |
+| `reference_image_urls` | string[] | 图片 URL 数组别名；新接入优先使用 `images` |
+| `input_video` / `input_audio` | 按模型约定 | 既有音视频输入兼容字段，按渠道说明使用；新接入优先使用对应参考数组 |
+| `metadata` | object | 附加信息容器，不依赖任意自定义键控制生成行为 |
+
+multipart 的 `input_reference` 是文件字段，与 JSON 中的字符串 URL 用法不同。
+`seed`、`fps`、`n`、`generate_audio`、`camera_movement` 等模型专属字段，只在该模型明确支持时添加。
+不要将某个渠道的 `metadata.content`、私有字段或默认值套用到所有视频模型。
+
+## 参数排查
+
+- 出现 `cannot unmarshal number ... seconds ... string`：将数字 `5` 改成字符串 `"5"`。
+- 时长被拒绝或未按预期变化：检查是否为固定时长渠道，以及当前模型的时长范围。
+- 输出清晰度不符：分别检查 `size` 与 `resolution`，不要仅通过画幅或模型名称推断分辨率。
+- 参考素材未生效：确认字段、模型能力与 URL 可访问性，先用一个有效素材验证。
+- 提交可选参数后无效果或返回 400：查看该渠道说明与错误响应，删除未经支持的字段后重新确认请求。
+
+更多权限、模型和重试问题见[模型选择](/docs/thq-video-api/models)与[错误处理](/docs/thq-video-api/faq)。

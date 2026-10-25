@@ -1,0 +1,95 @@
+---
+title: 视频任务状态、轮询与结果下载｜THQ Video API
+description: 查询 THQ Video API 异步任务，处理 queued、in_progress、processing、completed 和 failed，并直接使用响应 url 预览和下载视频。
+---
+
+# 任务查询与结果下载
+
+创建后立即保存返回的完整任务 ID。后续查询使用原始 ID，不自行生成、不截断，也不删除 `task_` 等前缀。
+本地请求失败或等待超时不会自动取消已经受理的视频任务。
+
+## 查询任务
+
+```bash
+export THQ_VIDEO_TASK_ID='COPY_THE_RETURNED_TASK_ID'
+curl --fail-with-body -sS --max-time 60 \
+  "https://new.thqllm.com/v1/videos/$THQ_VIDEO_TASK_ID" \
+  -H "Authorization: Bearer $THQ_VIDEO_API_KEY"
+```
+
+使用有权限访问该任务的 API Key。查询失败时先检查 Key、完整 ID 与路径，不通过重新创建任务解决查询问题。
+
+## 状态与下一步
+
+| `status` | 含义 | 客户端处理 |
+| --- | --- | --- |
+| `queued` | 已受理，正在排队 | 保存 ID，继续查询 |
+| `in_progress` | 正在生成 | 继续查询；`progress` 仅作进度提示 |
+| `processing` | 仍在处理或准备结果文件 | 继续查询，等待结果 URL 就绪，不视为失败 |
+| `completed` | 已完成 | 读取并保存 `url`，用于预览或下载 |
+| `failed` | 任务失败 | 展示 `error.message` 或 `fail_reason`，停止正常轮询 |
+
+兼容已有响应时，可将 `success` / `succeeded` 归为成功，将 `failure` / `cancelled` / `canceled` 归为终态失败。
+未知状态不能当作成功；`progress: 100` 也不能代替完成状态和可用结果 URL。
+
+完成响应示例，地址仅为占位，实际必须使用 API 返回值：
+
+```json
+{
+  "id": "task_EXAMPLE",
+  "object": "video",
+  "status": "completed",
+  "progress": 100,
+  "url": "https://media.example.com/results/task_EXAMPLE.mp4"
+}
+```
+
+失败结构示例：
+
+```json
+{
+  "id": "task_EXAMPLE",
+  "object": "video",
+  "status": "failed",
+  "error": {
+    "code": "video_generation_failed",
+    "message": "参考素材不符合当前模型要求，请检查素材后再提交。"
+  }
+}
+```
+
+## 轮询与超时
+
+正常轮询间隔建议 5–10 秒。总等待时间与单次 HTTP 超时分开配置；视频生成可能较久，
+可按业务设置 30–60 分钟或更长的等待上限，而不是把一次请求的 60 秒当作整个任务期限。
+
+- 查询发生超时或连接中断：保留 ID，间隔一段时间后继续查询同一任务。
+- 查询返回 429 或临时 5xx：退避后重试查询；存在 `Retry-After` 时按其等待。
+- 创建发生超时、连接中断或 5xx：先在控制台确认是否已受理，不自动重发创建请求。
+- 本地等待达到上限：停止当前轮询并保留 ID，之后提供“继续查询”，不自动重新生成。
+- 任务已失败：根据错误调整提示词或素材，再由用户决定是否创建新任务。
+
+保留请求时间、任务 ID、HTTP 状态和可用的 `X-Oneapi-Request-Id`，便于排查。
+不要把进度长时间不变或暂时没有结果 URL 当作需要重新创建的信号。
+
+## 直接使用结果 URL
+
+成功时读取查询响应中的 `url`，原样交给视频播放器或下载程序。
+**不要再调用 `/v1/videos/{id}/content` 获取文件，也不要根据任务 ID 拼接媒体域名或存储路径。**
+
+结果 URL 的访问不需要附加 THQ API Key。将 API 认证请求与媒体下载请求分开，
+避免把 Key 随请求头或重定向发送给结果存储域名。
+
+```bash
+export THQ_VIDEO_RESULT_URL='COPY_THE_URL_FROM_THE_COMPLETED_RESPONSE'
+curl --fail --location --max-time 180 \
+  "$THQ_VIDEO_RESULT_URL" \
+  --output output.mp4
+```
+
+下载时检查最终 HTTP 状态与 Content-Type，确认返回视频媒体后再保存。
+不要把 HTML 错误页或 JSON 错误响应当作 MP4。示例中不包含 Authorization 头。
+
+结果地址的有效期以实际服务与响应说明为准；重要结果建议及时保存。
+工作台里的本地合成和项目备份见[素材管理与成片导出](/docs/thq-video-api/projects)，
+可运行的查询与下载代码见[Python 与 Node.js 示例](/docs/thq-video-api/examples)。

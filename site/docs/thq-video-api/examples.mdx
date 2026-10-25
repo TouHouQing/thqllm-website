@@ -1,0 +1,241 @@
+---
+title: Python 与 Node.js 视频 API 完整示例｜THQ Video API
+description: THQ Video API 的完整接入示例：创建一次视频任务、保存任务 ID、处理轮询和临时错误，再使用结果 URL 下载视频。
+---
+
+# Python 与 Node.js 示例
+
+以下示例会创建真实的视频任务。运行前确认模型、参考素材、参数与费用；只验证连接时，先调用
+[`GET /v1/models`](/docs/thq-video-api/video-api)，无需创建视频。
+
+两个示例均遵循同一流程：只创建一次、立即保存 ID、每隔 5 秒查询、临时错误退避、成功后直接下载 `url`。
+创建失败不自动重试；轮询到期保留 ID，不自动重新生成。
+
+## 准备环境变量
+
+示例从进程环境读取配置，不会自动加载 `.env`。在 Bash 中设置：
+
+```bash
+export THQ_VIDEO_BASE_URL='https://new.thqllm.com'
+read -r -s -p 'THQ Video API Key: ' THQ_VIDEO_API_KEY
+export THQ_VIDEO_API_KEY
+export THQ_VIDEO_MODEL='MODEL_ID_FROM_V1_MODELS'
+export THQ_VIDEO_SECONDS='5'
+export THQ_VIDEO_SIZE='16:9'
+export THQ_VIDEO_RESOLUTION='720p'
+```
+
+将模型 ID 替换为当前 Key 可用的实际 ID，其他参数按模型支持范围修改。
+`THQ_VIDEO_BASE_URL` 使用不含 `/v1` 的服务根地址。Windows 可在 PowerShell 中使用 `$env:变量名 = '值'` 设置相同变量。
+
+已有任务时，设置 `THQ_VIDEO_TASK_ID` 即可跳过创建，只查询和下载该任务：
+
+```bash
+export THQ_VIDEO_TASK_ID='COPY_THE_RETURNED_TASK_ID'
+```
+
+## Python：创建、轮询与下载
+
+安装依赖 `python -m pip install requests`，将代码保存为 `thq-video.py`，运行 `python thq-video.py`。
+新任务 ID 会写入当前目录的 `thq-video-task-id.txt`，结果保存为 `output.mp4`。
+
+```python
+import os
+import time
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
+from pathlib import Path
+from urllib.parse import quote, urlparse
+
+import requests
+
+BASE = os.environ.get("THQ_VIDEO_BASE_URL", "https://new.thqllm.com").rstrip("/")
+HEADERS = {"Authorization": "Bearer " + os.environ["THQ_VIDEO_API_KEY"]}
+TRANSIENT = {429, 500, 502, 503, 504, 522}
+task_id = os.environ.get("THQ_VIDEO_TASK_ID")
+
+if not task_id:
+    payload = {
+        "model": os.environ["THQ_VIDEO_MODEL"],
+        "prompt": "雨后的城市街道，镜头缓慢前进，柔和自然光",
+        "seconds": os.environ["THQ_VIDEO_SECONDS"],
+        "size": os.environ["THQ_VIDEO_SIZE"],
+        "resolution": os.environ["THQ_VIDEO_RESOLUTION"],
+        # "images": ["https://media.example.com/reference.jpg"],
+    }
+    # 创建只发送一次；异常时先核对控制台，不能自动重新提交。
+    response = requests.post(
+        BASE + "/v1/videos", headers=HEADERS, json=payload, timeout=(15, 180)
+    )
+    response.raise_for_status()
+    task_id = response.json().get("id")
+    if not isinstance(task_id, str) or not task_id:
+        raise RuntimeError("创建响应缺少有效 id，请核对控制台任务记录")
+
+print("已保存任务 ID:", task_id, flush=True)
+Path("thq-video-task-id.txt").write_text(task_id, encoding="utf-8")
+deadline = time.monotonic() + 60 * 60
+
+while time.monotonic() < deadline:
+    time.sleep(5)
+    try:
+        response = requests.get(
+            BASE + "/v1/videos/" + quote(task_id, safe=""),
+            headers=HEADERS,
+            timeout=(15, 60),
+        )
+    except (requests.Timeout, requests.ConnectionError):
+        continue  # 只重试查询，使用已保存的 ID。
+
+    if response.status_code in TRANSIENT:
+        value = response.headers.get("Retry-After", "10")
+        try:
+            delay = float(value)
+        except ValueError:
+            try:
+                delay = (parsedate_to_datetime(value) - datetime.now(timezone.utc)).total_seconds()
+            except (TypeError, ValueError, OverflowError):
+                delay = 10
+        time.sleep(min(max(5, delay), max(0, deadline - time.monotonic())))
+        continue
+
+    response.raise_for_status()
+    state = response.json()
+    status = str(state.get("status", "")).lower()
+    print("任务状态:", status, "进度:", state.get("progress"), flush=True)
+    if status in {"failed", "failure", "cancelled", "canceled"}:
+        raise RuntimeError(str(state.get("error") or state.get("fail_reason") or state))
+    if status in {"completed", "success", "succeeded"}:
+        url = state.get("url")
+        if not isinstance(url, str) or not url:
+            continue  # 结果尚未就绪，继续查同一任务。
+        parsed = urlparse(url)
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise RuntimeError("结果 URL 不是有效 HTTPS 地址，请核对任务响应")
+        # 媒体下载单独发起，不传 HEADERS，不调用 /content。
+        with requests.get(url, stream=True, timeout=(15, 180)) as media:
+            media.raise_for_status()
+            content_type = media.headers.get("Content-Type", "").lower().split(";")[0].strip()
+            if not (content_type.startswith("video/") or content_type == "application/octet-stream"):
+                raise RuntimeError("结果未返回视频文件，Content-Type: " + content_type)
+            with Path("output.mp4").open("wb") as output:
+                for chunk in media.iter_content(chunk_size=1024 * 1024):
+                    output.write(chunk)
+        print("视频已保存为 output.mp4")
+        break
+else:
+    raise TimeoutError("本地等待已到期，请继续查询原任务: " + task_id)
+```
+
+下载发生异常时，保留已保存的 ID，再次设置 `THQ_VIDEO_TASK_ID` 运行即可查询原任务。
+存储服务若返回 `application/octet-stream`，保存后还应确认文件能够作为视频正常播放。
+
+## Node.js：创建、轮询与下载
+
+使用 Node.js 20 或更高版本，无需额外依赖。保存为 `thq-video.mjs`，运行 `node thq-video.mjs`。
+
+```js
+import { createWriteStream } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+
+const base = (process.env.THQ_VIDEO_BASE_URL || 'https://new.thqllm.com').replace(/\/+$/, '');
+const key = process.env.THQ_VIDEO_API_KEY;
+if (!key) throw new Error('请设置 THQ_VIDEO_API_KEY');
+const headers = { Authorization: `Bearer ${key}` };
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const transient = new Set([429, 500, 502, 503, 504, 522]);
+let id = process.env.THQ_VIDEO_TASK_ID;
+
+if (!id) {
+  const {
+    THQ_VIDEO_MODEL: model,
+    THQ_VIDEO_SECONDS: seconds,
+    THQ_VIDEO_SIZE: size,
+    THQ_VIDEO_RESOLUTION: resolution,
+  } = process.env;
+  if (!model || !seconds || !size || !resolution) {
+    throw new Error('请设置模型、时长、画面比例和清晰度环境变量');
+  }
+  // 创建请求只发一次，不为超时或 5xx 配置自动重试。
+  const response = await fetch(`${base}/v1/videos`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, prompt: '雨后的街道，镜头缓慢前进', seconds, size, resolution }),
+    signal: AbortSignal.timeout(180_000),
+  });
+  if (!response.ok) throw new Error(`创建请求 HTTP ${response.status}: ${await response.text()}`);
+  id = (await response.json()).id;
+  if (typeof id !== 'string' || !id) throw new Error('响应缺少有效 id，请核对控制台任务记录');
+}
+
+console.log('已保存任务 ID:', id);
+await writeFile('thq-video-task-id.txt', id, 'utf8');
+const deadline = Date.now() + 60 * 60 * 1000;
+let resultUrl;
+
+while (Date.now() < deadline) {
+  await sleep(5000);
+  let response;
+  try {
+    response = await fetch(`${base}/v1/videos/${encodeURIComponent(id)}`, {
+      headers,
+      signal: AbortSignal.timeout(60_000),
+    });
+  } catch {
+    continue; // 网络异常只重试查询。
+  }
+  if (transient.has(response.status)) {
+    const value = response.headers.get('Retry-After');
+    await response.body?.cancel();
+    const delay =
+      value && /^\d+$/.test(value)
+        ? Number(value) * 1000
+        : value
+          ? Date.parse(value) - Date.now()
+          : 10_000;
+    await sleep(
+      Math.min(
+        Math.max(5000, Number.isFinite(delay) ? delay : 10_000),
+        Math.max(0, deadline - Date.now()),
+      ),
+    );
+    continue;
+  }
+  if (!response.ok) throw new Error(`查询 HTTP ${response.status}: ${await response.text()}`);
+  const state = await response.json();
+  const status = String(state.status || '').toLowerCase();
+  console.log('任务状态:', status, '进度:', state.progress);
+  if (['failed', 'failure', 'cancelled', 'canceled'].includes(status)) {
+    throw new Error(JSON.stringify(state.error || state.fail_reason || state));
+  }
+  if (
+    ['completed', 'success', 'succeeded'].includes(status) &&
+    typeof state.url === 'string' &&
+    state.url
+  ) {
+    resultUrl = state.url;
+    break;
+  }
+}
+if (!resultUrl) throw new Error(`本地等待已到期，请继续查询原任务: ${id}`);
+const parsedUrl = new URL(resultUrl);
+if (parsedUrl.protocol !== 'https:') throw new Error('结果 URL 必须使用 HTTPS');
+
+// 直接使用返回的 URL；不附带 API Key，不调用 /content。
+const media = await fetch(resultUrl, { signal: AbortSignal.timeout(180_000) });
+if (!media.ok) throw new Error(`下载 HTTP ${media.status}`);
+const contentType = (media.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+if (
+  (!contentType.startsWith('video/') && contentType !== 'application/octet-stream') ||
+  !media.body
+) {
+  throw new Error(`结果未返回视频文件，Content-Type: ${contentType}`);
+}
+await pipeline(Readable.fromWeb(media.body), createWriteStream('output.mp4'));
+console.log('视频已保存为 output.mp4');
+```
+
+生产应用应把任务 ID 与业务记录关联，提供恢复查询和错误展示。
+需要参考图片或音视频时，在创建请求中添加[素材字段](/docs/thq-video-api/media)，不要改变只创建一次与保留 ID 的流程。

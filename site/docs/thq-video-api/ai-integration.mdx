@@ -1,0 +1,77 @@
+---
+title: AI 接入指南与 Skill 下载｜THQ Video API
+description: 下载 THQ Video API 接入技能，让 AI 编程工具实现模型查询、视频创建、素材输入、任务轮询与结果下载，并使用 THQ 品牌与服务地址。
+---
+
+# AI 接入与 Skill
+
+把 THQ Video API 的接口约定交给 AI 编程工具，可以减少地址、参数与轮询流程的配置错误。
+下面的文件可作为 Markdown 附件读取，也可保存为工具支持的项目技能。
+
+<a href="/skills/thq-video-api/SKILL.md" download="THQ-Video-API-SKILL.md">下载 THQ Video API Skill</a>
+
+## 下载并加载
+
+```bash
+curl --fail --location \
+  'https://thqllm.com/skills/thq-video-api/SKILL.md' \
+  --output THQ-Video-API-SKILL.md
+```
+
+可以直接把文件交给 AI；支持项目技能时，将其保存为技能目录下的 `thq-video-api/SKILL.md`。
+不同工具使用不同的技能目录，沿用当前项目和工具的约定，不必修改无关的全局配置。
+
+可使用下面的提示：
+
+```text
+请读取附件 THQ-Video-API-SKILL.md，按其中的 THQ Video API 约定完成接入。
+如果当前工具支持项目技能，保存为现有技能目录下的 thq-video-api/SKILL.md，告诉我实际路径。
+否则直接把附件作为接口说明。先检查项目现有配置，暂时不要创建视频任务。
+```
+
+## 配置连接
+
+在项目服务端运行环境或本地 `.env` 中配置，使用自己的 Key 替换占位值：
+
+```dotenv
+THQ_VIDEO_BASE_URL=https://new.thqllm.com
+THQ_VIDEO_API_KEY=YOUR_THQ_VIDEO_API_KEY
+```
+
+`THQ_VIDEO_BASE_URL` 不包含 `/v1`，应用需要实际加载环境变量。
+保留项目已有配置，把 `.env` 排除在版本控制之外；不要把 Key 粘贴进公开代码或交给浏览器页面。
+
+## 先验证连接
+
+```text
+请从项目环境变量读取 THQ_VIDEO_BASE_URL 与 THQ_VIDEO_API_KEY，调用 GET /v1/models 验证连接。
+只展示模型 ID 和连接结果，不输出 Key。模型列表没有返回的价格、时长和参考素材限制不要猜测。
+先完成连接验证和接入代码，不为验证连接自动创建视频任务。
+```
+
+模型列表请求可以验证地址与权限，但不能保证某个模型的所有视频参数都可用。
+具体模型、分组与限制见[模型选择](/docs/thq-video-api/models)。
+
+## 完整开发需求
+
+```text
+请根据 THQ Video API Skill，为当前项目实现完整的视频生成功能：
+从服务端环境变量加载地址和 Key，先查询模型列表，再实现创建任务、立即保存完整任务 ID、
+状态查询、失败处理、恢复查询、视频预览与下载。
+seconds 使用字符串，size 直接传画面比例，resolution 独立传清晰度；参考素材使用 HTTPS URL 数组。
+每隔 5–10 秒查询同一任务，queued、in_progress 和 processing 时继续等待。
+完成后直接使用响应 url，不调用 /content，也不要把 API Key 发给媒体域名。
+创建超时或 5xx 时不要自动重发；本地等待超时保留 ID，支持之后继续查询。
+运行生成测试前按我已授权的任务、费用和素材范围执行；尚未授权时先完成代码与离线验证。
+```
+
+## 只查询已有任务
+
+```text
+请使用本地配置查询 THQ Video API 已有任务：TASK_ID。
+调用 GET /v1/videos/{id}；完成后使用响应中的 url 预览或下载，下载请求不携带 Key。
+仍在处理时保留原任务 ID，不创建新任务；失败时展示任务错误。
+```
+
+Skill 提供接口与实现约定，账号权限由自己的 API Key 决定。
+也可以直接使用[Python 与 Node.js 示例](/docs/thq-video-api/examples)，或者在[工作台](/docs/thq-video-api/quick-start)中完成创作。
