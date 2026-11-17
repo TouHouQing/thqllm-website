@@ -62,6 +62,8 @@ if not task_id:
         "size": os.environ["THQ_VIDEO_SIZE"],
         "resolution": os.environ["THQ_VIDEO_RESOLUTION"],
         # "images": ["https://media.example.com/reference.jpg"],
+        # "first_frame": "https://media.example.com/first.jpg",
+        # "last_frame": "https://media.example.com/last.jpg",
     }
     # 创建只发送一次；异常时先核对控制台，不能自动重新提交。
     response = requests.post(
@@ -162,7 +164,15 @@ if (!id) {
   const response = await fetch(`${base}/v1/videos`, {
     method: 'POST',
     headers: { ...headers, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, prompt: '雨后的街道，镜头缓慢前进', seconds, size, resolution }),
+    body: JSON.stringify({
+      model,
+      prompt: '雨后的街道，镜头缓慢前进',
+      seconds,
+      size,
+      resolution,
+      // first_frame: 'https://media.example.com/first.jpg',
+      // last_frame: 'https://media.example.com/last.jpg',
+    }),
     signal: AbortSignal.timeout(180_000),
   });
   if (!response.ok) throw new Error(`创建请求 HTTP ${response.status}: ${await response.text()}`);

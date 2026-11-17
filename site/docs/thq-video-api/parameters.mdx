@@ -41,12 +41,37 @@ description: THQ Video API 创建任务的参数说明，区分字符串时长 s
 | 字段 | 类型 | 用途 |
 | --- | --- | --- |
 | `images` | string[] | 推荐的参考图片 HTTPS URL 数组；一张图也可放入数组 |
+| `first_frame` | string | 首帧图片 HTTPS URL；仅用于支持首帧模式的模型 |
+| `last_frame` | string | 尾帧图片 HTTPS URL；仅用于支持尾帧模式的模型 |
 | `reference_videos` | string[] | 参考视频 HTTPS URL 数组，仅用于支持该能力的模型 |
 | `reference_audios` | string[] | 参考音频 HTTPS URL 数组，仅用于支持该能力的模型 |
 
 数组需要使用真正的 JSON 数组，不能写成含 JSON 的字符串。多张图片保持数组顺序，不使用重复 JSON 键。
 参考音频不代表一定输出带声音的视频；参考图也不自动等同于首帧或尾帧，素材用途仍由模型能力决定。
 组合示例与素材可访问性要求见[参考图片、视频与音频](/docs/thq-video-api/media)。
+
+## 首帧与尾帧
+
+支持首尾帧的模型可以在 JSON 顶层分别传入 `first_frame` 和 `last_frame`。两个字段都是单个、可公开读取的 HTTPS 图片 URL：
+
+```json
+{
+  "model": "MODEL_ID_FROM_V1_MODELS",
+  "prompt": "镜头从首帧自然过渡到尾帧，保持主体与场景连续",
+  "seconds": "5",
+  "size": "16:9",
+  "resolution": "720p",
+  "first_frame": "https://media.example.com/first.jpg",
+  "last_frame": "https://media.example.com/last.jpg"
+}
+```
+
+- 首帧和尾帧各传一张图片；只使用首帧时，只有在模型明确支持时才省略 `last_frame`。
+- 新接入统一使用 `first_frame` / `last_frame`。部分兼容渠道可能接受 `first_frame_url` / `last_frame_url`，不要同时传两套字段。
+- 首尾帧是独立输入模式，不要默认与 `images`、`reference_videos` 或 `reference_audios` 混用；混合规则以所选模型和渠道说明为准。
+- 图片链接在排队、拉取和生成期间都必须可访问，不能使用本地路径、`blob:`、`data:` 或需要登录的网页。
+
+首尾帧与普通多图参考的差异和上传建议见[参考图片、视频与音频](/docs/thq-video-api/media)。
 
 ## 兼容字段
 
@@ -55,6 +80,7 @@ description: THQ Video API 创建任务的参数说明，区分字符串时长 s
 | `duration` | integer | 整数时长别名，例如 `5`；新请求优先使用字符串 `seconds`，不要传入相互冲突的时长 |
 | `image` / `input_reference` | string | JSON 单图 URL 兼容字段；不要与 `images` 混用 |
 | `reference_image_urls` | string[] | 图片 URL 数组别名；新接入优先使用 `images` |
+| `first_frame_url` / `last_frame_url` | string | 首尾帧 URL 兼容别名；新接入优先使用 `first_frame` / `last_frame` |
 | `input_video` / `input_audio` | 按模型约定 | 既有音视频输入兼容字段，按渠道说明使用；新接入优先使用对应参考数组 |
 | `metadata` | object | 附加信息容器，不依赖任意自定义键控制生成行为 |
 

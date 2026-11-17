@@ -25,7 +25,7 @@ description: 接入 THQ Video API（https://new.thqllm.com），实现模型查�
 4. 成功后保存响应中的 `url`，直接交给播放器或下载器，不拼接结果域名或路径。
 
 创建成功仅表示受理；生成不是聊天或 SSE 流式接口。
-只验证连接时查询模型即可。生成任务测试按用户已有授权执行，不把读取技能当作额外付费授权。
+只验证连接时查询模型即可。完整接入应同时实现创建、保存 ID、轮询、失败处理、恢复查询和结果预览/下载，最后按用户已确认的任务、费用和素材范围运行一次完整链路测试；读取技能本身不等于获得生成授权。
 
 ## JSON 创建任务
 
@@ -35,7 +35,9 @@ description: 接入 THQ Video API（https://new.thqllm.com），实现模型查�
   "prompt": "雨后的街道，镜头缓慢前进，写实电影质感",
   "seconds": "5",
   "size": "16:9",
-  "resolution": "720p"
+  "resolution": "720p",
+  "first_frame": "https://media.example.com/first.jpg",
+  "last_frame": "https://media.example.com/last.jpg"
 }
 ```
 
@@ -44,6 +46,8 @@ description: 接入 THQ Video API（https://new.thqllm.com），实现模型查�
 - `size` 直接传比例，例如 `16:9`、`9:16`、`1:1`、`4:3`、`3:4`、`21:9`。不换算像素，不改用 `ratio`。
 - `resolution` 独立传 `480p`、`720p` 或 `1080p` 等模型支持档位，不使用 `resolution_name`。
 - 比例不保证固定像素尺寸；固定时长或其他能力限制以当前模型说明为准。
+- `first_frame`、`last_frame` 是首尾帧图片 HTTPS URL 字符串，仅在模型支持时添加；只传首帧前先确认该模型允许省略尾帧。
+- 部分兼容渠道可能接受 `first_frame_url` / `last_frame_url`，新接入统一使用 `first_frame` / `last_frame`，不要同时传两套字段。
 - `metadata` 是附加信息容器，不依赖任意自定义键控制生成。
 - `seed`、`fps`、`n`、`generate_audio` 等只在模型明确支持时使用。
 
@@ -52,11 +56,13 @@ description: 接入 THQ Video API（https://new.thqllm.com），实现模型查�
 ## 参考素材
 
 - 图片优先使用 JSON `images: ["https://media.example.com/reference.jpg"]`；一张图也使用数组。
+- 普通多图参考与首尾帧是不同输入模式：首尾帧使用顶层 `first_frame` / `last_frame`，不要默认与 `images`、音视频参考混用。
 - 音视频参考使用 `reference_videos`、`reference_audios` URL 数组，仅在模型支持时添加。
 - `image` / `input_reference` 是 JSON 单图 URL 兼容字段，不与 `images` 混用；`reference_image_urls` 是图片数组别名。
+- `first_frame_url` / `last_frame_url` 是部分渠道的兼容别名；新请求只使用不带 `_url` 的字段。
 - `input_video` / `input_audio` 按模型说明用于已有兼容接入。
 - URL 需在排队与生成期间可读取，签名参数原样保留。不要传本地路径、`blob:`、`data:` 或需要登录的网页。
-- 多张本地素材先使用项目已有存储服务取得 HTTPS URL，不猜测素材上传端点。
+- 本地素材先使用项目已有对象存储或部署提供的上传服务取得 HTTPS URL；上传地址、认证、MIME 和大小限制以当前部署说明为准，不猜测不存在的 THQ 上传域名。
 - multipart 仅提交一张本地图片，文件字段为一个 `input_reference`；文本字段也不重复。
 - multipart 不手动设置 Content-Type，由客户端生成 boundary；多素材改用 JSON URL 数组。
 - 参考音频不代表输出一定有音轨，参考视频不代表模型支持视频延长。
@@ -67,6 +73,7 @@ description: 接入 THQ Video API（https://new.thqllm.com），实现模型查�
 
 - `queued`、`in_progress`、`processing`：继续查询。进度值不代替最终状态。
 - `completed`：读取 `url`；尚无有效 URL 时继续查原任务，不重新生成。
+- 兼容响应可能同时提供 `video_url`、`result_url` 或 `metadata.url`；新代码优先读取顶层 `url`，不自行拼接媒体路径。
 - `failed`：展示 `error.message` 或 `fail_reason`，停止正常轮询。
 - 兼容 `success` / `succeeded` 成功态，`failure` / `cancelled` / `canceled` 失败态；未知状态不能视为成功。
 - 总等待时间与单次 HTTP 超时分开设置，可按业务配置 30–60 分钟或更长。到期保留 ID，允许之后继续查询。
@@ -85,7 +92,7 @@ description: 接入 THQ Video API（https://new.thqllm.com），实现模型查�
 - 404：检查路径、完整任务 ID 与模型可用性。
 - 409：结果未准备好时继续查询任务，不重新生成。
 - 413 / 415：检查素材大小、格式与 MIME。
-- 失败任务再次生成是新请求，应按用户意图与授权决定。
+- 失败任务再次生成是新请求；相同输入不要自动重试，只有错误明确提示稍后重试或用户确认重新生成时才提交。
 
 保留任务 ID、请求时间、HTTP 状态与 X-Oneapi-Request-Id，不输出 Key 或私人素材签名。
 错误详情：https://thqllm.com/docs/thq-video-api/faq。

@@ -27,7 +27,7 @@ description: 排查 THQ Video API 的鉴权、参数、参考素材、异步任�
   "error": {
     "code": "",
     "message": "Invalid token (request id: EXAMPLE_REQUEST_ID)",
-    "type": "new_api_error"
+    "type": "api_error"
   }
 }
 ```
@@ -42,6 +42,8 @@ description: 排查 THQ Video API 的鉴权、参数、参考素材、异步任�
 媒体请求不附带 THQ API Key。若结果暂时无可用 URL，继续查询原任务，不创建新任务。
 下载前检查最终响应状态与 Content-Type，详见[任务查询与结果下载](/docs/thq-video-api/tasks)。
 
+部分兼容路由还会返回 `video_url`、`result_url` 或 `metadata.url`。优先使用顶层 `url`，不要根据任务 ID 自己拼接结果地址。
+
 ## processing、进度不变或等待超时代表失败吗？
 
 不代表。`queued`、`in_progress`、`processing` 都是等待中的状态，`progress` 只作提示。
@@ -55,6 +57,18 @@ description: 排查 THQ Video API 的鉴权、参数、参考素材、异步任�
 素材需要可读取的 HTTPS 直链，不能使用本地路径、`blob:` 地址或需要登录的页面。
 multipart 只提交一张 `input_reference` 文件；多素材改用 URL 数组。
 完整示例见[参考图片、视频与音频](/docs/thq-video-api/media)。
+
+## 首帧和尾帧怎么传？
+
+支持该能力的模型在 JSON 顶层接收 `first_frame` 和 `last_frame`，每个字段都是一张可公开读取的 HTTPS 图片 URL。
+新请求不要把首尾帧写进 `images` 数组，也不要同时传 `first_frame_url` / `last_frame_url` 兼容别名。
+只使用首帧或混合其他参考素材前，先确认当前渠道的组合规则；不同模型可能直接拒绝不支持的字段。
+详细示例见[请求参数](/docs/thq-video-api/parameters)与[参考素材](/docs/thq-video-api/media)。
+
+## 本地图片怎样用于首尾帧或多图参考？
+
+视频接口读取的是 HTTPS 媒体 URL。先使用项目已有对象存储或部署提供的上传接口取得公开 URL，再填入 `images`、`first_frame` 或 `last_frame`。
+不要上传到文档中未确认的域名，也不要传本地路径、`blob:`、`data:` 或需要登录的页面；上传接口的认证、MIME 和大小限制以当前部署说明为准。
 
 ## size 与 resolution 怎么填写？
 

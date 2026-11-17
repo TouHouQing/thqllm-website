@@ -86,6 +86,7 @@ curl --fail-with-body -sS --max-time 180 \
 
 `seconds` 是字符串；`size` 直接传画面比例，`resolution` 独立传清晰度，不把 `16:9` 换算为像素尺寸。
 完整字段与兼容别名见[请求参数](/docs/thq-video-api/parameters)。
+如果模型支持首尾帧，在 JSON 顶层增加 `first_frame` 和 `last_frame` 图片 HTTPS URL；普通多图参考使用 `images` 数组，不要把两种模式混在一起，除非渠道明确支持。
 
 创建响应结构示例：
 

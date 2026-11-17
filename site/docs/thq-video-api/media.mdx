@@ -30,6 +30,27 @@ THQ Video API 推荐使用 JSON 和可读取的 HTTPS 素材 URL。
 不要使用两个同名 `images` 键，不要把数组写成字符串，也不要同时传 `images` 与 `image` / `input_reference` 等单图别名。
 多张素材不一定代表首尾帧配对；只有模型明确支持时才按其约定指定首帧、尾帧或其他用途。
 
+## 首帧与尾帧
+
+需要让镜头从指定画面过渡到另一个画面时，在 JSON 顶层传入单个图片 URL：
+
+```json
+{
+  "model": "MODEL_ID_FROM_V1_MODELS",
+  "prompt": "从首帧自然过渡到尾帧，保持人物和场景连续",
+  "seconds": "5",
+  "size": "16:9",
+  "resolution": "720p",
+  "first_frame": "https://media.example.com/first.jpg",
+  "last_frame": "https://media.example.com/last.jpg"
+}
+```
+
+`first_frame` 和 `last_frame` 不是多图数组：每个字段只放一张图片。只传首帧时，先确认当前模型允许省略尾帧；部分兼容渠道可能接受 `first_frame_url` / `last_frame_url`，新请求统一使用不带 `_url` 的字段。
+首尾帧模式不要默认再混用 `images`、`reference_videos` 或 `reference_audios`，具体组合以模型和渠道说明为准。
+
+首帧、尾帧图片必须在排队和生成期间持续可读取。使用 HTTPS 直链，保留签名参数和原始编码，不要传本地路径、`blob:`、`data:` 或需要登录的网页。
+
 ## 参考视频与参考音频
 
 模型支持多模态参考时，可组合图片、视频和音频 URL：
@@ -54,6 +75,19 @@ THQ Video API 推荐使用 JSON 和可读取的 HTTPS 素材 URL。
 
 多素材接入时，由应用把本地文件上传到自己的对象存储或已经接入的素材服务，取得可读取的 HTTPS 对象 URL，
 再放入 `images`、`reference_videos` 或 `reference_audios`。存储服务的上传接口、认证和大小限制以该服务配置为准。
+
+如果项目已经提供媒体上传接口，先把文件原始字节上传为 HTTPS URL，再提交视频任务；不要把尚未公开的本地路径直接写入 JSON。上传接口的地址、鉴权方式、允许的 MIME 类型和大小限制必须以当前部署说明为准，文档没有统一假设一个不存在的 THQ 上传域名。
+
+例如，应用可以把部署提供的地址放在 `THQ_VIDEO_MEDIA_UPLOAD_URL` 中，再按接口要求发送真实 MIME：
+
+```bash
+curl --fail-with-body -sS "$THQ_VIDEO_MEDIA_UPLOAD_URL" \
+  -H "Authorization: Bearer $THQ_VIDEO_API_KEY" \
+  -H 'Content-Type: image/png' \
+  --data-binary @./reference.png
+```
+
+读取响应中的 HTTPS `url`，再放进 `images`、`first_frame`、`last_frame`、`reference_videos` 或 `reference_audios`。如果项目没有上传接口，使用自己的对象存储或已接入的素材服务，并把凭据保留在服务端。
 
 素材 URL 需要满足：
 
